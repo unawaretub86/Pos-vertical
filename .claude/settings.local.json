@@ -12,7 +12,8 @@
       "Bash(go get:*)",
       "Bash(npm run:*)",
       "Bash(go build:*)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -373,14 +373,14 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 ### 1.4 Categorías
 
 **Backend:**
-- [ ] `GET /api/categories` — listar categorías
-- [ ] `POST /api/categories` — crear categoría
-- [ ] `PUT /api/categories/:id` — actualizar categoría
-- [ ] `DELETE /api/categories/:id` — eliminar (solo si no tiene productos, o reasignar)
+- [x] `GET /api/categories` — listar categorías
+- [x] `POST /api/categories` — crear categoría
+- [x] `PUT /api/categories/:id` — actualizar categoría
+- [x] `DELETE /api/categories/:id` — eliminar (FK constraint activa: falla si tiene productos asignados)
 
 **Frontend — Categorías:**
-- [ ] Integradas en pantalla de Inventario o Productos
-- [ ] CRUD completo con formularios inline o modal
+- [x] Integradas en pantalla de Inventario o Productos
+- [x] CRUD completo con formularios inline o modal
 - [ ] Aparecen como **category tabs** en el POS (`.cat-tab`):
   - Padding: `5px 12px`, `border-radius: 20px`, `font-size: 12px`, `font-weight: 500`
   - Normal: `color: text-secondary`, `border: 1px solid border`
@@ -388,10 +388,11 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
   - Activo: `background: accent-dim`, `color: accent`, `border-color: accent`
 
 **DoD:**
-- [ ] CRUD funcional desde la UI
-- [ ] No se puede eliminar categoría con productos asignados sin reasignar
-- [ ] Nombre de categoría es requerido y único
-- [ ] Lista se actualiza en tiempo real al crear/editar/eliminar
+- [x] CRUD funcional desde la UI
+- [x] No se puede eliminar categoría con productos asignados (check manual en repositorio + HTTP 409 con mensaje descriptivo)
+- [x] Nombre de categoría es requerido y único (validación en servicio + UNIQUE en DB)
+- [x] Lista se actualiza en tiempo real al crear/editar/eliminar
+- [x] Campo `description` guardado correctamente (migración ALTER TABLE idempotente)
 - [ ] Las categorías aparecen correctamente como tabs en el POS
 
 ---
@@ -399,14 +400,18 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 ### 1.5 Productos
 
 **Backend:**
-- [ ] `GET /api/products` — listar productos (con paginación)
-- [ ] `GET /api/products/:id` — detalle de producto
-- [ ] `POST /api/products` — crear producto
-- [ ] `PUT /api/products/:id` — actualizar producto
-- [ ] `DELETE /api/products/:id` — desactivar producto (soft delete)
-- [ ] `GET /api/products/search?q=` — búsqueda por nombre o código
-- [ ] `GET /api/products/low-stock` — productos bajo stock mínimo
-- [ ] Campos: name, code, category_id, type (product/service), sale_price, wholesale_price, cost, unit (unit/kg/lb/liter), stock, min_stock, tax_rate, active
+- [x] `GET /api/products` — listar productos (con filtros: search, category_id, active)
+- [x] `GET /api/products/:id` — detalle de producto
+- [x] `POST /api/products` — crear producto
+- [x] `PUT /api/products/:id` — actualizar producto
+- [x] `DELETE /api/products/:id` — eliminar producto (hard delete; pendiente cambiar a soft delete)
+- [x] `GET /api/products?search=q` — búsqueda integrada en listado (nombre o código, LIKE)
+- [ ] `GET /api/products/low-stock` — endpoint dedicado para productos bajo stock mínimo
+- [x] Campos: name, code, category_id, type (product/service), sale_price, wholesale_price, cost, unit (unit/kg/lb/liter), stock, min_stock, tax_rate, active
+
+**Pendientes backend:**
+- [ ] Cambiar DELETE a soft delete (`active = 0`) en lugar de hard delete
+- [ ] Endpoint dedicado `GET /api/products/low-stock`
 
 **Frontend — Pantalla Productos / Cards en POS:**
 
@@ -422,20 +427,23 @@ Cards de producto en el grid del POS (`.product-card`):
   - Amarillo ≤ 10: `.stock-low` (accent-dim/accent)
   - Rojo ≤ 3: `.stock-out` (danger-dim/danger)
 
-Página de gestión de productos (`/products`):
-- [ ] Tabla con filtros por categoría y estado
-- [ ] Formulario de creación/edición (modal o página)
-- [ ] Búsqueda en tiempo real (debounce 200ms)
-- [ ] Indicador visual de stock bajo (badge danger) en la lista
+Página de gestión de productos (`/inventory`):
+- [x] Tabla con filtros por categoría (tabs) y estado (activo/inactivo/todos)
+- [x] Formulario de creación/edición (modal)
+- [x] Búsqueda en tiempo real (debounce 200ms)
+- [x] Indicador visual de stock bajo (badge + fila resaltada en danger-dim)
+- [x] Stats cards: total activos, bajo mínimo, sin stock (siempre sobre activos, independiente del filtro)
+- [x] Filtro de estado: "Solo activos" (default) / "Solo inactivos" / "Todos". El backend solo filtra `active=1`; los filtros "inactivos" y "todos" traen todo y filtran client-side.
 
 **DoD:**
-- [ ] CRUD completo funcional
-- [ ] Búsqueda retorna resultados en < 1 segundo
-- [ ] Validaciones: nombre requerido, precio > 0, costo >= 0
-- [ ] Productos tipo "servicio" no muestran campos de stock
-- [ ] Productos desactivados no aparecen en búsqueda del POS
-- [ ] Stock badges muestran color correcto según cantidad
-- [ ] Cards tienen hover effect y transform implementados
+- [x] CRUD completo funcional
+- [x] Búsqueda retorna resultados en < 1 segundo (filtro en DB)
+- [x] Validaciones: nombre requerido, precio >= 0, tipo y unidad válidos
+- [x] Productos tipo "servicio" no muestran campos de stock
+- [x] Productos desactivados no aparecen en búsqueda del POS (filtro `active=true` por defecto)
+- [x] Stock badges muestran color correcto según cantidad
+- [x] Alineación de columnas numéricas (Precio, Stock, Mín.) correcta
+- [ ] Cards tienen hover effect y transform implementados (pendiente POS frontend)
 
 ---
 

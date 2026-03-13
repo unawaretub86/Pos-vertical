@@ -20,13 +20,14 @@ func (h *Handler) listCategories(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) createCategory(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	}
 	if err := decode(r, &body); err != nil {
 		respondError(w, http.StatusBadRequest, "request inválido")
 		return
 	}
-	cat, err := h.categories.Create(r.Context(), body.Name)
+	cat, err := h.categories.Create(r.Context(), body.Name, body.Description)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -41,13 +42,14 @@ func (h *Handler) updateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	}
 	if err := decode(r, &body); err != nil {
 		respondError(w, http.StatusBadRequest, "request inválido")
 		return
 	}
-	cat, err := h.categories.Update(r.Context(), id, body.Name)
+	cat, err := h.categories.Update(r.Context(), id, body.Name, body.Description)
 	if errors.Is(err, repository.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "categoría no encontrada")
 		return
@@ -69,7 +71,7 @@ func (h *Handler) deleteCategory(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "categoría no encontrada")
 		return
 	} else if err != nil {
-		respondError(w, http.StatusInternalServerError, "error eliminando categoría")
+		respondError(w, http.StatusConflict, err.Error())
 		return
 	}
 	respond(w, http.StatusOK, map[string]string{"message": "categoría eliminada"})

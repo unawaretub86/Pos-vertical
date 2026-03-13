@@ -10,9 +10,11 @@ import (
 // CategoryRepository defines CRUD operations for categories.
 type CategoryRepository interface {
 	Create(ctx context.Context, name string) (*model.Category, error)
+	CreateWithDescription(ctx context.Context, name, description string) (*model.Category, error)
 	List(ctx context.Context) ([]*model.Category, error)
 	GetByID(ctx context.Context, id int64) (*model.Category, error)
 	Update(ctx context.Context, id int64, name string) (*model.Category, error)
+	UpdateFull(ctx context.Context, id int64, name, description string) (*model.Category, error)
 	Delete(ctx context.Context, id int64) error
 }
 

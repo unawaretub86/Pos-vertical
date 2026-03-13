@@ -1,8 +1,12 @@
 package database
 
 func (db *DB) migrate() error {
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	// Add description column if it doesn't exist (idempotent migration)
+	_, _ = db.Exec(`ALTER TABLE categories ADD COLUMN description TEXT NOT NULL DEFAULT ''`)
+	return nil
 }
 
 const schema = `
@@ -30,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS categories (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	name TEXT NOT NULL UNIQUE,
+	description TEXT NOT NULL DEFAULT '',
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

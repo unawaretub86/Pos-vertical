@@ -12,25 +12,26 @@ type User struct {
 }
 
 type Category struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Product struct {
-	ID             int64     `json:"id"`
-	Name           string    `json:"name"`
-	Code           string    `json:"code"`
-	CategoryID     *int64    `json:"category_id"`
-	Type           string    `json:"type"` // product | service
-	SalePrice      float64   `json:"sale_price"`
-	WholesalePrice *float64  `json:"wholesale_price"`
-	Cost           float64   `json:"cost"`
-	Unit           string    `json:"unit"`
-	Stock          float64   `json:"stock"`
-	MinStock       float64   `json:"min_stock"`
-	TaxRate        float64   `json:"tax_rate"`
-	Active         bool      `json:"active"`
+	ID             int64    `json:"id"`
+	Name           string   `json:"name"`
+	Code           string   `json:"code"`
+	CategoryID     *int64   `json:"category_id"`
+	Type           string   `json:"type"`
+	SalePrice      float64  `json:"sale_price"`
+	WholesalePrice *float64 `json:"wholesale_price"`
+	Cost           float64  `json:"cost"`
+	Unit           string   `json:"unit"`
+	Stock          float64  `json:"stock"`
+	MinStock       float64  `json:"min_stock"`
+	TaxRate        float64  `json:"tax_rate"`
+	Active         bool     `json:"active"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
