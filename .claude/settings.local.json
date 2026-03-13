@@ -11,7 +11,8 @@
       "Bash(npx shadcn@latest init --defaults --yes)",
       "Bash(go get:*)",
       "Bash(npm run:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(xargs ls:*)"
     ]
   }
 }

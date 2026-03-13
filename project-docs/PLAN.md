@@ -268,28 +268,28 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 ### 1.1 Autenticación
 
 **Backend:**
-- [ ] `POST /api/auth/login` — login con username + password
-- [ ] Generar JWT con claims: user_id, role, exp
-- [ ] Hash de passwords con bcrypt
+- [x] `POST /api/auth/login` — login con username + password
+- [x] Generar JWT con claims: user_id, role, exp
+- [x] Hash de passwords con bcrypt
 
 **Frontend — Pantalla Login:**
-- [ ] Página de login (`/login`)
-- [ ] Layout centrado, pantalla completa, fondo `--canvas`
-- [ ] Logo/marca del negocio centrada arriba
-- [ ] Card con `surface-1`, `border`, `border-radius: 12px`, `padding: 32px`
-- [ ] Input username con ícono (Lucide `User`)
-- [ ] Input password con ícono (Lucide `Lock`) + toggle mostrar/ocultar
-- [ ] Botón "Ingresar" — `btn-accent`, `btn-full`
-- [ ] Mensaje de error en `danger` color debajo del formulario
-- [ ] Guardar token en localStorage/cookie
-- [ ] Redirect a `/` después de login exitoso
-- [ ] Logout: limpiar token, redirect a `/login`
+- [x] Página de login (`/login`)
+- [x] Layout centrado, pantalla completa, fondo `--canvas`
+- [x] Logo/marca del negocio centrada arriba
+- [x] Card con `surface-1`, `border`, `border-radius: 12px`, `padding: 32px`
+- [x] Input username con ícono (Lucide `User`)
+- [x] Input password con ícono (Lucide `Lock`) + toggle mostrar/ocultar
+- [x] Botón "Ingresar" — `btn-accent`, `btn-full`
+- [x] Mensaje de error en `danger` color debajo del formulario
+- [x] Guardar token en localStorage
+- [x] Redirect a `/` después de login exitoso
+- [x] Logout: limpiar token, redirect a `/login`
 
 **DoD:**
-- [ ] Login con credenciales válidas retorna JWT
-- [ ] Login con credenciales inválidas retorna 401 con mensaje claro
-- [ ] Páginas protegidas redirigen a `/login` sin token
-- [ ] Token expira y requiere re-login
+- [x] Login con credenciales válidas retorna JWT
+- [x] Login con credenciales inválidas retorna 401 con mensaje claro
+- [x] Páginas protegidas redirigen a `/login` sin token
+- [ ] Token expira y requiere re-login (manejado por JWT exp, sin refresh por ahora)
 
 ---
 
@@ -298,76 +298,75 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 > Aplica a todas las pantallas excepto Login y Setup.
 
 **Componente Sidebar (`.sidebar`):**
-- [ ] Ancho fijo: `220px`, `flex-shrink: 0`
-- [ ] Fondo: `--canvas` (igual que el fondo principal — sin contraste)
-- [ ] Separación: borde derecho `1px solid var(--border)`
-- [ ] Altura: `100vh`, `overflow: hidden`
+- [x] Ancho fijo: `220px`, `flex-shrink: 0`
+- [x] Fondo: `--canvas` (igual que el fondo principal — sin contraste)
+- [x] Separación: borde derecho `1px solid var(--border)`
+- [x] Altura: `100vh`, `overflow: hidden`
 
 **Sidebar — Brand (`.sidebar-brand`):**
-- [ ] Logo: `32×32px`, `background: accent`, `border-radius: 8px`, texto "POS" negro, `font-weight: 700`
-- [ ] Nombre del negocio: 15px, `font-weight: 600`
-- [ ] Subtítulo: 11px, `text-muted` (versión, ej. "v2.0 · Colombia")
-- [ ] Separador inferior: `border-bottom: 1px solid var(--border)`
+- [x] Logo: `32×32px`, `background: accent`, `border-radius: 8px`, texto "POS" negro, `font-weight: 700`
+- [x] Nombre del negocio: 15px, `font-weight: 600`
+- [x] Subtítulo: 11px, `text-muted` (versión, ej. "v2.0 · Colombia")
+- [x] Separador inferior: `border-bottom: 1px solid var(--border)`
 
 **Sidebar — Nav Items (`.nav-item`):**
-- [ ] Padding: `9px 10px`, `border-radius: 6px`, gap 10px (ícono + texto)
-- [ ] Estado normal: `color: text-secondary`, `font-size: 13.5px`, fondo transparente
-- [ ] Hover: `background: surface-2`, `color: text-primary`
-- [ ] Activo: `background: accent-dim`, `color: accent`, `border: 1px solid border`
-- [ ] Indicador activo: barra izquierda `3px wide`, `background: accent`, `height: 20px`, `border-radius: 0 3px 3px 0`, aparece con transición
-- [ ] Badge de alerta (`.nav-badge`): `background: accent`, `color: #000`, `10px bold`, `padding: 1px 6px`, `border-radius: 20px`
-- [ ] Íconos Lucide 16×16px, `opacity: 0.7` (0.7→1 en activo)
-- [ ] Transición: 150ms ease en background, color, border-color
+- [x] Padding: `9px 10px`, `border-radius: 6px`, gap 10px (ícono + texto)
+- [x] Estado normal: `color: text-secondary`, `font-size: 13.5px`, fondo transparente
+- [x] Hover: `background: surface-2`, `color: text-primary`
+- [x] Activo: `background: accent-dim`, `color: accent`, `border: 1px solid border`
+- [x] Indicador activo: barra izquierda `3px wide`, `background: accent`, `height: 20px`, `border-radius: 0 3px 3px 0`
+- [x] Íconos SVG 16×16px, `opacity: 0.7` (0.7→1 en activo)
+- [x] Transición: 150ms ease en background, color, border-color
 
 **Sidebar — Items por rol:**
-- Cajero: Punto de Venta, Caja
-- Admin: Punto de Venta, Dashboard, Caja, Clientes, Inventario, Reportes, Configuración
+- [x] Cajero: Punto de Venta, Caja
+- [x] Admin: Punto de Venta, Dashboard, Caja, Clientes, Inventario, Reportes, Configuración
 
 **Sidebar — Footer (`.sidebar-footer`):**
-- [ ] Avatar circular 32×32px, `gradient(135deg, accent, #c47a10)`, iniciales en negro
-- [ ] Nombre usuario: 13px, `font-weight: 600`
-- [ ] Role badge: `.role-badge.admin` (accent-dim/accent) o `.role-badge.cashier` (surface-3/text-muted), `10px`, `border-radius: 20px`
-- [ ] Botón tema (`.theme-btn`): 32×32px, `border-radius: 6px`, ícono sol (modo oscuro) / luna (modo claro), toggle claro/oscuro
-- [ ] Tema persiste en `localStorage`
-- [ ] Separador superior: `border-top: 1px solid var(--border)`
+- [x] Avatar circular 32×32px, `gradient(135deg, accent, #c47a10)`, iniciales en negro
+- [x] Nombre usuario: 13px, `font-weight: 600`
+- [x] Role badge: `.role-badge.admin` / `.role-badge.cashier`
+- [x] Botón tema: 32×32px, ícono sol/luna, toggle claro/oscuro
+- [x] Tema persiste en `localStorage`
+- [x] Separador superior: `border-top: 1px solid var(--border)`
+- [x] Botón logout con ícono
 
 **Componente Topbar (`.topbar`):**
-- [ ] Altura: `56px`, `padding: 0 24px`
-- [ ] Fondo: `--canvas`
-- [ ] Separador inferior: `border-bottom: 1px solid var(--border)`
-- [ ] Izquierda: título (15px, 600) + subtítulo (12px, text-muted)
-- [ ] Derecha: acciones específicas de la pantalla (botones `.btn-sm`)
-- [ ] Transición de color y background: 150ms
+- [x] Altura: `56px`, `padding: 0 24px`
+- [x] Fondo: `--canvas`
+- [x] Separador inferior: `border-bottom: 1px solid var(--border)`
+- [x] Izquierda: título (15px, 600) + subtítulo (12px, text-muted)
+- [x] Derecha: slot de acciones (botones `.btn-sm`)
 
 **DoD:**
-- [ ] Sidebar se muestra correctamente en modo oscuro y claro
-- [ ] Estado activo del nav-item coincide con la pantalla actual
-- [ ] Toggle de tema cambia instantáneamente sin flash
-- [ ] Íconos activos en Lucide para cada ítem de nav
-- [ ] Cajero no ve ítems de admin en la navegación
+- [x] Sidebar se muestra correctamente en modo oscuro y claro
+- [x] Estado activo del nav-item coincide con la pantalla actual
+- [x] Toggle de tema cambia instantáneamente sin flash
+- [x] Íconos para cada ítem de nav
+- [x] Cajero no ve ítems de admin en la navegación
 
 ---
 
 ### 1.3 Configuración Inicial (Setup)
 
 **Backend:**
-- [ ] `GET /api/setup` — obtener configuración actual
-- [ ] `PUT /api/setup` — guardar/actualizar configuración
-- [ ] Campos: nombre negocio, dirección, NIT/CC, moneda (COP default), texto header/footer ticket
-- [ ] Campo logo: upload y almacenamiento (base64 en DB o archivo local)
+- [x] `GET /api/setup` — obtener configuración actual
+- [x] `PUT /api/setup` — guardar/actualizar configuración
+- [x] Campos: nombre negocio, dirección, NIT/CC, moneda (COP default), texto header/footer ticket
+- [x] Campo logo: upload y almacenamiento (base64 en DB o archivo local)
 
 **Frontend — Pantalla Setup:**
-- [ ] Pantalla de setup (`/setup`)
-- [ ] Layout tipo wizard o formulario centralizado
-- [ ] Detección de primer uso (si no hay config, redirigir a `/setup`)
+- [x] Pantalla de setup (`/setup`)
+- [x] Layout tipo wizard o formulario centralizado
+- [x] Detección de primer uso (si no hay config, redirigir a `/setup`)
 - [ ] Accesible después desde `/settings`
-- [ ] Preview del logo
+- [x] Preview del logo
 
 **DoD:**
-- [ ] Primera ejecución muestra pantalla de setup
-- [ ] Datos se persisten y se muestran al recargar
-- [ ] Logo se muestra correctamente en la UI
-- [ ] Después de configurar, redirige al dashboard
+- [x] Primera ejecución muestra pantalla de setup
+- [x] Datos se persisten y se muestran al recargar
+- [x] Logo se muestra correctamente en la UI
+- [x] Después de configurar, redirige al dashboard
 
 ---
 

@@ -17,16 +17,19 @@ type Handler struct {
 	db         *database.DB
 	categories *service.CategoryService
 	products   *service.ProductService
+	setup      *repository.SetupRepository
 }
 
 // New constructs a Handler wiring up all repositories and services.
 func New(db *database.DB) *Handler {
 	catRepo := repository.NewCategoryRepository(db.DB)
 	prodRepo := repository.NewProductRepository(db.DB)
+	setupRepo := repository.NewSetupRepository(db.DB)
 	return &Handler{
 		db:         db,
 		categories: service.NewCategoryService(catRepo),
 		products:   service.NewProductService(prodRepo),
+		setup:      setupRepo,
 	}
 }
 
@@ -46,6 +49,13 @@ func (h *Handler) Routes() http.Handler {
 			respond(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
 		r.Get("/auth/me", h.me)
+
+		// Setup / Business config
+		r.Get("/setup", h.getSetup)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Put("/setup", h.updateSetup)
+		})
 
 		// Categories (all authenticated users can read; admin to write)
 		r.Get("/categories", h.listCategories)
