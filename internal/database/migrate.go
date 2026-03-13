@@ -130,5 +130,5 @@ CREATE TABLE IF NOT EXISTS stock_entries (
 
 -- Seed default admin user (password: admin)
 INSERT OR IGNORE INTO users (id, username, password_hash, role)
-VALUES (1, 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin');
+VALUES (1, 'admin', '$2a$10$v1/OGJ.TMlKg77OMe0jkx.2ZxE32lp/ZDwyVlXcuawUqmt8RPpL/C', 'admin');
 `

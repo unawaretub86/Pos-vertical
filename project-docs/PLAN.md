@@ -228,38 +228,38 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 
 ### 0.2 Base de Datos
 
-- [ ] Integrar SQLite con `modernc.org/sqlite` (pure Go)
-- [ ] Crear sistema de migraciones (embebido, auto-ejecuta al iniciar)
-- [ ] Migración inicial: todas las tablas del modelo de datos
+- [x] Integrar SQLite con `modernc.org/sqlite` (pure Go)
+- [x] Crear sistema de migraciones (embebido, auto-ejecuta al iniciar)
+- [x] Migración inicial: todas las tablas del modelo de datos
   - `business_config`, `users`, `categories`, `products`, `customers`
   - `sales`, `sale_items`, `customer_payments`
   - `registers`, `register_movements`, `stock_entries`
-- [ ] Configurar WAL mode + busy timeout para concurrencia
-- [ ] Seed de usuario admin por defecto (admin/admin)
+- [x] Configurar WAL mode + busy timeout para concurrencia
+- [x] Seed de usuario admin por defecto (admin/admin)
 
 **DoD:**
-- [ ] Al ejecutar el binario, se crea `data.db` si no existe
-- [ ] Todas las tablas se crean correctamente con FKs e índices
-- [ ] SQLite opera en WAL mode
-- [ ] Existe un usuario admin por defecto para primer acceso
+- [x] Al ejecutar el binario, se crea `data.db` si no existe
+- [x] Todas las tablas se crean correctamente con FKs e índices
+- [x] SQLite opera en WAL mode
+- [x] Existe un usuario admin por defecto para primer acceso
 
 ---
 
 ### 0.3 Infraestructura API
 
-- [ ] Configurar Chi router con middleware base
-- [ ] Middleware de logging (request/response)
-- [ ] Middleware de CORS (para desarrollo)
-- [ ] Middleware de autenticación (JWT)
-- [ ] Middleware de autorización por rol (admin/cashier)
-- [ ] Estructura de respuesta API estándar (`{data, error, meta}`)
-- [ ] Manejo global de errores
+- [x] Configurar Chi router con middleware base
+- [x] Middleware de logging (request/response)
+- [x] Middleware de CORS (para desarrollo)
+- [x] Middleware de autenticación (JWT)
+- [x] Middleware de autorización por rol (admin/cashier)
+- [x] Estructura de respuesta API estándar (`{data, error, meta}`)
+- [x] Manejo global de errores
 
 **DoD:**
-- [ ] Rutas protegidas rechazan requests sin token válido (401)
-- [ ] Rutas de admin rechazan tokens de cajero (403)
-- [ ] Respuestas API siguen formato consistente
-- [ ] Errores devuelven mensajes útiles sin exponer internals
+- [x] Rutas protegidas rechazan requests sin token válido (401)
+- [x] Rutas de admin rechazan tokens de cajero (403)
+- [x] Respuestas API siguen formato consistente
+- [x] Errores devuelven mensajes útiles sin exponer internals
 
 ---
 
