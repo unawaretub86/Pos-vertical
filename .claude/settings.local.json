@@ -5,7 +5,13 @@
       "Bash(do echo:*)",
       "Read(//c/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/$dir/memory/**)",
       "Bash(done)",
-      "Bash(start \"C:\\\\Users\\\\ANDREYO\\\\Desktop\\\\PROJECTS\\\\Pos-vertical\\\\pos-prototype.html\")"
+      "Bash(start \"C:\\\\Users\\\\ANDREYO\\\\Desktop\\\\PROJECTS\\\\Pos-vertical\\\\pos-prototype.html\")",
+      "Bash(go mod:*)",
+      "Bash(npx create-next-app@latest frontend --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npx shadcn@latest init --defaults --yes)",
+      "Bash(go get:*)",
+      "Bash(npm run:*)",
+      "Bash(go build:*)"
     ]
   }
 }

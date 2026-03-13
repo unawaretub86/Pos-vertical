@@ -198,8 +198,8 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 
 ### 0.1 Estructura del Proyecto
 
-- [ ] Inicializar módulo Go (`go mod init`)
-- [ ] Crear estructura de directorios backend:
+- [x] Inicializar módulo Go (`go mod init`)
+- [x] Crear estructura de directorios backend:
   ```
   cmd/pos/main.go
   internal/
@@ -210,19 +210,19 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
     middleware/
     database/
   ```
-- [ ] Inicializar proyecto Next.js 14 en `frontend/`
-- [ ] Configurar TypeScript, Tailwind CSS, shadcn/ui
-- [ ] Importar Inter desde Google Fonts en el proyecto Next.js
-- [ ] Crear sistema de tokens CSS (`globals.css`) con todas las variables de color modo oscuro/claro
-- [ ] Implementar `data-theme` attribute toggle en `<html>`
-- [ ] Crear script de build que compile frontend (static export) y embeba en binario Go
+- [x] Inicializar proyecto Next.js 14 en `frontend/`
+- [x] Configurar TypeScript, Tailwind CSS, shadcn/ui
+- [x] Importar Inter desde Google Fonts en el proyecto Next.js
+- [x] Crear sistema de tokens CSS (`globals.css`) con todas las variables de color modo oscuro/claro
+- [x] Implementar `data-theme` attribute toggle en `<html>`
+- [x] Crear script de build que compile frontend (static export) y embeba en binario Go
 
 **DoD:**
-- [ ] `go build ./cmd/pos` compila sin errores
-- [ ] `npm run build` en frontend genera export estático
-- [ ] El binario sirve frontend en `localhost:8080`
-- [ ] El proyecto tiene `.gitignore` adecuado (node_modules, binarios, data.db)
-- [ ] Variables CSS de colores funcionan y cambian al alternar tema
+- [x] `go build ./cmd/pos` compila sin errores
+- [x] `npm run build` en frontend genera export estático
+- [x] El binario sirve frontend en `localhost:8080`
+- [x] El proyecto tiene `.gitignore` adecuado (node_modules, binarios, data.db)
+- [x] Variables CSS de colores funcionan y cambian al alternar tema
 
 ---
 
