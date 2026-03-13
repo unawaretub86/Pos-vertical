@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/$dir/memory/**)",
+      "Bash(done)",
+      "Bash(start \"C:\\\\Users\\\\ANDREYO\\\\Desktop\\\\PROJECTS\\\\Pos-vertical\\\\pos-prototype.html\")"
+    ]
+  }
+}
