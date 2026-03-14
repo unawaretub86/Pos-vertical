@@ -532,12 +532,12 @@ Layout principal (`.pos-layout`):
 ### 2.1 Caja Registradora
 
 **Backend:**
-- [ ] `POST /api/registers` — abrir caja (monto base)
-- [ ] `GET /api/registers` — listar cajas (historial)
-- [ ] `GET /api/registers/:id` — detalle de caja
-- [ ] `POST /api/registers/:id/close` — cerrar caja con cuadre
-- [ ] `GET /api/registers/:id/movements` — movimientos de caja
-- [ ] `POST /api/registers/:id/movements` — entrada/salida manual de efectivo
+- [x] `POST /api/registers` — abrir caja (monto base)
+- [x] `GET /api/registers` — listar cajas (historial)
+- [x] `GET /api/registers/:id` — detalle de caja
+- [x] `POST /api/registers/:id/close` — cerrar caja con cuadre
+- [x] `GET /api/registers/:id/movements` — movimientos de caja
+- [x] `POST /api/registers/:id/movements` — entrada/salida manual de efectivo
 
 **Frontend — Pantalla Caja (`/register`) — Fuente de verdad: `#screen-caja` en prototipo:**
 

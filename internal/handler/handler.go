@@ -18,6 +18,7 @@ type Handler struct {
 	categories *service.CategoryService
 	products   *service.ProductService
 	sales      *service.SaleService
+	registers  *service.RegisterService
 	setup      *repository.SetupRepository
 }
 
@@ -26,12 +27,14 @@ func New(db *database.DB) *Handler {
 	catRepo := repository.NewCategoryRepository(db.DB)
 	prodRepo := repository.NewProductRepository(db.DB)
 	saleRepo := repository.NewSaleRepository(db.DB)
+	regRepo := repository.NewRegisterRepository(db.DB)
 	setupRepo := repository.NewSetupRepository(db.DB)
 	return &Handler{
 		db:         db,
 		categories: service.NewCategoryService(catRepo),
 		products:   service.NewProductService(prodRepo),
 		sales:      service.NewSaleService(saleRepo, prodRepo),
+		registers:  service.NewRegisterService(regRepo),
 		setup:      setupRepo,
 	}
 }
@@ -83,6 +86,15 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/sales", h.createSale)
 		r.Get("/sales", h.listSales)
 		r.Get("/sales/{id}", h.getSale)
+
+		// Registers (all authenticated users)
+		r.Post("/registers", h.openRegister)
+		r.Get("/registers", h.listRegisters)
+		r.Get("/registers/open", h.getOpenRegister)
+		r.Get("/registers/{id}", h.getRegister)
+		r.Post("/registers/{id}/close", h.closeRegister)
+		r.Get("/registers/{id}/movements", h.listMovements)
+		r.Post("/registers/{id}/movements", h.addMovement)
 	})
 
 	return r
