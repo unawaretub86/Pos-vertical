@@ -106,6 +106,17 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		}
 	}
 
+	// For credit sales, record the debt in customer_payments (same transaction)
+	if sale.PaymentMethod == "credit" && sale.CustomerID != nil {
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO customer_payments (customer_id, amount, note) VALUES (?, ?, ?)`,
+			*sale.CustomerID, sale.Total, fmt.Sprintf("Deuda venta #%d", saleID),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("customer payment insert: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("sale commit: %w", err)
 	}

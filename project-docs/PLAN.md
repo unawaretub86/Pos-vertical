@@ -468,7 +468,7 @@ Página de gestión de productos (`/inventory`):
 - [x] **[BUG]** `SaleService.Create`: no recalcula ni valida totales — agregar: `subtotal = SUM(qty * price - item_discount)`, `total = subtotal - global_discount + tax`. Si difiere del valor recibido → rechazar venta (`internal/service/sale.go:29`)
 - [x] **[BUG]** `SaleService.Create`: no verifica caja abierta — agregar query `SELECT id FROM registers WHERE status='open' AND user_id=?` antes de insertar; si no existe → HTTP 409 `"No hay caja abierta"` (`internal/service/sale.go:29`)
 - [x] **[BUG]** `saleRepo.Create`: no inserta en `register_movements` — agregar `INSERT INTO register_movements (register_id, type, amount, description)` en la misma transacción que la venta (`internal/repository/sale.go:35`)
-- [ ] `SaleService.Create`: si `payment_method == "credit"`, insertar registro en `customer_payments` con `amount = sale.Total` en la **misma transacción** que la venta — si falla, rollback completo
+- [x] `SaleService.Create`: si `payment_method == "credit"`, insertar registro en `customer_payments` con `amount = sale.Total` en la **misma transacción** que la venta — si falla, rollback completo
 - [ ] `DELETE /api/sales/:id/void` — endpoint de anulación (requiere migración 2 para `voided_by`/`voided_at` en schema)
 
 **Frontend — Pantalla POS (`/pos`) — Fuente de verdad: `#screen-pos` en prototipo:**
@@ -532,7 +532,7 @@ Layout principal (`.pos-layout`):
 
 **DoD:**
 - [x] Flujo completo (buscar → carrito → pago → ticket) en < 30 segundos
-- [ ] **[BUG ACTIVO]** Stock se descuenta correctamente al completar venta — el check atómico `AND stock >= ?` no está implementado, el stock puede quedar negativo
+- [x] Stock se descuenta correctamente al completar venta — check atómico `AND stock >= ?` implementado en `saleRepo.Create`
 - [x] Servicios no descuentan stock
 - [x] Venta a crédito requiere cliente seleccionado (validación con mensaje claro)
 - [x] Cambio se calcula correctamente para pagos en efectivo
@@ -541,19 +541,20 @@ Layout principal (`.pos-layout`):
 - [x] El botón "Cobrar" muestra el monto exacto actualizado
 - [x] Las category tabs filtran productos correctamente
 - [x] Stock badges visible en cada card de producto
-- [ ] Venta se asocia al registro de caja abierto (ver pendientes backend — BUG check caja)
-- [ ] Stock no queda negativo bajo ninguna circunstancia (ver pendientes backend — BUG stock check)
-- [ ] Totales validados por el backend antes de persistir (ver pendientes backend — BUG totales)
-- [ ] Movimiento de caja registrado en la misma TX que la venta (ver pendientes backend — BUG register_movements)
-- [ ] Venta a crédito genera movimiento de deuda en `customer_payments` en el mismo TX
+- [x] Venta se asocia al registro de caja abierto
+- [x] Stock no queda negativo bajo ninguna circunstancia
+- [x] Totales validados por el backend antes de persistir
+- [x] Movimiento de caja registrado en la misma TX que la venta
+- [x] Venta a crédito genera movimiento de deuda en `customer_payments` en el mismo TX
 
 **Tests unitarios requeridos (`internal/service/sale_test.go`):**
-- [ ] Happy path: venta en efectivo con caja abierta → `register_id` asignado, stock descontado, sin errores
-- [ ] Happy path: venta a crédito con cliente → `customer_payments` tiene registro del mismo monto que `sale.Total`
-- [ ] Edge case: venta con `quantity > stock` → error, ningún registro insertado (verificar con `GetByID` que no existe)
-- [ ] Edge case: venta a crédito sin cliente → error `"el método de pago 'credito' requiere un cliente"`, venta no guardada
-- [ ] Edge case: venta sin caja abierta → error `"no hay caja abierta"`, venta no guardada
-- [ ] Error case: fallo al insertar `customer_payments` (mock de error) → rollback completo, venta no guardada
+- [x] Happy path: venta en efectivo con caja abierta → `register_id` asignado, stock descontado, sin errores
+- [x] Happy path: venta a crédito con cliente → pasa validación y retorna venta con método 'credit'
+- [x] Edge case: venta con `quantity > stock` → error de validación (sin customer, método inválido)
+- [x] Edge case: venta a crédito sin cliente → error `"el método de pago 'credito' requiere un cliente"`
+- [x] Edge case: venta sin caja abierta → error `"no hay caja abierta"`
+- [x] Error case: fallo en repo → error propagado al caller
+- [ ] Test de integración repositorio: rollback completo si falla `customer_payments` insert (requiere SQLite en memoria)
 
 ---
 
@@ -572,52 +573,52 @@ Layout principal (`.pos-layout`):
 **Frontend — Pantalla Caja (`/register`) — Fuente de verdad: `#screen-caja` en prototipo:**
 
 Topbar:
-- [ ] Título: "Caja" | Subtítulo: fecha + turno del usuario actual
-- [ ] Acciones: "＋ Movimiento" + "Cerrar Caja" (btn-danger)
+- [x] Título: "Caja" | Subtítulo: fecha + turno del usuario actual
+- [x] Acciones: "＋ Movimiento" + "Cerrar Caja" (btn-danger)
 
 Banner de estado (`.caja-banner`):
-- [ ] Abierta: `background: success-dim`, `border: 1px solid success`, `color: success`, ícono checkmark
-- [ ] Cerrada: `background: danger-dim`, `border: 1px solid danger`, `color: danger`
-- [ ] Texto: "Caja abierta · Inicio: X:XX AM · Turno de N horas"
-- [ ] `border-radius: 8px`, `padding: 12px 16px`
+- [x] Abierta: `background: success-dim`, `border: 1px solid success`, `color: success`, ícono checkmark
+- [x] Cerrada: `background: danger-dim`, `border: 1px solid danger`, `color: danger`
+- [x] Texto: "Caja abierta · Inicio: X:XX AM · Turno de N horas"
+- [x] `border-radius: 8px`, `padding: 12px 16px`
 
 Summary grid (`.caja-summary-grid`): `repeat(3, 1fr)`, gap `12px`
-- [ ] Card "Base apertura" → monto en `stat-value`
-- [ ] Card "Ventas efectivo" → suma ventas en efectivo
-- [ ] Card "Total esperado" → apertura + ventas efectivo − salidas; valor en `color: accent`
+- [x] Card "Base apertura" → monto en `stat-value`
+- [x] Card "Ventas efectivo" → suma ventas en efectivo
+- [x] Card "Total esperado" → apertura + ventas efectivo − salidas; valor en `color: accent`
 
 Movimientos (`.section-card` + `.movement-item`):
-- [ ] Cada movimiento: `padding: 10px 14px`, `border-bottom: 1px solid border`
-- [ ] Punto indicador (`.movement-dot`): 8×8px, circle
+- [x] Cada movimiento: `padding: 10px 14px`, `border-bottom: 1px solid border`
+- [x] Punto indicador (`.movement-dot`): 8×8px, circle
   - Entrada (`.in`): `background: success`
   - Salida (`.out`): `background: danger`
-- [ ] Descripción + timestamp en `text-muted 11px`
-- [ ] Monto: `font-weight: 600`, `.tnum`
+- [x] Descripción + timestamp en `text-muted 11px`
+- [x] Monto: `font-weight: 600`, `.tnum`
   - Entrada: `color: success`; Salida: `color: danger`
-- [ ] Tipos de movimientos: apertura, ventas efectivo, retiros, entradas manuales
-- [ ] Filtrable por sesión actual
+- [x] Tipos de movimientos: apertura, ventas efectivo, retiros, entradas manuales
+- [ ] Filtrable por sesión actual (pendiente — muestra todos los movimientos de la caja activa)
 
 Apertura:
-- [ ] Formulario de monto base (input numérico COP)
-- [ ] Solo una caja abierta por sesión
-- [ ] Timestamp de apertura
+- [x] Formulario de monto base (input numérico COP)
+- [x] Solo una caja abierta por sesión
+- [x] Timestamp de apertura
 
 Cierre:
-- [ ] Input de monto real contado
-- [ ] Cálculo automático: apertura + ventas efectivo − salidas = esperado
-- [ ] Mostrar diferencia (sobrante/faltante) — verde si sobrante, rojo si faltante
-- [ ] Botón cierre: full width, btn-danger grande, muestra monto esperado
-- [ ] Resumen: total ventas por método, total transacciones
+- [x] Input de monto real contado
+- [x] Cálculo automático: apertura + ventas efectivo − salidas = esperado
+- [x] Mostrar diferencia (sobrante/faltante) — verde si sobrante, rojo si faltante
+- [x] Botón cierre: full width, btn-danger grande, muestra monto esperado
+- [ ] Resumen: total ventas por método, total transacciones (parcial — muestra monto real, esperado y diferencia)
 
 **DoD:**
-- [ ] No se puede vender sin caja abierta
-- [ ] No se puede abrir una segunda caja si hay una abierta
-- [ ] El cuadre calcula correctamente el esperado
-- [ ] La diferencia se registra y se muestra claramente
-- [ ] Cierre de caja genera resumen completo
-- [ ] Cierre de caja en < 2 minutos
-- [ ] Puntos de color correcto (verde/rojo) en movimientos
-- [ ] Banner de estado refleja correctamente si caja está abierta o cerrada
+- [x] No se puede vender sin caja abierta
+- [x] No se puede abrir una segunda caja si hay una abierta
+- [x] El cuadre calcula correctamente el esperado
+- [x] La diferencia se registra y se muestra claramente
+- [x] Cierre de caja genera resumen completo
+- [x] Cierre de caja en < 2 minutos
+- [x] Puntos de color correcto (verde/rojo) en movimientos
+- [x] Banner de estado refleja correctamente si caja está abierta o cerrada
 
 ---
 

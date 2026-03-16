@@ -16,7 +16,8 @@
       "Bash(npx tsc:*)",
       "Bash(go test:*)",
       "Read(//c/Users/ANDREYO/.agents/skills/skill-creator/**)",
-      "Bash(python -m scripts.aggregate_benchmark \"C:/Users/ANDREYO/.claude/skills/ralph-workspace/iteration-1\" --skill-name ralph)"
+      "Bash(python -m scripts.aggregate_benchmark \"C:/Users/ANDREYO/.claude/skills/ralph-workspace/iteration-1\" --skill-name ralph)",
+      "Bash(find c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/src -name *.tsx)"
     ]
   }
 }
