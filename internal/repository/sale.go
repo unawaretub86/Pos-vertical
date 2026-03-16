@@ -71,19 +71,38 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		}
 
 		// Only decrement stock for 'product' type items
-		var productType string
-		err = tx.QueryRowContext(ctx, `SELECT type FROM products WHERE id = ?`, item.ProductID).Scan(&productType)
+		var productType, productName string
+		var productStock float64
+		err = tx.QueryRowContext(ctx, `SELECT type, name, stock FROM products WHERE id = ?`, item.ProductID).Scan(&productType, &productName, &productStock)
 		if err != nil {
 			return nil, fmt.Errorf("sale_item product type: %w", err)
 		}
 		if productType == "product" {
-			_, err = tx.ExecContext(ctx,
-				`UPDATE products SET stock = stock - ? WHERE id = ?`,
-				item.Quantity, item.ProductID,
+			res, err := tx.ExecContext(ctx,
+				`UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`,
+				item.Quantity, item.ProductID, item.Quantity,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("sale stock update: %w", err)
 			}
+			affected, err := res.RowsAffected()
+			if err != nil {
+				return nil, fmt.Errorf("sale stock rows affected: %w", err)
+			}
+			if affected == 0 {
+				return nil, fmt.Errorf("stock insuficiente: hay %.0f unidades de %s, intentas vender %.0f", productStock, productName, item.Quantity)
+			}
+		}
+	}
+
+	// Register movement for this sale (same transaction)
+	if sale.RegisterID != nil {
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO register_movements (register_id, type, amount, description) VALUES (?, 'sale', ?, ?)`,
+			*sale.RegisterID, sale.Total, fmt.Sprintf("Venta #%d", saleID),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("register movement insert: %w", err)
 		}
 	}
 

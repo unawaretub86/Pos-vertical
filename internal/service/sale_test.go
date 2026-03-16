@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/andreyo/pos/internal/model"
@@ -11,10 +12,14 @@ import (
 // --- mocks ---
 
 type mockSaleRepo struct {
-	created *model.Sale
+	created   *model.Sale
+	createErr error
 }
 
 func (m *mockSaleRepo) Create(_ context.Context, sale *model.Sale) (*model.Sale, error) {
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
 	sale.ID = 1
 	m.created = sale
 	return sale, nil
@@ -42,11 +47,48 @@ func (m *mockProductRepo) Update(_ context.Context, p *model.Product) (*model.Pr
 }
 func (m *mockProductRepo) Delete(_ context.Context, _ int64) error { return nil }
 
+type mockRegisterRepo struct {
+	openRegister *model.Register
+	openErr      error
+}
+
+func (m *mockRegisterRepo) Create(_ context.Context, r *model.Register) (*model.Register, error) {
+	return r, nil
+}
+func (m *mockRegisterRepo) List(_ context.Context) ([]*model.Register, error) { return nil, nil }
+func (m *mockRegisterRepo) GetByID(_ context.Context, _ int64) (*model.Register, error) {
+	return nil, nil
+}
+func (m *mockRegisterRepo) GetOpen(_ context.Context) (*model.Register, error) {
+	if m.openErr != nil {
+		return nil, m.openErr
+	}
+	return m.openRegister, nil
+}
+func (m *mockRegisterRepo) Close(_ context.Context, _ int64, _, _, _ float64) (*model.Register, error) {
+	return nil, nil
+}
+func (m *mockRegisterRepo) AddMovement(_ context.Context, mv *model.RegisterMovement) (*model.RegisterMovement, error) {
+	return mv, nil
+}
+func (m *mockRegisterRepo) ListMovements(_ context.Context, _ int64) ([]*model.RegisterMovement, error) {
+	return nil, nil
+}
+func (m *mockRegisterRepo) SumCashSales(_ context.Context, _ int64) (float64, error) { return 0, nil }
+func (m *mockRegisterRepo) SumCashOut(_ context.Context, _ int64) (float64, error)   { return 0, nil }
+
 // --- helpers ---
+
+func openRegister() *model.Register {
+	id := int64(10)
+	_ = id
+	return &model.Register{ID: 10, Status: "open"}
+}
 
 func validSale() *model.Sale {
 	return &model.Sale{
 		PaymentMethod: "cash",
+		Total:         20,
 		Items: []model.SaleItem{
 			{ProductID: 1, Quantity: 2, UnitPrice: 10},
 		},
@@ -54,7 +96,19 @@ func validSale() *model.Sale {
 }
 
 func newSvc() *SaleService {
-	return NewSaleService(&mockSaleRepo{}, &mockProductRepo{})
+	return NewSaleService(
+		&mockSaleRepo{},
+		&mockProductRepo{},
+		&mockRegisterRepo{openRegister: openRegister()},
+	)
+}
+
+func newSvcNoRegister() *SaleService {
+	return NewSaleService(
+		&mockSaleRepo{},
+		&mockProductRepo{},
+		&mockRegisterRepo{openErr: repository.ErrNotFound},
+	)
 }
 
 // --- validateSale tests ---
@@ -164,5 +218,95 @@ func TestSaleService_Create_AllPaymentMethods(t *testing.T) {
 		if _, err := svc.Create(context.Background(), s); err != nil {
 			t.Errorf("payment method %q should be valid, got: %v", m, err)
 		}
+	}
+}
+
+// --- New required tests ---
+
+func TestSaleService_Create_AssignsOpenRegisterID(t *testing.T) {
+	svc := newSvc()
+	sale, err := svc.Create(context.Background(), validSale())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sale.RegisterID == nil || *sale.RegisterID != 10 {
+		t.Errorf("expected register_id 10, got %v", sale.RegisterID)
+	}
+}
+
+func TestSaleService_Create_NoOpenRegister_ReturnsError(t *testing.T) {
+	svc := newSvcNoRegister()
+	_, err := svc.Create(context.Background(), validSale())
+	if err == nil {
+		t.Fatal("expected error: no open register")
+	}
+	if err.Error() != "no hay caja abierta" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestSaleService_Create_InconsistentTotal_ReturnsError(t *testing.T) {
+	svc := newSvc()
+	s := validSale()
+	// items sum to 20, but frontend sends 50
+	s.Total = 50
+	_, err := svc.Create(context.Background(), s)
+	if err == nil {
+		t.Fatal("expected error: inconsistent total")
+	}
+}
+
+func TestSaleService_Create_RecalculatesTotalCorrectly(t *testing.T) {
+	svc := newSvc()
+	s := validSale()
+	// 2 items * $10 = $20 subtotal, $0 discount, $0 tax → total = 20
+	s.Total = 20
+	sale, err := svc.Create(context.Background(), s)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sale.Total != 20 {
+		t.Errorf("expected total 20, got %v", sale.Total)
+	}
+	if sale.Subtotal != 20 {
+		t.Errorf("expected subtotal 20, got %v", sale.Subtotal)
+	}
+}
+
+func TestSaleService_Create_CreditWithCustomer_Succeeds(t *testing.T) {
+	svc := newSvc()
+	s := validSale()
+	s.PaymentMethod = "credit"
+	id := int64(5)
+	s.CustomerID = &id
+	sale, err := svc.Create(context.Background(), s)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sale.PaymentMethod != "credit" {
+		t.Errorf("expected payment method 'credit', got %q", sale.PaymentMethod)
+	}
+}
+
+func TestSaleService_Create_CreditWithoutCustomer_ReturnsError(t *testing.T) {
+	svc := newSvc()
+	s := validSale()
+	s.PaymentMethod = "credit"
+	s.CustomerID = nil
+	_, err := svc.Create(context.Background(), s)
+	if err == nil {
+		t.Fatal("expected error: credit without customer")
+	}
+}
+
+func TestSaleService_Create_RepoError_Propagates(t *testing.T) {
+	svc := NewSaleService(
+		&mockSaleRepo{createErr: errors.New("db failure")},
+		&mockProductRepo{},
+		&mockRegisterRepo{openRegister: openRegister()},
+	)
+	_, err := svc.Create(context.Background(), validSale())
+	if err == nil {
+		t.Fatal("expected error from repo")
 	}
 }

@@ -464,10 +464,10 @@ Página de gestión de productos (`/inventory`):
 - [x] `GET /api/sales/:id` — detalle de venta
 
 **Pendientes backend críticos (bloquean DoD):**
-- [ ] **[BUG]** `saleRepo.Create`: el UPDATE de stock usa `WHERE id = ?` sin `AND stock >= ?` — corregir a `UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`, verificar `rows affected == 0` → rollback con error `"Stock insuficiente: hay X unidades de [producto], intentas vender Y"` (`internal/repository/sale.go:80`)
-- [ ] **[BUG]** `SaleService.Create`: no recalcula ni valida totales — agregar: `subtotal = SUM(qty * price - item_discount)`, `total = subtotal - global_discount + tax`. Si difiere del valor recibido → rechazar venta (`internal/service/sale.go:29`)
-- [ ] **[BUG]** `SaleService.Create`: no verifica caja abierta — agregar query `SELECT id FROM registers WHERE status='open' AND user_id=?` antes de insertar; si no existe → HTTP 409 `"No hay caja abierta"` (`internal/service/sale.go:29`)
-- [ ] **[BUG]** `saleRepo.Create`: no inserta en `register_movements` — agregar `INSERT INTO register_movements (register_id, type, amount, description)` en la misma transacción que la venta (`internal/repository/sale.go:35`)
+- [x] **[BUG]** `saleRepo.Create`: el UPDATE de stock usa `WHERE id = ?` sin `AND stock >= ?` — corregir a `UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`, verificar `rows affected == 0` → rollback con error `"Stock insuficiente: hay X unidades de [producto], intentas vender Y"` (`internal/repository/sale.go:80`)
+- [x] **[BUG]** `SaleService.Create`: no recalcula ni valida totales — agregar: `subtotal = SUM(qty * price - item_discount)`, `total = subtotal - global_discount + tax`. Si difiere del valor recibido → rechazar venta (`internal/service/sale.go:29`)
+- [x] **[BUG]** `SaleService.Create`: no verifica caja abierta — agregar query `SELECT id FROM registers WHERE status='open' AND user_id=?` antes de insertar; si no existe → HTTP 409 `"No hay caja abierta"` (`internal/service/sale.go:29`)
+- [x] **[BUG]** `saleRepo.Create`: no inserta en `register_movements` — agregar `INSERT INTO register_movements (register_id, type, amount, description)` en la misma transacción que la venta (`internal/repository/sale.go:35`)
 - [ ] `SaleService.Create`: si `payment_method == "credit"`, insertar registro en `customer_payments` con `amount = sale.Total` en la **misma transacción** que la venta — si falla, rollback completo
 - [ ] `DELETE /api/sales/:id/void` — endpoint de anulación (requiere migración 2 para `voided_by`/`voided_at` en schema)
 

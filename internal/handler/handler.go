@@ -33,7 +33,7 @@ func New(db *database.DB) *Handler {
 		db:         db,
 		categories: service.NewCategoryService(catRepo),
 		products:   service.NewProductService(prodRepo),
-		sales:      service.NewSaleService(saleRepo, prodRepo),
+		sales:      service.NewSaleService(saleRepo, prodRepo, regRepo),
 		registers:  service.NewRegisterService(regRepo),
 		setup:      setupRepo,
 	}
