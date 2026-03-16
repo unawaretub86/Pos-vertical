@@ -9,10 +9,10 @@ import (
 )
 
 var validPaymentMethods = map[string]bool{
-	"efectivo":      true,
-	"transferencia": true,
-	"tarjeta":       true,
-	"credito":       true,
+	"cash":     true,
+	"transfer": true,
+	"card":     true,
+	"credit":   true,
 }
 
 // SaleService handles sale business logic.
@@ -46,9 +46,9 @@ func (s *SaleService) GetByID(ctx context.Context, id int64) (*model.Sale, error
 
 func validateSale(sale *model.Sale) error {
 	if !validPaymentMethods[sale.PaymentMethod] {
-		return errors.New("método de pago inválido: debe ser efectivo, transferencia, tarjeta o credito")
+		return errors.New("método de pago inválido: debe ser cash, transfer, card o credit")
 	}
-	if sale.PaymentMethod == "credito" && sale.CustomerID == nil {
+	if sale.PaymentMethod == "credit" && sale.CustomerID == nil {
 		return errors.New("el método de pago 'credito' requiere un cliente")
 	}
 	if len(sale.Items) == 0 {

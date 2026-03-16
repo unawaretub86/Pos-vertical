@@ -13,7 +13,10 @@
       "Bash(npm run:*)",
       "Bash(go build:*)",
       "Bash(xargs ls:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(go test:*)",
+      "Read(//c/Users/ANDREYO/.agents/skills/skill-creator/**)",
+      "Bash(python -m scripts.aggregate_benchmark \"C:/Users/ANDREYO/.claude/skills/ralph-workspace/iteration-1\" --skill-name ralph)"
     ]
   }
 }

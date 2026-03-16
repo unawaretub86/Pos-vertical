@@ -229,11 +229,19 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 ### 0.2 Base de Datos
 
 - [x] Integrar SQLite con `modernc.org/sqlite` (pure Go)
-- [x] Crear sistema de migraciones (embebido, auto-ejecuta al iniciar)
-- [x] Migración inicial: todas las tablas del modelo de datos
-  - `business_config`, `users`, `categories`, `products`, `customers`
-  - `sales`, `sale_items`, `customer_payments`
-  - `registers`, `register_movements`, `stock_entries`
+- [x] Integrar SQLite con `modernc.org/sqlite` (pure Go)
+- [/] Crear sistema de migraciones (embebido, auto-ejecuta al iniciar)
+  - [x] Migración inicial: todas las tablas del modelo de datos
+    - `business_config`, `users`, `categories`, `products`, `customers`
+    - `sales`, `sale_items`, `customer_payments`
+    - `registers`, `register_movements`, `stock_entries`
+  - [ ] **Refactorizar a migraciones versionadas** — el sistema actual usa solo `CREATE TABLE IF NOT EXISTS` y no soporta `ALTER TABLE` en campo. Si un cliente ya tiene `data.db` y se agrega una columna nueva, la columna nunca se aplica y el binario falla silenciosamente
+    - [ ] Crear tabla `schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME)`
+    - [ ] Convertir schema inicial en **migración versión 1**
+    - [ ] Migración 2: `ALTER TABLE sales ADD COLUMN voided_by INTEGER REFERENCES users(id)` + `ALTER TABLE sales ADD COLUMN voided_at DATETIME` + `ALTER TABLE products ADD CHECK (stock >= 0)`
+    - [ ] Migración 3: `ALTER TABLE sale_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0`
+    - [ ] Cada migración corre en transacción — si falla, el binario no arranca
+    - [ ] El binario hace backup automático de `data.db` antes de correr cualquier migración pendiente (`data.db.backup-YYYYMMDD`)
 - [x] Configurar WAL mode + busy timeout para concurrencia
 - [x] Seed de usuario admin por defecto (admin/admin)
 
@@ -242,6 +250,7 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 - [x] Todas las tablas se crean correctamente con FKs e índices
 - [x] SQLite opera en WAL mode
 - [x] Existe un usuario admin por defecto para primer acceso
+- [ ] Al actualizar el binario sobre un `data.db` existente, las migraciones pendientes se aplican automáticamente sin pérdida de datos
 
 ---
 
@@ -454,6 +463,14 @@ Página de gestión de productos (`/inventory`):
 - [x] `GET /api/sales` — listar ventas (con filtros de fecha)
 - [x] `GET /api/sales/:id` — detalle de venta
 
+**Pendientes backend críticos (bloquean DoD):**
+- [ ] **[BUG]** `saleRepo.Create`: el UPDATE de stock usa `WHERE id = ?` sin `AND stock >= ?` — corregir a `UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`, verificar `rows affected == 0` → rollback con error `"Stock insuficiente: hay X unidades de [producto], intentas vender Y"` (`internal/repository/sale.go:80`)
+- [ ] **[BUG]** `SaleService.Create`: no recalcula ni valida totales — agregar: `subtotal = SUM(qty * price - item_discount)`, `total = subtotal - global_discount + tax`. Si difiere del valor recibido → rechazar venta (`internal/service/sale.go:29`)
+- [ ] **[BUG]** `SaleService.Create`: no verifica caja abierta — agregar query `SELECT id FROM registers WHERE status='open' AND user_id=?` antes de insertar; si no existe → HTTP 409 `"No hay caja abierta"` (`internal/service/sale.go:29`)
+- [ ] **[BUG]** `saleRepo.Create`: no inserta en `register_movements` — agregar `INSERT INTO register_movements (register_id, type, amount, description)` en la misma transacción que la venta (`internal/repository/sale.go:35`)
+- [ ] `SaleService.Create`: si `payment_method == "credit"`, insertar registro en `customer_payments` con `amount = sale.Total` en la **misma transacción** que la venta — si falla, rollback completo
+- [ ] `DELETE /api/sales/:id/void` — endpoint de anulación (requiere migración 2 para `voided_by`/`voided_at` en schema)
+
 **Frontend — Pantalla POS (`/pos`) — Fuente de verdad: `#screen-pos` en prototipo:**
 
 Layout principal (`.pos-layout`):
@@ -509,12 +526,13 @@ Layout principal (`.pos-layout`):
 - [x] Confirmar venta → guardar en DB → actualizar stock → toast "Venta completada"
 - [x] Limpiar carrito después de venta exitosa
 - [ ] Descuento por ítem (% o monto fijo) — pendiente
+- [ ] Botón de descuento global configurable por admin (habilitar/deshabilitar desde configuración) — pendiente
 - [ ] Modificar precio en línea (solo admin) — pendiente
 - [ ] Venta a crédito marca recibo como "CRÉDITO" — pendiente ticket
 
 **DoD:**
 - [x] Flujo completo (buscar → carrito → pago → ticket) en < 30 segundos
-- [x] Stock se descuenta correctamente al completar venta
+- [ ] **[BUG ACTIVO]** Stock se descuenta correctamente al completar venta — el check atómico `AND stock >= ?` no está implementado, el stock puede quedar negativo
 - [x] Servicios no descuentan stock
 - [x] Venta a crédito requiere cliente seleccionado (validación con mensaje claro)
 - [x] Cambio se calcula correctamente para pagos en efectivo
@@ -523,7 +541,19 @@ Layout principal (`.pos-layout`):
 - [x] El botón "Cobrar" muestra el monto exacto actualizado
 - [x] Las category tabs filtran productos correctamente
 - [x] Stock badges visible en cada card de producto
-- [ ] Venta se asocia al registro de caja abierto — pendiente Fase 2
+- [ ] Venta se asocia al registro de caja abierto (ver pendientes backend — BUG check caja)
+- [ ] Stock no queda negativo bajo ninguna circunstancia (ver pendientes backend — BUG stock check)
+- [ ] Totales validados por el backend antes de persistir (ver pendientes backend — BUG totales)
+- [ ] Movimiento de caja registrado en la misma TX que la venta (ver pendientes backend — BUG register_movements)
+- [ ] Venta a crédito genera movimiento de deuda en `customer_payments` en el mismo TX
+
+**Tests unitarios requeridos (`internal/service/sale_test.go`):**
+- [ ] Happy path: venta en efectivo con caja abierta → `register_id` asignado, stock descontado, sin errores
+- [ ] Happy path: venta a crédito con cliente → `customer_payments` tiene registro del mismo monto que `sale.Total`
+- [ ] Edge case: venta con `quantity > stock` → error, ningún registro insertado (verificar con `GetByID` que no existe)
+- [ ] Edge case: venta a crédito sin cliente → error `"el método de pago 'credito' requiere un cliente"`, venta no guardada
+- [ ] Edge case: venta sin caja abierta → error `"no hay caja abierta"`, venta no guardada
+- [ ] Error case: fallo al insertar `customer_payments` (mock de error) → rollback completo, venta no guardada
 
 ---
 
@@ -952,11 +982,26 @@ Configuraciones a implementar:
 - [ ] Tests de componentes frontend (React Testing Library)
 - [ ] Test E2E del flujo principal: login → POS → venta → ticket
 
+**Cobertura mínima requerida — Service Layer (Go):**
+
+| Módulo | Caso | Resultado esperado |
+|--------|------|--------------------|
+| `SaleService` | Venta efectivo, caja abierta | `register_id` asignado, stock decrementado |
+| `SaleService` | Venta crédito con cliente | `customer_payments` registrado en mismo TX |
+| `SaleService` | Venta crédito sin cliente | Error, venta no guardada |
+| `SaleService` | Venta sin caja abierta | Error `"no hay caja abierta"`, venta no guardada |
+| `SaleService` | Cantidad > stock disponible | Error, rollback total, stock sin cambio |
+| `SaleService` | Fallo en escritura de `customer_payments` | Rollback total, venta no guardada |
+| `ProductService` | Crear producto con precio negativo | Error de validación |
+| `CategoryService` | Eliminar categoría con productos asignados | HTTP 409, categoría no eliminada |
+| `RegisterService` | Abrir segunda caja con una ya abierta | Error, segunda caja no creada |
+
 **DoD:**
 - [ ] Binario se genera sin errores en un solo comando
 - [ ] Binario funciona en Windows 10/11 sin dependencias
 - [ ] `pos.exe` < 30 MB
 - [ ] Tests pasan al 100%
+- [ ] Todos los casos de la tabla de cobertura mínima tienen test implementado y pasando
 - [ ] Flujo E2E completo funciona
 
 ### 9.3 Documentación Mínima
