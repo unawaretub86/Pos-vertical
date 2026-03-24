@@ -43,6 +43,21 @@ type Customer struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// CustomerWithBalance extends Customer with on-the-fly credit balance data.
+type CustomerWithBalance struct {
+	Customer
+	Balance      float64    `json:"balance"`
+	OldestDebtAt *time.Time `json:"oldest_debt_at"`
+}
+
+type CustomerPayment struct {
+	ID         int64     `json:"id"`
+	CustomerID int64     `json:"customer_id"`
+	Amount     float64   `json:"amount"`
+	Note       string    `json:"note"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 type Sale struct {
 	ID            int64      `json:"id"`
 	UserID        int64      `json:"user_id"`

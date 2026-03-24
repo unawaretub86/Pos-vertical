@@ -230,18 +230,18 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 
 - [x] Integrar SQLite con `modernc.org/sqlite` (pure Go)
 - [x] Integrar SQLite con `modernc.org/sqlite` (pure Go)
-- [/] Crear sistema de migraciones (embebido, auto-ejecuta al iniciar)
+- [x] Crear sistema de migraciones (embebido, auto-ejecuta al iniciar)
   - [x] Migración inicial: todas las tablas del modelo de datos
     - `business_config`, `users`, `categories`, `products`, `customers`
     - `sales`, `sale_items`, `customer_payments`
     - `registers`, `register_movements`, `stock_entries`
-  - [ ] **Refactorizar a migraciones versionadas** — el sistema actual usa solo `CREATE TABLE IF NOT EXISTS` y no soporta `ALTER TABLE` en campo. Si un cliente ya tiene `data.db` y se agrega una columna nueva, la columna nunca se aplica y el binario falla silenciosamente
-    - [ ] Crear tabla `schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME)`
-    - [ ] Convertir schema inicial en **migración versión 1**
-    - [ ] Migración 2: `ALTER TABLE sales ADD COLUMN voided_by INTEGER REFERENCES users(id)` + `ALTER TABLE sales ADD COLUMN voided_at DATETIME` + `ALTER TABLE products ADD CHECK (stock >= 0)`
-    - [ ] Migración 3: `ALTER TABLE sale_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0`
-    - [ ] Cada migración corre en transacción — si falla, el binario no arranca
-    - [ ] El binario hace backup automático de `data.db` antes de correr cualquier migración pendiente (`data.db.backup-YYYYMMDD`)
+  - [x] **Refactorizar a migraciones versionadas** — el sistema actual usa solo `CREATE TABLE IF NOT EXISTS` y no soporta `ALTER TABLE` en campo. Si un cliente ya tiene `data.db` y se agrega una columna nueva, la columna nunca se aplica y el binario falla silenciosamente
+    - [x] Crear tabla `schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME)`
+    - [x] Convertir schema inicial en **migración versión 1**
+    - [x] Migración 2: `ALTER TABLE sales ADD COLUMN voided_by INTEGER REFERENCES users(id)` + `ALTER TABLE sales ADD COLUMN voided_at DATETIME` + `ALTER TABLE products ADD CHECK (stock >= 0)`
+    - [x] Migración 3: `ALTER TABLE sale_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0`
+    - [x] Cada migración corre en transacción — si falla, el binario no arranca
+    - [x] El binario hace backup automático de `data.db` antes de correr cualquier migración pendiente (`data.db.backup-YYYYMMDD`)
 - [x] Configurar WAL mode + busy timeout para concurrencia
 - [x] Seed de usuario admin por defecto (admin/admin)
 
@@ -250,7 +250,7 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 - [x] Todas las tablas se crean correctamente con FKs e índices
 - [x] SQLite opera en WAL mode
 - [x] Existe un usuario admin por defecto para primer acceso
-- [ ] Al actualizar el binario sobre un `data.db` existente, las migraciones pendientes se aplican automáticamente sin pérdida de datos
+- [x] Al actualizar el binario sobre un `data.db` existente, las migraciones pendientes se aplican automáticamente sin pérdida de datos
 
 ---
 
@@ -468,7 +468,7 @@ Página de gestión de productos (`/inventory`):
 - [x] **[BUG]** `SaleService.Create`: no recalcula ni valida totales — agregar: `subtotal = SUM(qty * price - item_discount)`, `total = subtotal - global_discount + tax`. Si difiere del valor recibido → rechazar venta (`internal/service/sale.go:29`)
 - [x] **[BUG]** `SaleService.Create`: no verifica caja abierta — agregar query `SELECT id FROM registers WHERE status='open' AND user_id=?` antes de insertar; si no existe → HTTP 409 `"No hay caja abierta"` (`internal/service/sale.go:29`)
 - [x] **[BUG]** `saleRepo.Create`: no inserta en `register_movements` — agregar `INSERT INTO register_movements (register_id, type, amount, description)` en la misma transacción que la venta (`internal/repository/sale.go:35`)
-- [x] `SaleService.Create`: si `payment_method == "credit"`, insertar registro en `customer_payments` con `amount = sale.Total` en la **misma transacción** que la venta — si falla, rollback completo
+- ~~`SaleService.Create`: si `payment_method == "credit"`, insertar registro en `customer_payments`~~ **ELIMINADO (Ralph Review 2025-03-24):** este requerimiento contradice la arquitectura de balance on-the-fly. El balance = `SUM(credit_sales) - SUM(customer_payments)`. Si al crear la venta a crédito se inserta un payment con el mismo monto, el balance queda en $0 inmediatamente (la deuda se auto-cancela). La arquitectura actual es correcta: la venta a crédito aumenta la deuda vía la tabla `sales`; los abonos se registran en `customer_payments` como eventos independientes posteriores.
 - [ ] `DELETE /api/sales/:id/void` — endpoint de anulación (requiere migración 2 para `voided_by`/`voided_at` en schema)
 
 **Frontend — Pantalla POS (`/pos`) — Fuente de verdad: `#screen-pos` en prototipo:**
@@ -534,7 +534,7 @@ Layout principal (`.pos-layout`):
 - [x] Flujo completo (buscar → carrito → pago → ticket) en < 30 segundos
 - [x] Stock se descuenta correctamente al completar venta — check atómico `AND stock >= ?` implementado en `saleRepo.Create`
 - [x] Servicios no descuentan stock
-- [x] Venta a crédito requiere cliente seleccionado (validación con mensaje claro)
+- [ ] Venta a crédito requiere cliente seleccionado (validación con mensaje claro) — ⚠️ **BUG ACTIVO**: el selector de cliente en el POS no existe; al elegir "Crédito" no hay UI para buscar/seleccionar/crear un cliente. El backend valida correctamente pero el frontend nunca envía `customer_id`. Bloqueante para venta a crédito.
 - [x] Cambio se calcula correctamente para pagos en efectivo
 - [x] Descuentos se reflejan en el total en tiempo real
 - [x] Montos en formato COP (sin decimales, separador de miles con punto)
@@ -545,7 +545,7 @@ Layout principal (`.pos-layout`):
 - [x] Stock no queda negativo bajo ninguna circunstancia
 - [x] Totales validados por el backend antes de persistir
 - [x] Movimiento de caja registrado en la misma TX que la venta
-- [x] Venta a crédito genera movimiento de deuda en `customer_payments` en el mismo TX
+- ~~Venta a crédito genera movimiento de deuda en `customer_payments`~~ **ELIMINADO**: la deuda se registra vía `sales.payment_method = 'credit'`, no vía `customer_payments` (ver nota en Pendientes backend)
 
 **Tests unitarios requeridos (`internal/service/sale_test.go`):**
 - [x] Happy path: venta en efectivo con caja abierta → `register_id` asignado, stock descontado, sin errores
@@ -627,43 +627,47 @@ Cierre:
 ### 3.1 Clientes
 
 **Backend:**
-- [ ] `GET /api/customers` — listar clientes (búsqueda por nombre/teléfono)
-- [ ] `POST /api/customers` — crear cliente
-- [ ] `PUT /api/customers/:id` — actualizar cliente
-- [ ] `DELETE /api/customers/:id` — eliminar cliente (solo si saldo = 0)
-- [ ] `GET /api/customers/:id/balance` — saldo deudor del cliente
+- [x] `GET /api/customers` — listar clientes (búsqueda por nombre/teléfono)
+- [x] `POST /api/customers` — crear cliente
+- [x] `PUT /api/customers/:id` — actualizar cliente
+- [x] `DELETE /api/customers/:id` — eliminar cliente (solo si saldo = 0)
+- [x] `GET /api/customers/:id/balance` — saldo deudor del cliente
 
 **Frontend — Pantalla Clientes/Cartera (`/customers`) — Fuente de verdad: `#screen-clientes` en prototipo:**
 
 Topbar:
-- [ ] Título: "Clientes · Cartera" | Subtítulo: "$X.XXX.XXX por cobrar en total"
-- [ ] Acciones: "Exportar" (btn) + "＋ Nuevo cliente" (btn-accent)
+- [x] Título: "Clientes · Cartera" | Subtítulo: "$X.XXX.XXX por cobrar en total"
+- [x] Acciones: "Exportar" (btn) + "＋ Nuevo cliente" (btn-accent)
 
 Toolbar:
-- [ ] Input búsqueda con ícono lupa (flex: 1)
-- [ ] Botón "Ordenar por deuda" con ícono flecha
+- [x] Input búsqueda con ícono lupa (flex: 1)
+- [x] Botón "Ordenar por deuda" con ícono flecha
 - [ ] Botón "Todos los estados" (filtro)
 
 Tabla de clientes (`.table-wrap`):
-- [ ] Headers: Cliente | Teléfono | Deuda más antigua | Saldo pendiente | Acciones
-- [ ] Header de cliente contiene:
+- [x] Headers: Cliente | Teléfono | Deuda más antigua | Saldo pendiente | Acciones
+- [x] Header de cliente contiene:
   - Nombre: `font-weight: 600`, `color: text-primary`
   - Dirección/info: `font-size: 11px`, `color: text-muted`
   - Barra de deuda (`.debt-bar`): full width, `height: 4px`, `background: surface-3`, `border-radius: 4px`
     - Fill (`.debt-bar-fill`): `background: danger`, `border-radius: 4px`, ancho proporcional al monto max
     - Transición: `0.3s ease`
-- [ ] Antigüedad: `font-size: 12px`, `color: text-muted`
-- [ ] Saldo: `right`, clase `.danger-amount` (`font-weight: 600`, `color: danger`, `.tnum`)
-- [ ] Acciones por fila: "Detalle" (btn-sm) + "Abonar" (btn-sm btn-accent)
-- [ ] Fila clickable (`.customer-row`): cursor pointer
+- [x] Antigüedad: `font-size: 12px`, `color: text-muted`
+- [x] Saldo: `right`, clase `.danger-amount` (`font-weight: 600`, `color: danger`, `.tnum`)
+- [x] Acciones por fila: "Editar" (btn-sm) + "Abonar" (btn-sm btn-accent, solo con deuda)
+- [x] Fila clickable (`.customer-row`): cursor pointer
 
 **DoD:**
-- [ ] CRUD funcional desde la UI
-- [ ] Búsqueda por nombre y teléfono funciona
-- [ ] No se puede eliminar cliente con deuda pendiente
-- [ ] Balance del cliente se muestra en la lista
-- [ ] Barra de deuda refleja proporción correcta
-- [ ] Saldo total se muestra en el subtítulo del topbar
+- [x] CRUD funcional desde la UI
+- [x] Búsqueda por nombre y teléfono funciona
+- [x] No se puede eliminar cliente con deuda pendiente (validación backend + botón deshabilitado)
+- [x] Balance del cliente se muestra en la lista
+- [x] Barra de deuda refleja proporción correcta
+- [x] Saldo total se muestra en el subtítulo del topbar
+- [ ] Eliminar cliente con deuda → pendiente prueba manual por Andrey
+
+**⚠️ BUG BLOQUEANTE DETECTADO EN TESTING:**
+- El POS no tiene selector de cliente al elegir método "Crédito" — sin `customer_id` la venta a crédito es imposible desde la UI. Requiere agregar un componente de búsqueda/selección de cliente en el panel derecho del POS cuando `payment_method === 'credit'`. Registrado en 1.6 (DoD).
 
 ---
 
@@ -988,11 +992,12 @@ Configuraciones a implementar:
 | Módulo | Caso | Resultado esperado |
 |--------|------|--------------------|
 | `SaleService` | Venta efectivo, caja abierta | `register_id` asignado, stock decrementado |
-| `SaleService` | Venta crédito con cliente | `customer_payments` registrado en mismo TX |
+| `SaleService` | Venta crédito con cliente | Venta creada con `payment_method = 'credit'`, balance del cliente aumenta (calculado on-the-fly) |
 | `SaleService` | Venta crédito sin cliente | Error, venta no guardada |
 | `SaleService` | Venta sin caja abierta | Error `"no hay caja abierta"`, venta no guardada |
 | `SaleService` | Cantidad > stock disponible | Error, rollback total, stock sin cambio |
-| `SaleService` | Fallo en escritura de `customer_payments` | Rollback total, venta no guardada |
+| `CustomerPayments` | Abono parcial a deuda | Balance se reduce, abono registrado en `customer_payments` |
+| `CustomerPayments` | Abono mayor al saldo | Error de validación, abono rechazado |
 | `ProductService` | Crear producto con precio negativo | Error de validación |
 | `CategoryService` | Eliminar categoría con productos asignados | HTTP 409, categoría no eliminada |
 | `RegisterService` | Abrir segunda caja con una ya abierta | Error, segunda caja no creada |
@@ -1066,3 +1071,143 @@ Fase 9 (Distribución)  ██████░░░░░░░░░░░░�
 ```
 
 > **Nota:** Cada fase puede comenzar solo cuando la anterior tiene sus DoD cumplidos. La Fase 8 (UI/UX) se desarrolla en paralelo con las otras fases pero se pule al final. El `pos-prototype.html` es la **fuente de verdad visual** — cualquier decisión de UI debe validarse ahí primero.
+
+---
+
+## Ralph Review — Auditoría de Integridad (2025-03-24)
+
+> Revisión crítica del plan y código actual enfocada en manejo de dinero, integridad de datos y viabilidad para uso real. Esta sección documenta hallazgos, correcciones pendientes y decisiones diferidas.
+
+### Decisiones de contexto MVP
+
+| Pregunta | Decisión | Impacto |
+|----------|----------|---------|
+| ¿Cuántos cajeros operan simultáneamente? | **1 solo cajero para MVP**. El register es global (no por usuario) y esto es aceptable | El service `GetOpen` retorna la primera caja abierta sin filtrar por `user_id`. No cambiar para MVP |
+| ¿Cómo se manejan devoluciones parciales? | **Decisión diferida**. Definir al implementar `VoidSale` — sentarse a diseñar si anular + recrear es suficiente o se necesita `ReturnItems` parcial | Afecta el diseño de la anulación. No empezar VoidSale sin resolver esto |
+| ¿Cómo se aplica precio mayorista? | **Decisión diferida**. Agregar flag `is_wholesale` (o similar) al cliente para que el POS aplique `wholesale_price` automáticamente. Definir la UX al implementar | El campo `wholesale_price` existe en productos pero no hay mecanismo de activación. Resolver cuando se trabaje la funcionalidad de clientes en POS |
+
+### 🔴 Bugs y correcciones bloqueantes
+
+Estos ítems deben corregirse **antes de que el sistema maneje dinero real**.
+
+#### B1. Abonos de crédito sin implementar (`customer_payments` sin endpoints)
+
+**Ubicación:** Fase 3.2 completa está en `[ ]`
+**Problema:** `POST /api/customers/:id/payments` no existe (ni handler, ni service, ni repo). Los clientes acumulan deuda pero no hay forma de registrar pagos. El diferenciador del producto (fiado) no funciona.
+**Corrección:** Implementar CRUD completo de `customer_payments` con validaciones:
+- `amount > 0`
+- `amount <= balance` (no abonar más de lo que se debe)
+- Transacción atómica
+- Generar recibo por cada abono
+
+#### B2. `cash_in` no incluido en cálculo de caja esperada
+
+**Ubicación:** `internal/service/register.go:99`
+**Problema:** `expected = opening + cashSales - cashOut`. Falta `+ cashIn`. Si se registra un movimiento de tipo `cash_in` (e.g., Don Carlos mete cambio), al cerrar caja el sistema muestra un sobrante ficticio.
+**Corrección:**
+1. Agregar `SumCashIn(ctx, registerID) (float64, error)` al `RegisterRepository`
+2. Query: `SELECT COALESCE(SUM(amount), 0) FROM register_movements WHERE register_id = ? AND type = 'cash_in'`
+3. Actualizar fórmula en `Summary()` y `Close()`: `expected = opening + cashSales + cashIn - cashOut`
+
+#### B3. IVA/Tax no se recalcula en el backend
+
+**Ubicación:** `internal/service/sale.go:52`
+**Problema:** `sale.Tax` viene del frontend sin recálculo. El backend recalcula `subtotal` pero acepta cualquier valor de tax. Si el frontend envía `tax: 0` en un producto con IVA 19%, la venta se registra sin impuesto. Además, `sale_items.tax_rate` (migración 3) nunca se escribe — la columna está siempre en `DEFAULT 0`.
+**Corrección:**
+1. En `SaleService.Create`, para cada ítem: obtener `product.tax_rate` de la DB
+2. Calcular `item_tax = item.Subtotal * product.tax_rate`
+3. Guardar `sale_items.tax_rate = product.tax_rate` en la inserción
+4. `sale.Tax = SUM(item_tax)` — recalculado, no aceptado del frontend
+5. Recalcular `sale.Total = subtotal - discount + tax`
+
+#### B4. Anulación de ventas no implementada
+
+**Ubicación:** No existe `VoidSale` en ninguna capa
+**Problema:** Schema listo (migración 2 agrega `voided_by`/`voided_at`) pero no hay código. Sin anulación, errores en ventas no tienen corrección posible.
+**Corrección:** Implementar `VoidSale` en repo + service + handler.
+**⚠️ DECISIÓN PENDIENTE:** Antes de implementar, definir si se necesita devolución parcial (`ReturnItems`) o si anular + recrear es suficiente. Sentarse a diseñar esto juntos.
+**Reglas ya definidas en PRD:**
+- Solo rol `admin`
+- Solo ventas < 24 horas
+- Restore stock en la misma TX
+- Status → `voided`, nunca borrar
+- Registrar `voided_by` y `voided_at`
+
+#### B5. Selector de cliente falta en POS para ventas a crédito
+
+**Ubicación:** Frontend POS, panel derecho
+**Problema:** Al elegir método "Crédito" no hay UI para buscar/seleccionar/crear cliente. El backend valida correctamente (`credit` requiere `customer_id`) pero el frontend nunca lo envía.
+**Corrección:** Agregar componente de búsqueda/selección de cliente en el panel derecho del POS. Se activa cuando `payment_method === 'credit'`. Incluir opción de crear cliente rápido inline.
+
+#### B6. Entrada de inventario sin implementar
+
+**Ubicación:** `stock_entries` table existe, no hay service ni handler
+**Problema:** No hay forma de registrar mercancía entrante. El stock solo baja (ventas) y nunca sube.
+**Corrección:** Implementar `POST /api/stock-entries`:
+- Seleccionar producto, cantidad, nota opcional
+- `UPDATE products SET stock = stock + ? WHERE id = ?`
+- INSERT en `stock_entries` para auditoría
+- Todo en una transacción
+
+### 🟡 Correcciones importantes (antes de producción)
+
+#### I1. Backup no hace WAL checkpoint
+
+**Ubicación:** `internal/database/migrate.go:94`
+**Problema:** El comentario dice "checkpoints the WAL first" pero el código no ejecuta `PRAGMA wal_checkpoint(TRUNCATE)`. La copia de `data.db` puede ser inconsistente (datos en `data.db-wal` no se incluyen).
+**Corrección:** Agregar `db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")` antes de copiar en `backupDB()`.
+
+#### I2. Error de apertura de caja silenciada
+
+**Ubicación:** `internal/service/register.go:56`
+**Problema:** `_, _ = s.repo.AddMovement(...)` — si falla el insert del movimiento de apertura, la caja se abre pero el movimiento no queda registrado.
+**Corrección:** Manejar el error. Si `AddMovement` falla, la apertura debe fallar también (o al mínimo logear el error).
+
+#### I3. Hard delete en productos
+
+**Ubicación:** `internal/repository/` — `DELETE FROM products WHERE id = ?`
+**Problema:** Si el producto tiene `sale_items` referenciándolo, el FK constraint falla. Además, pierde el historial del producto.
+**Corrección:** Cambiar a soft delete: `UPDATE products SET active = 0 WHERE id = ?`. Ya marcado como pendiente en el PLAN (1.5).
+
+#### I4. `SaleFilter` no filtra por status
+
+**Ubicación:** `internal/repository/sale.go:121`
+**Problema:** `SELECT ... FROM sales WHERE 1=1` sin filtro de status. Cuando existan ventas anuladas, aparecerán en listados y reportes inflando totales.
+**Corrección:** Agregar `AND status = 'completed'` por defecto en `SaleFilter`. Opcionalmente, parámetro `IncludeVoided bool` para vistas de auditoría.
+
+#### I5. JWT secret hardcoded
+
+**Ubicación:** `internal/middleware/middleware.go:22`
+**Problema:** Default `"pos-secret-key-change-in-prod"`. Para un sistema local el riesgo es bajo, pero cualquier persona con el binario puede generar tokens.
+**Corrección:** Generar un secret random al primer inicio y persistirlo en `business_config` o archivo local. Leer desde ahí en arranques posteriores.
+
+### 🟢 Notas de arquitectura (correctas, documentar para referencia)
+
+- **Balance on-the-fly**: `SUM(credit_sales) - SUM(customer_payments)` es la fuente de verdad. No existe campo `balance` en `customers`. Esto es correcto y se debe mantener.
+- **Register global para MVP**: Con 1 cajero, `GetOpen` sin filtro de `user_id` es aceptable. Si en el futuro se soportan múltiples cajeros, agregar `user_id` al filtro y permitir múltiples cajas abiertas.
+- **Stock check atómico**: `UPDATE ... WHERE stock >= ?` + verificar `rows affected` es correcto y está implementado.
+- **Transacciones en ventas**: sale + items + stock update + register_movement en una TX es correcto.
+
+### Decisiones diferidas (resolver en la fase correspondiente)
+
+| Decisión | Fase | Contexto |
+|----------|------|----------|
+| ¿Anulación total o devolución parcial? | Al implementar VoidSale (B4) | Don Carlos puede necesitar devolver 3 de 10 productos. Definir si anular+recrear es suficiente o necesita `ReturnItems`. Sentarse a diseñar juntos |
+| ¿Cómo se activa precio mayorista? | Al implementar selector de cliente en POS (B5) | Agregar flag/tipo al cliente (`is_wholesale` o `customer_type`). Cuando el cliente es mayorista y está seleccionado en POS, aplicar `wholesale_price` automáticamente. Diseñar la UX juntos |
+
+### Test cases requeridos post-corrección
+
+| Caso | Resultado esperado |
+|------|--------------------|
+| Registrar abono parcial $50.000 a cliente con deuda $200.000 | Balance = $150.000, abono en `customer_payments` |
+| Registrar abono = saldo total | Balance = $0, botón "Abonar" desaparece |
+| Registrar abono > saldo | Error de validación, no se inserta |
+| Agregar `cash_in` $200.000 → cerrar caja | Expected incluye los $200.000, diferencia correcta |
+| Venta con producto IVA 19% ($100.000) | `sale_items.tax_rate = 0.19`, `sale.tax = $19.000`, total = $119.000 |
+| Frontend envía `tax: 0` en producto con IVA | Backend recalcula y registra el IVA real |
+| Anular venta en efectivo | Stock restaurado, status `voided`, `voided_by` registrado |
+| Anular venta a crédito | Balance del cliente se reduce (venta ya no cuenta) |
+| Anular venta después de 24h | Error "fuera de ventana de anulación" |
+| Cajero intenta anular | Error "solo admin puede anular" |
+| Backup antes de migración | Copia completa incluyendo datos de WAL |
+| Registrar entrada de inventario | Stock aumenta, entry registrado en `stock_entries` |

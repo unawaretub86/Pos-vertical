@@ -33,3 +33,14 @@ type ProductFilter struct {
 	CategoryID *int64
 	ActiveOnly bool
 }
+
+// CustomerRepository defines CRUD operations for customers.
+type CustomerRepository interface {
+	List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error)
+	GetByID(ctx context.Context, id int64) (*model.Customer, error)
+	Create(ctx context.Context, c *model.Customer) (*model.Customer, error)
+	Update(ctx context.Context, c *model.Customer) (*model.Customer, error)
+	Delete(ctx context.Context, id int64) error
+	Balance(ctx context.Context, id int64) (float64, error)
+	TotalPortfolioBalance(ctx context.Context) (float64, error)
+}

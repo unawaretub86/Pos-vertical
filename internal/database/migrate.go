@@ -1,15 +1,126 @@
 package database
 
+import (
+	"fmt"
+	"io"
+	"os"
+	"time"
+)
+
+// migration represents a single versioned database migration.
+type migration struct {
+	version int
+	up      string   // SQL executed inside a transaction; failure stops the binary
+	fixup   []string // SQL run after commit with errors silently ignored (idempotent ops)
+}
+
+var dbMigrations = []migration{
+	{
+		version: 1,
+		up:      migration1,
+		// For databases that pre-date the description column (created before this project added it).
+		fixup: []string{
+			`ALTER TABLE categories ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
+		},
+	},
+	{version: 2, up: migration2},
+	{version: 3, up: migration3},
+}
+
+// migrate creates the schema_migrations table, detects pending migrations,
+// backs up the database if needed, and runs each migration in a transaction.
+// Any failure causes the binary to refuse to start.
 func (db *DB) migrate() error {
-	if _, err := db.Exec(schema); err != nil {
-		return err
+	// The tracking table must always exist before we query it.
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version    INTEGER PRIMARY KEY,
+			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+	); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
 	}
-	// Add description column if it doesn't exist (idempotent migration)
-	_, _ = db.Exec(`ALTER TABLE categories ADD COLUMN description TEXT NOT NULL DEFAULT ''`)
+
+	var current int
+	_ = db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&current)
+
+	var pending []migration
+	for _, m := range dbMigrations {
+		if m.version > current {
+			pending = append(pending, m)
+		}
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+
+	if err := backupDB(db.path); err != nil {
+		return fmt.Errorf("backup before migration: %w", err)
+	}
+
+	for _, m := range pending {
+		if err := db.runMigration(m); err != nil {
+			return fmt.Errorf("migration v%d: %w", m.version, err)
+		}
+	}
 	return nil
 }
 
-const schema = `
+func (db *DB) runMigration(m migration) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if _, err := tx.Exec(m.up); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES (?)`, m.version); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	for _, stmt := range m.fixup {
+		_, _ = db.Exec(stmt)
+	}
+	return nil
+}
+
+// backupDB creates a copy of the SQLite file at <path>.backup-YYYYMMDD.
+// It checkpoints the WAL first so the backup is consistent.
+// If the file does not exist yet (first run) it is a no-op.
+func backupDB(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+
+	dst := path + ".backup-" + time.Now().Format("20060102")
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, src); err != nil {
+		return err
+	}
+	return out.Sync()
+}
+
+// ── Migration SQL ─────────────────────────────────────────────────────────────
+
+// migration1 is the full initial schema. All tables use CREATE TABLE IF NOT
+// EXISTS so it is safe to re-run on databases that already have the schema.
+const migration1 = `
 CREATE TABLE IF NOT EXISTS business_config (
 	id INTEGER PRIMARY KEY CHECK (id = 1),
 	name TEXT NOT NULL DEFAULT '',
@@ -136,4 +247,17 @@ CREATE TABLE IF NOT EXISTS stock_entries (
 -- Seed default admin user (password: admin)
 INSERT OR IGNORE INTO users (id, username, password_hash, role)
 VALUES (1, 'admin', '$2a$10$v1/OGJ.TMlKg77OMe0jkx.2ZxE32lp/ZDwyVlXcuawUqmt8RPpL/C', 'admin');
+`
+
+// migration2 adds void support to sales.
+// Note: SQLite does not support adding CHECK constraints via ALTER TABLE;
+// the CHECK (stock >= 0) on products is enforced at the application layer.
+const migration2 = `
+ALTER TABLE sales ADD COLUMN voided_by INTEGER REFERENCES users(id);
+ALTER TABLE sales ADD COLUMN voided_at DATETIME;
+`
+
+// migration3 adds per-item tax tracking to sale_items.
+const migration3 = `
+ALTER TABLE sale_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0;
 `

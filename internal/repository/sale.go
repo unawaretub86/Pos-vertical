@@ -95,25 +95,18 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		}
 	}
 
-	// Register movement for this sale (same transaction)
+	// Register movement for all sales; credit sales use a distinct description prefix
 	if sale.RegisterID != nil {
+		desc := fmt.Sprintf("Venta #%d", saleID)
+		if sale.PaymentMethod == "credit" {
+			desc = fmt.Sprintf("Crédito #%d", saleID)
+		}
 		_, err = tx.ExecContext(ctx,
 			`INSERT INTO register_movements (register_id, type, amount, description) VALUES (?, 'sale', ?, ?)`,
-			*sale.RegisterID, sale.Total, fmt.Sprintf("Venta #%d", saleID),
+			*sale.RegisterID, sale.Total, desc,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("register movement insert: %w", err)
-		}
-	}
-
-	// For credit sales, record the debt in customer_payments (same transaction)
-	if sale.PaymentMethod == "credit" && sale.CustomerID != nil {
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO customer_payments (customer_id, amount, note) VALUES (?, ?, ?)`,
-			*sale.CustomerID, sale.Total, fmt.Sprintf("Deuda venta #%d", saleID),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("customer payment insert: %w", err)
 		}
 	}
 

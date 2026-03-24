@@ -7,6 +7,7 @@ import (
 
 type DB struct {
 	*sql.DB
+	path string
 }
 
 func New(path string) (*DB, error) {
@@ -17,7 +18,7 @@ func New(path string) (*DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
-	d := &DB{db}
+	d := &DB{DB: db, path: path}
 	if err := d.migrate(); err != nil {
 		return nil, err
 	}

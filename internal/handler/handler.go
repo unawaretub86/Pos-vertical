@@ -19,6 +19,7 @@ type Handler struct {
 	products   *service.ProductService
 	sales      *service.SaleService
 	registers  *service.RegisterService
+	customers  *service.CustomerService
 	setup      *repository.SetupRepository
 }
 
@@ -28,6 +29,7 @@ func New(db *database.DB) *Handler {
 	prodRepo := repository.NewProductRepository(db.DB)
 	saleRepo := repository.NewSaleRepository(db.DB)
 	regRepo := repository.NewRegisterRepository(db.DB)
+	custRepo := repository.NewCustomerRepository(db.DB)
 	setupRepo := repository.NewSetupRepository(db.DB)
 	return &Handler{
 		db:         db,
@@ -35,6 +37,7 @@ func New(db *database.DB) *Handler {
 		products:   service.NewProductService(prodRepo),
 		sales:      service.NewSaleService(saleRepo, prodRepo, regRepo),
 		registers:  service.NewRegisterService(regRepo),
+		customers:  service.NewCustomerService(custRepo),
 		setup:      setupRepo,
 	}
 }
@@ -95,6 +98,17 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/registers/{id}/close", h.closeRegister)
 		r.Get("/registers/{id}/movements", h.listMovements)
 		r.Post("/registers/{id}/movements", h.addMovement)
+
+		// Customers (all authenticated users can read; admin to write)
+		r.Get("/customers", h.listCustomers)
+		r.Get("/customers/{id}", h.getCustomer)
+		r.Get("/customers/{id}/balance", h.getCustomerBalance)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Post("/customers", h.createCustomer)
+			r.Put("/customers/{id}", h.updateCustomer)
+			r.Delete("/customers/{id}", h.deleteCustomer)
+		})
 	})
 
 	return r
