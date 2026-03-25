@@ -25,6 +25,7 @@ var dbMigrations = []migration{
 	},
 	{version: 2, up: migration2},
 	{version: 3, up: migration3},
+	{version: 4, up: migration4},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -260,4 +261,9 @@ ALTER TABLE sales ADD COLUMN voided_at DATETIME;
 // migration3 adds per-item tax tracking to sale_items.
 const migration3 = `
 ALTER TABLE sale_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0;
+`
+
+// migration4 adds optional default opening amount to business_config.
+const migration4 = `
+ALTER TABLE business_config ADD COLUMN default_opening_amount REAL NOT NULL DEFAULT 0;
 `

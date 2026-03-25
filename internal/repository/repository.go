@@ -7,6 +7,20 @@ import (
 	"github.com/andreyo/pos/internal/model"
 )
 
+// UserRepository defines operations for user management.
+type UserRepository interface {
+	List(ctx context.Context) ([]*model.User, error)
+	GetByID(ctx context.Context, id int64) (*model.User, error)
+	GetByUsername(ctx context.Context, username string) (*model.User, error)
+	Create(ctx context.Context, u *model.User) (*model.User, error)
+	Update(ctx context.Context, u *model.User) (*model.User, error)
+	UpdatePassword(ctx context.Context, id int64, passwordHash string) error
+	// Deactivate sets active=false; never hard-deletes.
+	Deactivate(ctx context.Context, id int64) error
+	// CountAdmins returns the number of active admin users.
+	CountAdmins(ctx context.Context) (int, error)
+}
+
 // CategoryRepository defines CRUD operations for categories.
 type CategoryRepository interface {
 	Create(ctx context.Context, name string) (*model.Category, error)

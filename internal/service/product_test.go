@@ -22,6 +22,9 @@ func (s *stubProductRepo) Update(_ context.Context, p *model.Product) (*model.Pr
 	return p, nil
 }
 func (s *stubProductRepo) Delete(_ context.Context, _ int64) error { return nil }
+func (s *stubProductRepo) LowStock(_ context.Context) ([]*model.Product, error) {
+	return nil, nil
+}
 
 func validProduct() *model.Product {
 	return &model.Product{

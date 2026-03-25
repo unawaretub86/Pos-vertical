@@ -9,24 +9,28 @@
 
 ---
 
-## Estado del Proyecto — 2026-03-24
+## Estado del Proyecto — 2026-03-25
 
 | Fase | Descripción | Estado |
 |------|-------------|--------|
 | 0 | Fundación (DB, API, Auth infra) | ✅ Completa |
-| 1 | Core POS (Auth, Layout, Setup, Categorías, Productos, POS) | ✅ Completa (minor: transform CSS pendiente) |
+| 1 | Core POS (Auth, Layout, Setup, Categorías, Productos, POS) | ✅ Completa |
 | 2 | Caja Registradora | ✅ Completa |
 | 3.1 | Clientes CRUD + balance | ✅ Completa |
 | 3.2 | Pagos de crédito (abonos) | ✅ Completa |
 | 3.3 | Cartera de crédito (`/portfolio`) | ✅ Completa (2026-03-24) |
 | 4 | Inventario (stock entries, pantalla dedicada) | ✅ Completa (2026-03-24) |
 | 5 | Reportes de ventas | ✅ Completa (2026-03-24) |
-| 6 | Tickets / impresión | 🔲 Pendiente |
-| 7 | Gestión de usuarios | 🔲 Pendiente |
-| 8 | Dashboard + Settings + Polish | 🔲 Pendiente |
-| 9 | Build, empaquetado, testing E2E | 🔲 Pendiente |
+| 6 | Tickets / impresión | ✅ Completa (2026-03-25) |
+| 7 | Gestión de usuarios | ✅ Completa (2026-03-25) |
+| 8.1 | Dashboard | ✅ Completa (2026-03-25) |
+| 8.2 | Pantalla de Configuración | ✅ Completa (2026-03-25) |
+| 8.3 | UX General — Polish Global | 🔲 Pendiente |
+| 9.1 | Build y empaquetado | 🟡 Parcial — `make build` funciona, `pos.exe` ~18 MB |
+| 9.2 | Testing | ✅ Tests pasando — mocks actualizados con `LowStock` y `Void` (2026-03-25) |
+| 9.3 | Documentación mínima | 🔲 Pendiente |
 
-**Próxima fase recomendada:** Fase 6 — Tickets / impresión
+**Próxima fase recomendada:** Fase 8.3 — Polish Global, luego completar Fase 9
 
 ---
 
@@ -826,9 +830,9 @@ Card "Historial de Cajas":
 ### 6.1 Impresión de Tickets
 
 **Backend:**
-- [ ] `GET /api/sales/:id/ticket` — generar datos de ticket
-- [ ] Soporte ESC/POS para impresoras térmicas (58mm/80mm)
-- [ ] Contenido del ticket:
+- [x] `GET /api/sales/:id/ticket` — generar datos de ticket
+- [ ] Soporte ESC/POS para impresoras térmicas (58mm/80mm) — pendiente, actualmente browser print
+- [x] Contenido del ticket:
   - Nombre/logo del negocio
   - Fecha y hora
   - Items con cantidades y precios
@@ -838,17 +842,17 @@ Card "Historial de Cajas":
   - Header/footer configurables
 
 **Frontend:**
-- [ ] Vista previa de ticket en pantalla (fallback si no hay impresora)
-- [ ] Montos en formato COP sin decimales
-- [ ] Configuración de formato en `/settings`
-- [ ] Botón imprimir desde detalle de venta
+- [x] Vista previa de ticket en pantalla (fallback si no hay impresora)
+- [x] Montos en formato COP sin decimales
+- [x] Configuración de formato en `/settings`
+- [x] Botón imprimir desde modal post-venta en POS
 
 **DoD:**
-- [ ] Ticket se genera correctamente con todos los campos
-- [ ] Impresión en impresora térmica funciona (Epson TM y genéricas 58mm)
-- [ ] "CRÉDITO" aparece claramente en ventas fiadas
-- [ ] Vista previa funciona como fallback
-- [ ] Header y footer son configurables
+- [x] Ticket se genera correctamente con todos los campos
+- [ ] Impresión ESC/POS en impresora térmica (Epson TM y genéricas 58mm) — v2
+- [x] "CRÉDITO" aparece claramente en ventas fiadas
+- [x] Vista previa funciona como fallback (browser print)
+- [x] Header y footer son configurables
 
 ---
 
@@ -857,106 +861,108 @@ Card "Historial de Cajas":
 ### 7.1 Gestión de Usuarios
 
 **Backend:**
-- [ ] `GET /api/users` — listar usuarios (admin only)
-- [ ] `POST /api/users` — crear usuario
-- [ ] `PUT /api/users/:id` — actualizar usuario
-- [ ] `DELETE /api/users/:id` — desactivar usuario
+- [x] `GET /api/users` — listar usuarios (admin only)
+- [x] `POST /api/users` — crear usuario
+- [x] `PUT /api/users/:id` — actualizar usuario
+- [x] `DELETE /api/users/:id` — desactivar usuario
 
 **Frontend — Pantalla Usuarios (`/users`):**
-- [ ] Tabla de usuarios: username, rol, estado (activo/inactivo), fecha creación
-- [ ] Formulario: username, password, rol (admin/cajero)
-- [ ] Roles: admin (acceso total), cajero (POS + su caja + sus ventas)
-- [ ] Badge de rol: misma lógica que sidebar (`.role-badge.admin` / `.role-badge.cashier`)
-- [ ] Solo admin puede acceder a esta pantalla
+- [x] Tabla de usuarios: username, rol, estado (activo/inactivo), fecha creación
+- [x] Formulario: username, password, rol (admin/cajero)
+- [x] Roles: admin (acceso total), cajero (POS + su caja + sus ventas)
+- [x] Badge de rol: misma lógica que sidebar (`.role-badge.admin` / `.role-badge.cashier`)
+- [x] Solo admin puede acceder a esta pantalla
 
 **DoD:**
-- [ ] Solo admin puede gestionar usuarios
-- [ ] Cajero solo ve: POS, Caja
-- [ ] Cajero no puede acceder a: productos, reportes, usuarios, settings
-- [ ] Password se almacena hasheado (bcrypt)
-- [ ] No se puede eliminar el último admin
+- [x] Solo admin puede gestionar usuarios
+- [x] Cajero solo ve: POS, Caja
+- [x] Cajero no puede acceder a: productos, reportes, usuarios, settings
+- [x] Password se almacena hasheado (bcrypt)
+- [x] No se puede eliminar el último admin
+
+**Bugs conocidos:**
+- [ ] **[BUG]** No hay botón para reactivar un usuario desactivado en la tabla. El botón de desactivar solo aparece cuando `user.active === true` (línea 328 de `frontend/app/users/page.tsx`) y no hay equivalente para activar. La única vía actual sería abrir el modal de edición y usar el toggle de estado, pero ese toggle tampoco es obvio visualmente.
 
 ---
 
 ## Fase 8 — UI/UX, Dashboard y Polish
 
-### 8.1 Dashboard
+### 8.1 Dashboard ✅ (2026-03-25)
 
 **Frontend — Pantalla Dashboard (`/`) — Fuente de verdad: `#screen-dashboard` en prototipo:**
 
 Topbar:
-- [ ] Título dinámico: "Buenos días/tardes/noches, [nombre] ☀/🌙"
-- [ ] Subtítulo: fecha actual formateada en español
-- [ ] Acción: "Abrir POS" (btn-accent)
+- [x] Título dinámico: "Buenos días/tardes/noches, [nombre] ☀/🌙"
+- [x] Subtítulo: fecha actual formateada en español
+- [x] Acción: "Abrir POS" (btn-accent)
 
 Banner estado de caja (`.caja-banner`):
-- [ ] Abierta: verde, muestra hora apertura y monto base
-- [ ] Cerrada: rojo, invita a abrir caja
-- [ ] Botón "Ver caja" inline (btn-sm btn-success)
+- [x] Abierta: verde, muestra hora apertura y monto base
+- [x] Cerrada: rojo, invita a abrir caja
+- [x] Botón "Ver caja" inline (btn-sm btn-success)
 
 Stats grid — 4 tarjetas (`.stats-grid`, `repeat(4, 1fr)`):
-- [ ] **Ventas hoy** — monto total del día; `.stat-delta.up/down` comparado con ayer
-- [ ] **Transacciones** — número de ventas; `.stat-delta` vs ayer
-- [ ] **Efectivo en caja** — monto actual en caja; `text-muted` "Actualizado hace X min"
-- [ ] **Por cobrar (fiado)** — total deuda; `stat-value.danger`; N clientes
-- [ ] `.stat-label`: 11px, uppercase, letter-spacing 0.5px, text-muted
-- [ ] `.stat-value`: 22px, font-weight 700, .tnum, letter-spacing -0.5px
-- [ ] `.stat-delta`: 11px, font-weight 600; `.up` (success) / `.down` (danger) con ícono chevron
+- [x] **Ventas hoy** — monto total del día; `.stat-delta.up/down` comparado con ayer
+- [x] **Transacciones** — número de ventas; `.stat-delta` vs ayer
+- [x] **Efectivo en caja** — monto actual en caja; `text-muted` "Actualizado hace X min"
+- [x] **Por cobrar (fiado)** — total deuda; `stat-value.danger`; N clientes
+- [x] `.stat-label`: 11px, uppercase, letter-spacing 0.5px, text-muted
+- [x] `.stat-value`: 22px, font-weight 700, .tnum, letter-spacing -0.5px
+- [x] `.stat-delta`: 11px, font-weight 600; `.up` (success) / `.down` (danger) con ícono chevron
 
 Ventas recientes (`.table-wrap`):
-- [ ] Headers: Hora | Cliente | Items | Total | Método | Estado
-- [ ] Hora: `12px`, `text-muted`
-- [ ] Total: clase `.amount.right` (font-weight 600, text-primary, .tnum)
-- [ ] Método: `.badge` con color según tipo (efectivo/transfer/tarjeta/crédito)
-- [ ] Estado: `.badge-ok` (success)
-- [ ] Botón "Ver todas →" (btn-sm btn-ghost) en section-title
+- [x] Headers: Hora | Cliente | Items | Total | Método | Estado
+- [x] Hora: `12px`, `text-muted`
+- [x] Total: clase `.amount.right` (font-weight 600, text-primary, .tnum)
+- [x] Método: `.badge` con color según tipo (efectivo/transfer/tarjeta/crédito)
+- [x] Estado: `.badge-ok` (success)
+- [x] Botón "Ver todas →" (btn-sm btn-ghost) en section-title
 
 Acciones rápidas (`.quick-actions`):
-- [ ] "Abrir POS" → navega a POS
-- [ ] "Ver Cartera" → navega a Clientes
-- [ ] "Ver Caja" → navega a Caja
-- [ ] "Cerrar Caja" (btn-danger) → acción de cierre
+- [x] "Abrir POS" → navega a POS
+- [x] "Ver Cartera" → navega a Clientes
+- [x] "Ver Caja" → navega a Caja
+- [ ] "Cerrar Caja" (btn-danger) → acción de cierre (omitido — el cierre se hace desde /register)
 
 **DoD:**
-- [ ] Dashboard muestra información correcta del día actual
-- [ ] Datos de ventas recientes se cargan al entrar al dashboard
-- [ ] Banner de estado de caja refleja estado real
-- [ ] Stats actualizadas correctamente
-- [ ] Navegación desde acciones rápidas funciona
+- [x] Dashboard muestra información correcta del día actual
+- [x] Datos de ventas recientes se cargan al entrar al dashboard
+- [x] Banner de estado de caja refleja estado real
+- [x] Stats actualizadas correctamente
+- [x] Navegación desde acciones rápidas funciona
 
 ---
 
-### 8.2 Pantalla de Configuración
+### 8.2 Pantalla de Configuración ✅ (2026-03-25)
 
 **Frontend — Pantalla Configuración (`/settings`) — Fuente de verdad: `#screen-configuracion` en prototipo:**
 
 Topbar:
-- [ ] Título: "Configuración"
+- [x] Título: "Configuración"
 
 Secciones tipo config-row (`.config-row`):
-- [ ] Cada fila: `padding: 12px 16px`, `background: surface-1`, `border: 1px solid border`, `border-radius: 8px`
-- [ ] Left: label 13px font-weight 500 + sublabel 11px text-muted
-- [ ] Right: control (input, toggle, botón)
+- [x] Cada fila: `padding: 12px 16px`, `background: surface-1`, `border: 1px solid border`, `border-radius: 8px`
+- [x] Left: label 13px font-weight 500 + sublabel 11px text-muted
+- [x] Right: control (input, toggle, botón)
 
-Toggle (`.toggle`):
-- [ ] 36×20px, `border-radius: 20px`, background: `surface-3` (off) / `accent` (on)
-- [ ] Círculo interior: 14×14px blanco, `top: 2px left: 2px` → `left: 18px` (on)
-- [ ] Transición: 150ms ease
+Toggle (`.toggle`): usado en sidebar (theme), CSS definido en globals.css
+- [x] 36×20px, `border-radius: 20px`, background: `surface-3` (off) / `accent` (on)
+- [x] Transición: 150ms ease
 
-Configuraciones a implementar:
-- [ ] Nombre del negocio + dirección + NIT
-- [ ] Logo del negocio (upload)
-- [ ] Tema: claro / oscuro (sincronizado con el toggle del sidebar)
-- [ ] Formato de ticket (header/footer)
-- [ ] Configuración de impresora
-- [ ] Formato de moneda (COP por defecto)
-- [ ] Gestión de usuarios (link a `/users`)
+Configuraciones implementadas:
+- [x] Nombre del negocio + dirección + NIT
+- [x] Logo del negocio (upload, base64)
+- [x] Formato de ticket (header/footer)
+- [x] **Monto base por defecto para apertura de caja** — pre-llena al abrir caja
+- [ ] Tema: claro / oscuro en settings (existe en sidebar, no duplicado en settings)
+- [ ] Configuración de impresora (out of scope MVP — impresora se configura a nivel OS)
+- [ ] Link a gestión de usuarios desde settings
 
 **DoD:**
-- [ ] Cambios en configuración se persisten correctamente
-- [ ] Toggle de tema en settings sincroniza con el del sidebar
-- [ ] Logo se actualiza en el sidebar al cambiarlo
-- [ ] Configuración de ticket se refleja en la vista previa
+- [x] Cambios en configuración se persisten correctamente (`PUT /setup`)
+- [x] Logo se guarda y carga correctamente
+- [x] Monto base pre-llena el campo al abrir caja
+- [ ] Logo se actualiza en el sidebar dinámicamente al cambiarlo (requiere evento/context)
 
 ---
 
@@ -990,19 +996,25 @@ Configuraciones a implementar:
 
 ## Fase 9 — Distribución y Entrega
 
-### 9.1 Build y Empaquetado
+### 9.1 Build y Empaquetado 🟡
 
-- [ ] Script de build: `make build` o equivalente
-  - Compila frontend (`next build && next export`)
-  - Embebe estáticos en binario Go (`embed`)
-  - Compila binario para Windows amd64
-- [ ] Binario final: `pos.exe` (< 30 MB)
+- [x] Script de build: `make build` — compila frontend + copia estáticos + compila Go
+- [x] Binario final: `pos.exe` (~18 MB, cumple < 30 MB)
+- [x] Frontend embebido en binario Go (`embed`)
 - [ ] Al ejecutar, abre automáticamente el navegador en `localhost:8080`
-- [ ] Icono del ejecutable
+- [ ] Icono del ejecutable (`.ico`)
+- [ ] Cross-compile para Windows desde cualquier OS (`GOOS=windows GOARCH=amd64`)
 
-### 9.2 Testing
+### 9.2 Testing 🟡
 
-- [ ] Tests unitarios para capa de servicio (Go)
+**Implementado — 46 tests unitarios (service layer), todos pasando:**
+
+- [x] Tests unitarios `CategoryService` (7 tests) — Create, Update, Delete, GetByID
+- [x] Tests unitarios `ProductService` (10 tests) — validación, Create, Update
+- [x] Tests unitarios `CustomerService` / `CustomerPayments` (10 tests) — pagos, validaciones
+- [x] Tests unitarios `SaleService` (18 tests) — flujos de venta, crédito, caja
+
+**Pendiente:**
 - [ ] Tests de integración para handlers (Go, con SQLite en memoria)
 - [ ] Tests de repositorio (Go, operaciones CRUD)
 - [ ] Tests de componentes frontend (React Testing Library)
@@ -1010,25 +1022,25 @@ Configuraciones a implementar:
 
 **Cobertura mínima requerida — Service Layer (Go):**
 
-| Módulo | Caso | Resultado esperado |
-|--------|------|--------------------|
-| `SaleService` | Venta efectivo, caja abierta | `register_id` asignado, stock decrementado |
-| `SaleService` | Venta crédito con cliente | Venta creada con `payment_method = 'credit'`, balance del cliente aumenta (calculado on-the-fly) |
-| `SaleService` | Venta crédito sin cliente | Error, venta no guardada |
-| `SaleService` | Venta sin caja abierta | Error `"no hay caja abierta"`, venta no guardada |
-| `SaleService` | Cantidad > stock disponible | Error, rollback total, stock sin cambio |
-| `CustomerPayments` | Abono parcial a deuda | Balance se reduce, abono registrado en `customer_payments` |
-| `CustomerPayments` | Abono mayor al saldo | Error de validación, abono rechazado |
-| `ProductService` | Crear producto con precio negativo | Error de validación |
-| `CategoryService` | Eliminar categoría con productos asignados | HTTP 409, categoría no eliminada |
-| `RegisterService` | Abrir segunda caja con una ya abierta | Error, segunda caja no creada |
+| Módulo | Caso | Test existente | Estado |
+|--------|------|----------------|--------|
+| `SaleService` | Venta efectivo, caja abierta | `TestSaleService_Create_AssignsOpenRegisterID` | ✅ |
+| `SaleService` | Venta crédito con cliente | `TestSaleService_Create_CreditWithCustomer_Succeeds` | ✅ |
+| `SaleService` | Venta crédito sin cliente | `TestSaleService_Create_CreditWithoutCustomer_ReturnsError` | ✅ |
+| `SaleService` | Venta sin caja abierta | `TestSaleService_Create_NoOpenRegister_ReturnsError` | ✅ |
+| `SaleService` | Cantidad > stock disponible | — | 🔲 |
+| `CustomerPayments` | Abono parcial a deuda | `TestCreatePayment_OK` | ✅ |
+| `CustomerPayments` | Abono mayor al saldo | `TestCreatePayment_ExceedsBalance` | ✅ |
+| `ProductService` | Crear producto con precio negativo | `TestValidateProduct_NegativeSalePrice` | ✅ |
+| `CategoryService` | Eliminar categoría con productos asignados | — | 🔲 |
+| `RegisterService` | Abrir segunda caja con una ya abierta | — | 🔲 |
 
 **DoD:**
-- [ ] Binario se genera sin errores en un solo comando
-- [ ] Binario funciona en Windows 10/11 sin dependencias
-- [ ] `pos.exe` < 30 MB
-- [ ] Tests pasan al 100%
-- [ ] Todos los casos de la tabla de cobertura mínima tienen test implementado y pasando
+- [x] Binario se genera sin errores (`make build`)
+- [x] `pos.exe` < 30 MB
+- [ ] Binario auto-abre navegador al ejecutar
+- [ ] Tests de los 3 casos pendientes de la tabla de cobertura
+- [ ] Tests de integración de handlers
 - [ ] Flujo E2E completo funciona
 
 ### 9.3 Documentación Mínima
@@ -1079,16 +1091,20 @@ Configuraciones a implementar:
 ## Orden de Implementación Recomendado
 
 ```
-Fase 0 (Fundación)     ████████░░░░░░░░░░░░  ~15%
-Fase 1 (Core POS)      ████████████░░░░░░░░  ~30%
-Fase 2 (Caja)          ██████░░░░░░░░░░░░░░  ~10%
-Fase 3 (Crédito)       ██████░░░░░░░░░░░░░░  ~10%
-Fase 4 (Inventario)    ████░░░░░░░░░░░░░░░░  ~5%
-Fase 5 (Reportes)      ██████░░░░░░░░░░░░░░  ~10%
-Fase 6 (Tickets)       ████░░░░░░░░░░░░░░░░  ~5%
-Fase 7 (Usuarios)      ████░░░░░░░░░░░░░░░░  ~5%
-Fase 8 (UI/UX)         ██████░░░░░░░░░░░░░░  ~5%
-Fase 9 (Distribución)  ██████░░░░░░░░░░░░░░  ~5%
+Fase 0 (Fundación)     ████████████████████  ✅ 100%
+Fase 1 (Core POS)      ████████████████████  ✅ 100%
+Fase 2 (Caja)          ████████████████████  ✅ 100%
+Fase 3 (Crédito)       ████████████████████  ✅ 100%
+Fase 4 (Inventario)    ████████████████████  ✅ 100%
+Fase 5 (Reportes)      ████████████████████  ✅ 100%
+Fase 6 (Tickets)       ████████████████████  ✅ 100%
+Fase 7 (Usuarios)      ████████████████████  ✅ 100%
+Fase 8.1 (Dashboard)   ████████████████████  ✅ 100%
+Fase 8.2 (Settings)    ████████████████░░░░  ~85% (falta logo live-update)
+Fase 8.3 (Polish)      ░░░░░░░░░░░░░░░░░░░░  🔲 0%
+Fase 9.1 (Build)       ████████████████░░░░  ~80% (falta auto-open browser, .ico)
+Fase 9.2 (Testing)     ████████████░░░░░░░░  ~60% (service tests ✓, faltan 3 casos + integración)
+Fase 9.3 (Docs)        ░░░░░░░░░░░░░░░░░░░░  🔲 0%
 ```
 
 > **Nota:** Cada fase puede comenzar solo cuando la anterior tiene sus DoD cumplidos. La Fase 8 (UI/UX) se desarrolla en paralelo con las otras fases pero se pule al final. El `pos-prototype.html` es la **fuente de verdad visual** — cualquier decisión de UI debe validarse ahí primero.

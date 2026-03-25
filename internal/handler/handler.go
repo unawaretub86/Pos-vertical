@@ -20,6 +20,7 @@ type Handler struct {
 	sales        *service.SaleService
 	registers    *service.RegisterService
 	customers    *service.CustomerService
+	users        *service.UserService
 	setup        *repository.SetupRepository
 	stockEntries repository.StockEntryRepository
 	reports      repository.ReportRepository
@@ -32,6 +33,7 @@ func New(db *database.DB) *Handler {
 	saleRepo := repository.NewSaleRepository(db.DB)
 	regRepo := repository.NewRegisterRepository(db.DB)
 	custRepo := repository.NewCustomerRepository(db.DB)
+	userRepo := repository.NewUserRepository(db.DB)
 	setupRepo := repository.NewSetupRepository(db.DB)
 	stockRepo := repository.NewStockEntryRepository(db.DB)
 	reportRepo := repository.NewReportRepository(db.DB)
@@ -42,6 +44,7 @@ func New(db *database.DB) *Handler {
 		sales:        service.NewSaleService(saleRepo, prodRepo, regRepo),
 		registers:    service.NewRegisterService(regRepo),
 		customers:    service.NewCustomerService(custRepo),
+		users:        service.NewUserService(userRepo),
 		setup:        setupRepo,
 		stockEntries: stockRepo,
 		reports:      reportRepo,
@@ -97,9 +100,16 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/sales", h.createSale)
 		r.Get("/sales", h.listSales)
 		r.Get("/sales/{id}", h.getSale)
+		r.Get("/sales/{id}/ticket", h.getTicket)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Delete("/sales/{id}/void", h.voidSale)
+		})
+
+		// Dashboard (admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Get("/dashboard", h.getDashboard)
 		})
 
 		// Reports (admin only)
@@ -119,6 +129,15 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/registers/{id}/close", h.closeRegister)
 		r.Get("/registers/{id}/movements", h.listMovements)
 		r.Post("/registers/{id}/movements", h.addMovement)
+
+		// Users (admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Get("/users", h.listUsers)
+			r.Post("/users", h.createUser)
+			r.Put("/users/{id}", h.updateUser)
+			r.Delete("/users/{id}", h.deactivateUser)
+		})
 
 		// Customers (all authenticated users can read; admin to write)
 		r.Get("/customers", h.listCustomers)

@@ -122,3 +122,37 @@ type Claims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
 }
+
+type TicketBusiness struct {
+	Name         string `json:"name"`
+	Address      string `json:"address"`
+	NIT          string `json:"nit"`
+	TicketHeader string `json:"ticket_header"`
+	TicketFooter string `json:"ticket_footer"`
+}
+
+type TicketItem struct {
+	ProductName string  `json:"product_name"`
+	Quantity    float64 `json:"quantity"`
+	UnitPrice   float64 `json:"unit_price"`
+	Discount    float64 `json:"discount"`
+	Subtotal    float64 `json:"subtotal"`
+	Unit        string  `json:"unit"`
+}
+
+type TicketData struct {
+	SaleID        int64          `json:"sale_id"`
+	CreatedAt     time.Time      `json:"created_at"`
+	PaymentMethod string         `json:"payment_method"`
+	CashTendered  *float64       `json:"cash_tendered,omitempty"`
+	ChangeAmount  *float64       `json:"change_amount,omitempty"`
+	Reference     string         `json:"reference,omitempty"`
+	Status        string         `json:"status"`
+	Subtotal      float64        `json:"subtotal"`
+	Discount      float64        `json:"discount"`
+	Tax           float64        `json:"tax"`
+	Total         float64        `json:"total"`
+	Items         []TicketItem   `json:"items"`
+	Customer      *Customer      `json:"customer,omitempty"`
+	Business      TicketBusiness `json:"business"`
+}

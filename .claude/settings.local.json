@@ -21,7 +21,13 @@
       "Bash(make build:*)",
       "Bash(sqlite3 data.db \"SELECT id, customer_id, payment_method, total FROM sales ORDER BY id DESC LIMIT 5;\")",
       "Bash(cp \"c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/CustomerDetailClient.tsx\" \"c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/page.tsx\")",
-      "Bash(rm \"c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/CustomerDetailClient.tsx\")"
+      "Bash(rm \"c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/CustomerDetailClient.tsx\")",
+      "Bash(grep -n \"migration3\\\\|migration2\\\\|migration1\\\\|const migration\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/database/*.go)",
+      "Bash(grep -n \"SalesSummary\\\\|SaleFilter\\\\|DashboardStats\\\\|TopProduct\\\\|RegisterReport\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/repository/*.go)",
+      "Bash(grep -n \"getOpenRegister\\\\|ErrNoOpen\\\\|no.*caja\\\\|not found\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/handler/register.go c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/service/*.go)",
+      "Bash(grep -n \"Summary\\\\|RegisterSummary\\\\|CurrentAmount\\\\|current_amount\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/service/register.go c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/repository/*.go)",
+      "Bash(grep -n \"type DB\\\\|\\\\.DB \" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/database/*.go)",
+      "Bash(go run:*)"
     ]
   }
 }

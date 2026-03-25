@@ -5,15 +5,16 @@ import (
 )
 
 type BusinessConfig struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	Logo          string `json:"logo"`
-	Address       string `json:"address"`
-	NIT           string `json:"nit"`
-	Currency      string `json:"currency"`
-	TicketHeader  string `json:"ticket_header"`
-	TicketFooter  string `json:"ticket_footer"`
-	Configured    bool   `json:"configured"`
+	ID                   int     `json:"id"`
+	Name                 string  `json:"name"`
+	Logo                 string  `json:"logo"`
+	Address              string  `json:"address"`
+	NIT                  string  `json:"nit"`
+	Currency             string  `json:"currency"`
+	TicketHeader         string  `json:"ticket_header"`
+	TicketFooter         string  `json:"ticket_footer"`
+	DefaultOpeningAmount float64 `json:"default_opening_amount"`
+	Configured           bool    `json:"configured"`
 }
 
 type SetupRepository struct {
@@ -25,9 +26,14 @@ func NewSetupRepository(db *sql.DB) *SetupRepository {
 }
 
 func (r *SetupRepository) Get() (*BusinessConfig, error) {
-	row := r.db.QueryRow(`SELECT id, name, COALESCE(logo,''), COALESCE(address,''), COALESCE(nit,''), currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,'') FROM business_config WHERE id = 1`)
+	row := r.db.QueryRow(`
+		SELECT id, name, COALESCE(logo,''), COALESCE(address,''), COALESCE(nit,''),
+		       currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
+		       COALESCE(default_opening_amount, 0)
+		FROM business_config WHERE id = 1`)
 	cfg := &BusinessConfig{}
-	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT, &cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter)
+	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT,
+		&cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount)
 	if err == sql.ErrNoRows {
 		cfg.Currency = "COP"
 		cfg.Configured = false
@@ -42,13 +48,15 @@ func (r *SetupRepository) Get() (*BusinessConfig, error) {
 
 func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 	_, err := r.db.Exec(`
-		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, logo=excluded.logo, address=excluded.address,
 			nit=excluded.nit, currency=excluded.currency,
 			ticket_header=excluded.ticket_header, ticket_footer=excluded.ticket_footer,
+			default_opening_amount=excluded.default_opening_amount,
 			updated_at=CURRENT_TIMESTAMP
-	`, cfg.Name, cfg.Logo, cfg.Address, cfg.NIT, cfg.Currency, cfg.TicketHeader, cfg.TicketFooter)
+	`, cfg.Name, cfg.Logo, cfg.Address, cfg.NIT, cfg.Currency,
+		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount)
 	return err
 }

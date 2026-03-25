@@ -30,6 +30,9 @@ func (m *mockSaleRepo) List(_ context.Context, _ repository.SaleFilter) ([]*mode
 func (m *mockSaleRepo) GetByID(_ context.Context, _ int64) (*model.Sale, error) {
 	return m.created, nil
 }
+func (m *mockSaleRepo) Void(_ context.Context, _ int64, _ int64) (*model.Sale, error) {
+	return m.created, nil
+}
 
 type mockProductRepo struct{}
 
@@ -46,6 +49,9 @@ func (m *mockProductRepo) Update(_ context.Context, p *model.Product) (*model.Pr
 	return p, nil
 }
 func (m *mockProductRepo) Delete(_ context.Context, _ int64) error { return nil }
+func (m *mockProductRepo) LowStock(_ context.Context) ([]*model.Product, error) {
+	return nil, nil
+}
 
 type mockRegisterRepo struct {
 	openRegister *model.Register
