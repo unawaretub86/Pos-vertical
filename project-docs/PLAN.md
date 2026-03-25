@@ -9,6 +9,27 @@
 
 ---
 
+## Estado del Proyecto — 2026-03-24
+
+| Fase | Descripción | Estado |
+|------|-------------|--------|
+| 0 | Fundación (DB, API, Auth infra) | ✅ Completa |
+| 1 | Core POS (Auth, Layout, Setup, Categorías, Productos, POS) | ✅ Completa (minor: transform CSS pendiente) |
+| 2 | Caja Registradora | ✅ Completa |
+| 3.1 | Clientes CRUD + balance | ✅ Completa |
+| 3.2 | Pagos de crédito (abonos) | ✅ Completa |
+| 3.3 | Cartera de crédito (`/portfolio`) | ✅ Completa (2026-03-24) |
+| 4 | Inventario (stock entries, pantalla dedicada) | ✅ Completa (2026-03-24) |
+| 5 | Reportes de ventas | 🔲 Pendiente |
+| 6 | Tickets / impresión | 🔲 Pendiente |
+| 7 | Gestión de usuarios | 🔲 Pendiente |
+| 8 | Dashboard + Settings + Polish | 🔲 Pendiente |
+| 9 | Build, empaquetado, testing E2E | 🔲 Pendiente |
+
+**Próxima fase recomendada:** Fase 5 — Reportes de ventas
+
+---
+
 ## Fase 0 — Fundación del Proyecto
 
 ### 0.0 Sistema de Diseño (COMPLETADO ✓)
@@ -329,7 +350,7 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 
 **Sidebar — Items por rol:**
 - [x] Cajero: Punto de Venta, Caja
-- [x] Admin: Punto de Venta, Dashboard, Caja, Clientes, Inventario, Reportes, Configuración
+- [x] Admin: Punto de Venta, Dashboard, Caja, Clientes, Cartera, Inventario, Reportes, Configuración — Cartera agregado 2026-03-24
 
 **Sidebar — Footer (`.sidebar-footer`):**
 - [x] Avatar circular 32×32px, `gradient(135deg, accent, #c47a10)`, iniciales en negro
@@ -390,7 +411,7 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 **Frontend — Categorías:**
 - [x] Integradas en pantalla de Inventario o Productos
 - [x] CRUD completo con formularios inline o modal
-- [ ] Aparecen como **category tabs** en el POS (`.cat-tab`):
+- [x] Aparecen como **category tabs** en el POS (`.cat-tab`) — implementado en `frontend/app/pos/page.tsx`
   - Padding: `5px 12px`, `border-radius: 20px`, `font-size: 12px`, `font-weight: 500`
   - Normal: `color: text-secondary`, `border: 1px solid border`
   - Hover: `background: surface-2`, `color: text-primary`
@@ -402,7 +423,7 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 - [x] Nombre de categoría es requerido y único (validación en servicio + UNIQUE en DB)
 - [x] Lista se actualiza en tiempo real al crear/editar/eliminar
 - [x] Campo `description` guardado correctamente (migración ALTER TABLE idempotente)
-- [ ] Las categorías aparecen correctamente como tabs en el POS
+- [x] Las categorías aparecen correctamente como tabs en el POS
 
 ---
 
@@ -421,16 +442,17 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 **Frontend — Pantalla Productos / Cards en POS:**
 
 Cards de producto en el grid del POS (`.product-card`):
-- [ ] Grid: `repeat(3, 1fr)`, gap `8px`, scroll vertical con scrollbar thin (4px)
-- [ ] Card: `background: surface-1`, `border: 1px solid border`, `border-radius: 8px`, `padding: 12px`
-- [ ] Hover: `border-color: border-emphasis`, `background: surface-2`, `transform: translateY(-1px)`
-- [ ] Active (click): `transform: translateY(0)`, `opacity: 0.8`
-- [ ] Nombre: `font-size: 13px`, `font-weight: 600`, `line-height: 1.3`
-- [ ] Precio: `font-size: 17px`, `font-weight: 700`, `color: accent`, `.tnum`, `letter-spacing: -0.5px`
-- [ ] Stock badge (`.stock-badge`): `font-size: 10px`, `font-weight: 600`, `padding: 2px 6px`, `border-radius: 4px`
-  - Verde > 10: `.stock-ok` (success-dim/success)
-  - Amarillo ≤ 10: `.stock-low` (accent-dim/accent)
-  - Rojo ≤ 3: `.stock-out` (danger-dim/danger)
+- [x] Grid: `repeat(3, 1fr)`, gap `10px`, scroll vertical
+- [x] Card: `background: surface-1`, `border: 1px solid border`, `border-radius: 8px`, `padding: 12px`
+- [x] Hover: `border-color: border-emphasis`, `background: surface-2` — **color change implementado**
+- [ ] Hover: `transform: translateY(-1px)` — **pendiente** (no implementado aún)
+- [ ] Active (click): `transform: translateY(0)`, `opacity: 0.8` — **pendiente**
+- [x] Nombre: `font-size: 13px`, `font-weight: 600`
+- [x] Precio: `font-size: 17px`, `font-weight: 700`, `color: accent`, `.tnum`
+- [x] Stock badge: `font-size: 10px`, `padding: 2px 6px`, `border-radius: 4px`
+  - Verde (stock > 3 y > min_stock): success colors
+  - Amarillo (stock <= min_stock): accent colors
+  - Rojo (stock <= 3 o sin stock): danger colors
 
 Página de gestión de productos (`/inventory`):
 - [x] Tabla con filtros por categoría (tabs) y estado (activo/inactivo/todos)
@@ -448,7 +470,7 @@ Página de gestión de productos (`/inventory`):
 - [x] Productos desactivados no aparecen en búsqueda del POS (filtro `active=true` por defecto)
 - [x] Stock badges muestran color correcto según cantidad
 - [x] Alineación de columnas numéricas (Precio, Stock, Mín.) correcta
-- [ ] Cards tienen hover effect y transform implementados (pendiente POS frontend)
+- [/] Cards: hover color change ✓ / `transform: translateY` pendiente
 
 ---
 
@@ -550,7 +572,7 @@ Layout principal (`.pos-layout`):
 - [x] Edge case: venta a crédito sin cliente → error `"el método de pago 'credito' requiere un cliente"`
 - [x] Edge case: venta sin caja abierta → error `"no hay caja abierta"`
 - [x] Error case: fallo en repo → error propagado al caller
-- [ ] Test de integración repositorio: rollback completo si falla `customer_payments` insert (requiere SQLite en memoria)
+- ~~Test de integración repositorio: rollback si falla `customer_payments` insert~~ **OBSOLETO**: el requerimiento de customer_payments al crear venta fue eliminado (ver nota Ralph Review)
 
 ---
 
@@ -720,37 +742,37 @@ Tabla de clientes (`.table-wrap`):
 
 **Backend:**
 - [x] `GET /api/products/low-stock` — productos bajo stock mínimo — implementado 2026-03-24
-- [ ] `POST /api/stock-entries` — entrada de inventario
+- [x] `POST /api/stock-entries` — entrada de inventario — implementado 2026-03-24
 
 **Frontend — Pantalla Inventario (`/inventory`) — Fuente de verdad: `#screen-inventario` en prototipo:**
 
 Topbar:
-- [ ] Título: "Inventario" | Subtítulo: resumen (ej. "3 productos bajo mínimo")
-- [ ] Acciones: "＋ Entrada de inventario" (btn-accent)
+- [x] Título: "Inventario" | Subtítulo: resumen (ej. "3 productos bajo mínimo")
+- [x] Acciones: "＋ Entrada de inventario" (btn) + "＋ Nuevo producto" (btn-accent)
 
 Stats grid superior (`.inv-stats`): `repeat(3, 1fr)`, gap `12px`
-- [ ] Card "Total productos activos"
-- [ ] Card "Bajo stock mínimo" — valor en `color: danger`
-- [ ] Card "Sin stock" — valor en `color: danger`
+- [x] Card "Total productos activos"
+- [x] Card "Bajo stock mínimo" — valor en `color: warning`
+- [x] Card "Sin stock" — valor en `color: danger`
 
 Tabla de productos:
-- [ ] Columnas: Producto | Categoría | Stock actual | Stock mínimo | Estado | Acciones
-- [ ] Fila resaltada con background `danger-dim` para productos bajo mínimo
-- [ ] Badge de estado: verde (ok), amarillo (bajo), rojo (sin stock) — misma lógica que `.stock-badge`
-- [ ] Acción: "＋ Entrada" por fila
+- [x] Columnas: Producto | Categoría | Precio | Stock actual | Stock mínimo | Estado | Activo | Acciones
+- [x] Fila resaltada con background `danger-dim` para productos bajo mínimo
+- [x] Badge de estado: verde (ok), amarillo (bajo), rojo (sin stock) — misma lógica que `.stock-badge`
+- [x] Acción: "＋ Entrada" por fila
 
-Entrada de inventario (modal o subpantalla):
-- [ ] Seleccionar producto (búsqueda)
-- [ ] Input cantidad (numérico)
-- [ ] Nota opcional
-- [ ] Timestamp automático
+Entrada de inventario (modal):
+- [x] Seleccionar producto (dropdown con stock actual)
+- [x] Input cantidad (numérico)
+- [x] Nota opcional
+- [x] Timestamp automático (server-side)
 
 **DoD:**
-- [ ] Stock se actualiza inmediatamente al registrar entrada
-- [ ] Alerta visual clara para productos bajo stock mínimo (fila resaltada + badge)
-- [ ] Cada entrada queda registrada con timestamp y nota
-- [ ] Stock se descuenta automáticamente con ventas (validado en Fase 1)
-- [ ] Stats del topbar/summary muestran conteos correctos
+- [x] Stock se actualiza inmediatamente al registrar entrada
+- [x] Alerta visual clara para productos bajo stock mínimo (fila resaltada + badge)
+- [x] Cada entrada queda registrada con timestamp y nota
+- [x] Stock se descuenta automáticamente con ventas (validado en Fase 1)
+- [x] Stats del topbar/summary muestran conteos correctos
 
 ---
 

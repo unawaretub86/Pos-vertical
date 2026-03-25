@@ -14,13 +14,14 @@ import (
 
 // Handler holds all HTTP handler methods and their dependencies.
 type Handler struct {
-	db         *database.DB
-	categories *service.CategoryService
-	products   *service.ProductService
-	sales      *service.SaleService
-	registers  *service.RegisterService
-	customers  *service.CustomerService
-	setup      *repository.SetupRepository
+	db           *database.DB
+	categories   *service.CategoryService
+	products     *service.ProductService
+	sales        *service.SaleService
+	registers    *service.RegisterService
+	customers    *service.CustomerService
+	setup        *repository.SetupRepository
+	stockEntries repository.StockEntryRepository
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -31,14 +32,16 @@ func New(db *database.DB) *Handler {
 	regRepo := repository.NewRegisterRepository(db.DB)
 	custRepo := repository.NewCustomerRepository(db.DB)
 	setupRepo := repository.NewSetupRepository(db.DB)
+	stockRepo := repository.NewStockEntryRepository(db.DB)
 	return &Handler{
-		db:         db,
-		categories: service.NewCategoryService(catRepo),
-		products:   service.NewProductService(prodRepo),
-		sales:      service.NewSaleService(saleRepo, prodRepo, regRepo),
-		registers:  service.NewRegisterService(regRepo),
-		customers:  service.NewCustomerService(custRepo),
-		setup:      setupRepo,
+		db:           db,
+		categories:   service.NewCategoryService(catRepo),
+		products:     service.NewProductService(prodRepo),
+		sales:        service.NewSaleService(saleRepo, prodRepo, regRepo),
+		registers:    service.NewRegisterService(regRepo),
+		customers:    service.NewCustomerService(custRepo),
+		setup:        setupRepo,
+		stockEntries: stockRepo,
 	}
 }
 
@@ -84,6 +87,7 @@ func (h *Handler) Routes() http.Handler {
 			r.Post("/products", h.createProduct)
 			r.Put("/products/{id}", h.updateProduct)
 			r.Delete("/products/{id}", h.deleteProduct)
+			r.Post("/stock-entries", h.createStockEntry)
 		})
 
 		// Sales (all authenticated users)

@@ -109,6 +109,14 @@ type RegisterMovement struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type StockEntry struct {
+	ID        int64     `json:"id"`
+	ProductID int64     `json:"product_id"`
+	Quantity  float64   `json:"quantity"`
+	Note      string    `json:"note"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Claims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`

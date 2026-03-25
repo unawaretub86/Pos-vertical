@@ -35,6 +35,11 @@ type ProductFilter struct {
 	ActiveOnly bool
 }
 
+// StockEntryRepository handles stock entry persistence.
+type StockEntryRepository interface {
+	Create(ctx context.Context, entry *model.StockEntry) (*model.StockEntry, error)
+}
+
 // CustomerRepository defines CRUD operations for customers.
 type CustomerRepository interface {
 	List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error)

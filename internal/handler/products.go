@@ -10,6 +10,28 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func (h *Handler) createStockEntry(w http.ResponseWriter, r *http.Request) {
+	var entry model.StockEntry
+	if err := decode(r, &entry); err != nil {
+		respondError(w, http.StatusBadRequest, "request inválido")
+		return
+	}
+	if entry.ProductID == 0 || entry.Quantity <= 0 {
+		respondError(w, http.StatusBadRequest, "product_id y quantity son requeridos")
+		return
+	}
+	created, err := h.stockEntries.Create(r.Context(), &entry)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "producto no encontrado")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respond(w, http.StatusCreated, created)
+}
+
 func (h *Handler) listProducts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	filter := repository.ProductFilter{
