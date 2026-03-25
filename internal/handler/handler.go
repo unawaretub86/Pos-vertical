@@ -22,6 +22,7 @@ type Handler struct {
 	customers    *service.CustomerService
 	setup        *repository.SetupRepository
 	stockEntries repository.StockEntryRepository
+	reports      repository.ReportRepository
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -33,6 +34,7 @@ func New(db *database.DB) *Handler {
 	custRepo := repository.NewCustomerRepository(db.DB)
 	setupRepo := repository.NewSetupRepository(db.DB)
 	stockRepo := repository.NewStockEntryRepository(db.DB)
+	reportRepo := repository.NewReportRepository(db.DB)
 	return &Handler{
 		db:           db,
 		categories:   service.NewCategoryService(catRepo),
@@ -42,6 +44,7 @@ func New(db *database.DB) *Handler {
 		customers:    service.NewCustomerService(custRepo),
 		setup:        setupRepo,
 		stockEntries: stockRepo,
+		reports:      reportRepo,
 	}
 }
 
@@ -103,6 +106,9 @@ func (h *Handler) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Get("/reports/portfolio", h.getPortfolio)
+			r.Get("/reports/sales", h.getSalesReport)
+			r.Get("/reports/top-products", h.getTopProducts)
+			r.Get("/reports/registers", h.getRegistersReport)
 		})
 
 		// Registers (all authenticated users)

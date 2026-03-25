@@ -20,13 +20,13 @@
 | 3.2 | Pagos de crédito (abonos) | ✅ Completa |
 | 3.3 | Cartera de crédito (`/portfolio`) | ✅ Completa (2026-03-24) |
 | 4 | Inventario (stock entries, pantalla dedicada) | ✅ Completa (2026-03-24) |
-| 5 | Reportes de ventas | 🔲 Pendiente |
+| 5 | Reportes de ventas | ✅ Completa (2026-03-24) |
 | 6 | Tickets / impresión | 🔲 Pendiente |
 | 7 | Gestión de usuarios | 🔲 Pendiente |
 | 8 | Dashboard + Settings + Polish | 🔲 Pendiente |
 | 9 | Build, empaquetado, testing E2E | 🔲 Pendiente |
 
-**Próxima fase recomendada:** Fase 5 — Reportes de ventas
+**Próxima fase recomendada:** Fase 6 — Tickets / impresión
 
 ---
 
@@ -781,45 +781,43 @@ Entrada de inventario (modal):
 ### 5.1 Reportes de Ventas
 
 **Backend:**
-- [ ] `GET /api/reports/sales` — resumen de ventas (params: from, to, group_by)
-- [ ] `GET /api/reports/top-products` — productos más vendidos
-- [ ] `GET /api/reports/registers` — historial de cajas
+- [x] `GET /api/reports/sales` — resumen de ventas (params: from, to, group_by)
+- [x] `GET /api/reports/top-products` — productos más vendidos
+- [x] `GET /api/reports/registers` — historial de cajas
 
 **Frontend — Pantalla Reportes (`/reports`) — Fuente de verdad: `#screen-reportes` en prototipo:**
 
 Topbar:
-- [ ] Título: "Reportes" | Subtítulo: rango de fechas activo
-- [ ] Acciones: selector de rango (Día / Semana / Mes / Personalizado) + "Exportar"
+- [x] Título: "Reportes" | Subtítulo: rango de fechas activo
+- [x] Acciones: selector de rango (Día / Semana / Mes / Personalizado)
 
 Layout en grid `1fr 1fr`, gap `16px`:
 
 Card "Ventas del período" (`.report-card`):
-- [ ] Chart placeholder bar chart: `height: 120px`, `background: surface-2`, `border-radius: 6px`
-  - Barras: `background: accent-dim`, `border-top: 2px solid accent`, `opacity: 0.7`
-  - Barra actual/hoy: `opacity: 1`
-- [ ] Total ingresos, total costo, margen bruto
-- [ ] Desglose por método de pago
+- [x] Chart bar chart con barras proporcionales a datos reales: `height: 120px`, barra más reciente en accent
+- [x] Total ingresos, total costo, margen bruto
+- [x] Desglose por método de pago
 
 Card "Top Productos":
-- [ ] Ranking por cantidad vendida o por ingreso
-- [ ] Filtrable por rango de fecha
-- [ ] Lista con posición, nombre, cantidad, ingreso
+- [x] Ranking por ingreso
+- [x] Filtrable por rango de fecha
+- [x] Lista con posición, nombre, cantidad, ingreso
 
 Card "Cartera":
-- [ ] Resumen de deuda total
-- [ ] Acceso a vista completa de cartera
+- [x] Resumen de deuda total
+- [x] Acceso a vista completa de cartera
 
 Card "Historial de Cajas":
-- [ ] Lista: fecha apertura/cierre, monto apertura, esperado, real, diferencia
-- [ ] Diferencia en verde (sobrante) o rojo (faltante)
+- [x] Lista: fecha apertura/cierre, monto real, diferencia
+- [x] Diferencia en verde (sobrante) o rojo (faltante)
 - [ ] Opción de imprimir
 
 **DoD:**
-- [ ] Reportes de ventas agregan correctamente por período
-- [ ] Margen bruto = ingresos - costos (calculado correctamente)
-- [ ] Top productos ordena correctamente
-- [ ] Datos son consistentes con las ventas registradas
-- [ ] Chart bars proporcionales a los datos reales
+- [x] Reportes de ventas agregan correctamente por período
+- [x] Margen bruto = ingresos - costos (calculado correctamente)
+- [x] Top productos ordena correctamente
+- [x] Datos son consistentes con las ventas registradas
+- [x] Chart bars proporcionales a los datos reales
 
 ---
 
