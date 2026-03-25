@@ -72,6 +72,8 @@ type Sale struct {
 	ChangeAmount  *float64   `json:"change_amount"`
 	Reference     string     `json:"reference"`
 	Status        string     `json:"status"`
+	VoidedBy      *int64     `json:"voided_by,omitempty"`
+	VoidedAt      *time.Time `json:"voided_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	Items         []SaleItem `json:"items,omitempty"`
 }

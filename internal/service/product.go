@@ -45,6 +45,10 @@ func (s *ProductService) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
+func (s *ProductService) LowStock(ctx context.Context) ([]*model.Product, error) {
+	return s.repo.LowStock(ctx)
+}
+
 func validateProduct(p *model.Product) error {
 	p.Name = strings.TrimSpace(p.Name)
 	if p.Name == "" {

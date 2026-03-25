@@ -57,6 +57,29 @@ func (h *Handler) listSales(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, sales)
 }
 
+func (h *Handler) voidSale(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	claims := appmw.GetClaims(r)
+	var userID int64
+	if claims != nil {
+		userID = claims.UserID
+	}
+	sale, err := h.sales.Void(r.Context(), id, userID)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "venta no encontrada")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, sale)
+}
+
 func (h *Handler) getSale(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

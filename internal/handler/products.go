@@ -95,6 +95,15 @@ func (h *Handler) updateProduct(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, updated)
 }
 
+func (h *Handler) listLowStockProducts(w http.ResponseWriter, r *http.Request) {
+	products, err := h.products.LowStock(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo productos bajo stock")
+		return
+	}
+	respond(w, http.StatusOK, products)
+}
+
 func (h *Handler) deleteProduct(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

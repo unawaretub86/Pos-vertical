@@ -21,6 +21,7 @@ type SaleRepository interface {
 	Create(ctx context.Context, sale *model.Sale) (*model.Sale, error)
 	List(ctx context.Context, filter SaleFilter) ([]*model.Sale, error)
 	GetByID(ctx context.Context, id int64) (*model.Sale, error)
+	Void(ctx context.Context, saleID int64, userID int64) (*model.Sale, error)
 }
 
 type saleRepo struct {
@@ -119,7 +120,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 
 func (r *saleRepo) List(ctx context.Context, filter SaleFilter) ([]*model.Sale, error) {
 	query := `SELECT id, user_id, customer_id, register_id, subtotal, discount, tax, total,
-		payment_method, cash_tendered, change_amount, reference, status, created_at
+		payment_method, cash_tendered, change_amount, reference, status, voided_by, voided_at, created_at
 		FROM sales WHERE 1=1`
 	args := []any{}
 
@@ -157,7 +158,7 @@ func (r *saleRepo) List(ctx context.Context, filter SaleFilter) ([]*model.Sale, 
 func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, user_id, customer_id, register_id, subtotal, discount, tax, total,
-		payment_method, cash_tendered, change_amount, reference, status, created_at
+		payment_method, cash_tendered, change_amount, reference, status, voided_by, voided_at, created_at
 		FROM sales WHERE id = ?`, id)
 	s, err := scanSale(row)
 	if err == sql.ErrNoRows {
@@ -187,12 +188,99 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 	return s, rows.Err()
 }
 
+// Void marks a sale as voided, restores stock for product items, and records
+// a negative register movement — all in a single transaction.
+func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model.Sale, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("void begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Verify sale exists and is not already voided
+	var status string
+	var total float64
+	var registerID sql.NullInt64
+	err = tx.QueryRowContext(ctx, `SELECT status, total, register_id FROM sales WHERE id = ?`, saleID).
+		Scan(&status, &total, &registerID)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("void get sale: %w", err)
+	}
+	if status == "voided" {
+		return nil, fmt.Errorf("la venta ya fue anulada")
+	}
+
+	// Restore stock for 'product' type items
+	rows, err := tx.QueryContext(ctx, `
+		SELECT si.product_id, si.quantity, p.type
+		FROM sale_items si
+		JOIN products p ON p.id = si.product_id
+		WHERE si.sale_id = ?`, saleID)
+	if err != nil {
+		return nil, fmt.Errorf("void get items: %w", err)
+	}
+	type itemRow struct {
+		productID   int64
+		quantity    float64
+		productType string
+	}
+	var items []itemRow
+	for rows.Next() {
+		var ir itemRow
+		if err := rows.Scan(&ir.productID, &ir.quantity, &ir.productType); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("void item scan: %w", err)
+		}
+		items = append(items, ir)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("void items rows: %w", err)
+	}
+
+	for _, item := range items {
+		if item.productType == "product" {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE products SET stock = stock + ? WHERE id = ?`,
+				item.quantity, item.productID); err != nil {
+				return nil, fmt.Errorf("void restore stock: %w", err)
+			}
+		}
+	}
+
+	// Mark sale as voided
+	now := time.Now()
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE sales SET status = 'voided', voided_by = ?, voided_at = ? WHERE id = ?`,
+		userID, now, saleID); err != nil {
+		return nil, fmt.Errorf("void update sale: %w", err)
+	}
+
+	// Register reversal movement
+	if registerID.Valid {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO register_movements (register_id, type, amount, description) VALUES (?, 'withdrawal', ?, ?)`,
+			registerID.Int64, total, fmt.Sprintf("Anulación venta #%d", saleID)); err != nil {
+			return nil, fmt.Errorf("void register movement: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("void commit: %w", err)
+	}
+
+	return r.GetByID(ctx, saleID)
+}
+
 func scanSale(s scanner) (*model.Sale, error) {
 	sale := &model.Sale{}
 	return sale, s.Scan(
 		&sale.ID, &sale.UserID, &sale.CustomerID, &sale.RegisterID,
 		&sale.Subtotal, &sale.Discount, &sale.Tax, &sale.Total,
 		&sale.PaymentMethod, &sale.CashTendered, &sale.ChangeAmount,
-		&sale.Reference, &sale.Status, &sale.CreatedAt,
+		&sale.Reference, &sale.Status, &sale.VoidedBy, &sale.VoidedAt, &sale.CreatedAt,
 	)
 }

@@ -69,6 +69,10 @@ func (s *SaleService) GetByID(ctx context.Context, id int64) (*model.Sale, error
 	return s.repo.GetByID(ctx, id)
 }
 
+func (s *SaleService) Void(ctx context.Context, saleID int64, userID int64) (*model.Sale, error) {
+	return s.repo.Void(ctx, saleID, userID)
+}
+
 func validateSale(sale *model.Sale) error {
 	if !validPaymentMethods[sale.PaymentMethod] {
 		return errors.New("método de pago inválido: debe ser cash, transfer, card o credit")

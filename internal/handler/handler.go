@@ -77,6 +77,7 @@ func (h *Handler) Routes() http.Handler {
 
 		// Products (all authenticated users can read; admin to write)
 		r.Get("/products", h.listProducts)
+		r.Get("/products/low-stock", h.listLowStockProducts)
 		r.Get("/products/{id}", h.getProduct)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
@@ -89,6 +90,16 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/sales", h.createSale)
 		r.Get("/sales", h.listSales)
 		r.Get("/sales/{id}", h.getSale)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Delete("/sales/{id}/void", h.voidSale)
+		})
+
+		// Reports (admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Get("/reports/portfolio", h.getPortfolio)
+		})
 
 		// Registers (all authenticated users)
 		r.Post("/registers", h.openRegister)

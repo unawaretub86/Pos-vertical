@@ -102,8 +102,9 @@ func (r *productRepo) Update(ctx context.Context, p *model.Product) (*model.Prod
 	return r.GetByID(ctx, p.ID)
 }
 
+// Delete soft-deletes a product by setting active = 0.
 func (r *productRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM products WHERE id = ?`, id)
+	res, err := r.db.ExecContext(ctx, `UPDATE products SET active = 0 WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("product delete: %w", err)
 	}
@@ -112,6 +113,29 @@ func (r *productRepo) Delete(ctx context.Context, id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// LowStock returns all active products where stock <= min_stock.
+func (r *productRepo) LowStock(ctx context.Context) ([]*model.Product, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, name, code, category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at
+		FROM products
+		WHERE active = 1 AND type = 'product' AND stock <= min_stock
+		ORDER BY stock ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("product low stock: %w", err)
+	}
+	defer rows.Close()
+
+	var products []*model.Product
+	for rows.Next() {
+		p, err := scanProduct(rows)
+		if err != nil {
+			return nil, err
+		}
+		products = append(products, p)
+	}
+	return products, rows.Err()
 }
 
 // scanner abstracts *sql.Row and *sql.Rows for scanProduct.

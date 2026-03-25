@@ -229,7 +229,6 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 ### 0.2 Base de Datos
 
 - [x] Integrar SQLite con `modernc.org/sqlite` (pure Go)
-- [x] Integrar SQLite con `modernc.org/sqlite` (pure Go)
 - [x] Crear sistema de migraciones (embebido, auto-ejecuta al iniciar)
   - [x] Migración inicial: todas las tablas del modelo de datos
     - `business_config`, `users`, `categories`, `products`, `customers`
@@ -278,6 +277,7 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 
 **Backend:**
 - [x] `POST /api/auth/login` — login con username + password
+- [x] `GET /api/auth/me` — obtener usuario autenticado desde token
 - [x] Generar JWT con claims: user_id, role, exp
 - [x] Hash de passwords con bcrypt
 
@@ -413,14 +413,10 @@ posición: fixed bottom-right 24px; z-index: 9999; max 3 simultáneos;
 - [x] `GET /api/products/:id` — detalle de producto
 - [x] `POST /api/products` — crear producto
 - [x] `PUT /api/products/:id` — actualizar producto
-- [x] `DELETE /api/products/:id` — eliminar producto (hard delete; pendiente cambiar a soft delete)
+- [x] `DELETE /api/products/:id` — soft delete (`active = 0`) — implementado 2026-03-24
 - [x] `GET /api/products?search=q` — búsqueda integrada en listado (nombre o código, LIKE)
-- [ ] `GET /api/products/low-stock` — endpoint dedicado para productos bajo stock mínimo
+- [x] `GET /api/products/low-stock` — endpoint dedicado para productos bajo stock mínimo — implementado 2026-03-24
 - [x] Campos: name, code, category_id, type (product/service), sale_price, wholesale_price, cost, unit (unit/kg/lb/liter), stock, min_stock, tax_rate, active
-
-**Pendientes backend:**
-- [ ] Cambiar DELETE a soft delete (`active = 0`) en lugar de hard delete
-- [ ] Endpoint dedicado `GET /api/products/low-stock`
 
 **Frontend — Pantalla Productos / Cards en POS:**
 
@@ -469,7 +465,7 @@ Página de gestión de productos (`/inventory`):
 - [x] **[BUG]** `SaleService.Create`: no verifica caja abierta — agregar query `SELECT id FROM registers WHERE status='open' AND user_id=?` antes de insertar; si no existe → HTTP 409 `"No hay caja abierta"` (`internal/service/sale.go:29`)
 - [x] **[BUG]** `saleRepo.Create`: no inserta en `register_movements` — agregar `INSERT INTO register_movements (register_id, type, amount, description)` en la misma transacción que la venta (`internal/repository/sale.go:35`)
 - ~~`SaleService.Create`: si `payment_method == "credit"`, insertar registro en `customer_payments`~~ **ELIMINADO (Ralph Review 2025-03-24):** este requerimiento contradice la arquitectura de balance on-the-fly. El balance = `SUM(credit_sales) - SUM(customer_payments)`. Si al crear la venta a crédito se inserta un payment con el mismo monto, el balance queda en $0 inmediatamente (la deuda se auto-cancela). La arquitectura actual es correcta: la venta a crédito aumenta la deuda vía la tabla `sales`; los abonos se registran en `customer_payments` como eventos independientes posteriores.
-- [ ] `DELETE /api/sales/:id/void` — endpoint de anulación (requiere migración 2 para `voided_by`/`voided_at` en schema)
+- [x] `DELETE /api/sales/:id/void` — endpoint de anulación — implementado 2026-03-24. Restaura stock en TX, marca `voided_by`/`voided_at`, genera movimiento de reversión en caja. Solo admin.
 
 **Frontend — Pantalla POS (`/pos`) — Fuente de verdad: `#screen-pos` en prototipo:**
 
@@ -534,7 +530,7 @@ Layout principal (`.pos-layout`):
 - [x] Flujo completo (buscar → carrito → pago → ticket) en < 30 segundos
 - [x] Stock se descuenta correctamente al completar venta — check atómico `AND stock >= ?` implementado en `saleRepo.Create`
 - [x] Servicios no descuentan stock
-- [ ] Venta a crédito requiere cliente seleccionado (validación con mensaje claro) — ⚠️ **BUG ACTIVO**: el selector de cliente en el POS no existe; al elegir "Crédito" no hay UI para buscar/seleccionar/crear un cliente. El backend valida correctamente pero el frontend nunca envía `customer_id`. Bloqueante para venta a crédito.
+- [x] Venta a crédito requiere cliente seleccionado (validación con mensaje claro) — `CustomerPicker` implementado en POS; se muestra solo cuando `paymentMethod === 'credit'`, valida antes de cobrar, envía `customer_id` al backend.
 - [x] Cambio se calcula correctamente para pagos en efectivo
 - [x] Descuentos se reflejan en el total en tiempo real
 - [x] Montos en formato COP (sin decimales, separador de miles con punto)
@@ -565,6 +561,7 @@ Layout principal (`.pos-layout`):
 **Backend:**
 - [x] `POST /api/registers` — abrir caja (monto base)
 - [x] `GET /api/registers` — listar cajas (historial)
+- [x] `GET /api/registers/open` — obtener la caja abierta del usuario actual (nil si no hay)
 - [x] `GET /api/registers/:id` — detalle de caja
 - [x] `POST /api/registers/:id/close` — cerrar caja con cuadre
 - [x] `GET /api/registers/:id/movements` — movimientos de caja
@@ -628,6 +625,7 @@ Cierre:
 
 **Backend:**
 - [x] `GET /api/customers` — listar clientes (búsqueda por nombre/teléfono)
+- [x] `GET /api/customers/:id` — detalle de cliente
 - [x] `POST /api/customers` — crear cliente
 - [x] `PUT /api/customers/:id` — actualizar cliente
 - [x] `DELETE /api/customers/:id` — eliminar cliente (solo si saldo = 0)
@@ -666,8 +664,7 @@ Tabla de clientes (`.table-wrap`):
 - [x] Saldo total se muestra en el subtítulo del topbar
 - [ ] Eliminar cliente con deuda → pendiente prueba manual por Andrey
 
-**⚠️ BUG BLOQUEANTE DETECTADO EN TESTING:**
-- El POS no tiene selector de cliente al elegir método "Crédito" — sin `customer_id` la venta a crédito es imposible desde la UI. Requiere agregar un componente de búsqueda/selección de cliente en el panel derecho del POS cuando `payment_method === 'credit'`. Registrado en 1.6 (DoD).
+~~**⚠️ BUG BLOQUEANTE DETECTADO EN TESTING:** El POS no tiene selector de cliente al elegir método "Crédito"~~ **RESUELTO**: `CustomerPicker` implementado y funcional en `frontend/app/pos/page.tsx`. Ver DoD 1.6.
 
 ---
 
@@ -697,20 +694,23 @@ Tabla de clientes (`.table-wrap`):
 ### 3.3 Cartera de Crédito
 
 **Backend:**
-- [ ] `GET /api/reports/portfolio` — resumen de cartera
+- [x] `GET /api/reports/portfolio` — resumen de cartera — implementado 2026-03-24. Filtra clientes con balance > 0, ordenado por deuda desc.
 
 **Frontend — Vista Cartera (`/portfolio`):**
-- [ ] Lista: nombre cliente, deuda total, fecha venta más antigua
-- [ ] Ordenable por monto o antigüedad
-- [ ] Drill-down a detalle del cliente
-- [ ] Botón "Abonar" directo por fila
+- [x] Lista: nombre cliente, deuda total, fecha venta más antigua
+- [x] Ordenable por monto o antigüedad (toggle asc/desc)
+- [x] Drill-down a detalle del cliente (click fila o botón "Ver")
+- [x] Botón "Abonar" directo por fila → navega a `/customers/:id`
+- [x] Barra de deuda proporcional por fila
+- [x] Total general al pie de la tabla
+- [x] "Cartera" agregado al sidebar nav (adminOnly)
 
 **DoD:**
-- [ ] Vista de cartera carga en < 5 segundos
-- [ ] Muestra todos los clientes con deuda > 0
-- [ ] Se puede ordenar por deuda y por antigüedad
-- [ ] Click en cliente lleva a su detalle con ventas y abonos
-- [ ] Todo visible en una sola pantalla
+- [x] Vista de cartera carga en < 5 segundos
+- [x] Muestra todos los clientes con deuda > 0
+- [x] Se puede ordenar por deuda y por antigüedad
+- [x] Click en cliente lleva a su detalle con ventas y abonos
+- [x] Todo visible en una sola pantalla
 
 ---
 
@@ -719,7 +719,7 @@ Tabla de clientes (`.table-wrap`):
 ### 4.1 Control de Stock
 
 **Backend:**
-- [ ] `GET /api/products/low-stock` — productos bajo stock mínimo
+- [x] `GET /api/products/low-stock` — productos bajo stock mínimo — implementado 2026-03-24
 - [ ] `POST /api/stock-entries` — entrada de inventario
 
 **Frontend — Pantalla Inventario (`/inventory`) — Fuente de verdad: `#screen-inventario` en prototipo:**
