@@ -155,3 +155,76 @@ func (r *customerRepo) TotalPortfolioBalance(ctx context.Context) (float64, erro
 	}
 	return total, nil
 }
+
+// ListPayments returns all payments for a given customer, ordered by most recent first.
+func (r *customerRepo) ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, customer_id, amount, COALESCE(note,''), created_at
+		 FROM customer_payments WHERE customer_id = ? ORDER BY created_at DESC`, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("list payments: %w", err)
+	}
+	defer rows.Close()
+
+	var payments []*model.CustomerPayment
+	for rows.Next() {
+		p := &model.CustomerPayment{}
+		if err := rows.Scan(&p.ID, &p.CustomerID, &p.Amount, &p.Note, &p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan payment: %w", err)
+		}
+		payments = append(payments, p)
+	}
+	return payments, rows.Err()
+}
+
+// CreatePayment inserts a new customer payment (abono).
+func (r *customerRepo) CreatePayment(ctx context.Context, p *model.CustomerPayment) (*model.CustomerPayment, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO customer_payments (customer_id, amount, note) VALUES (?, ?, ?)`,
+		p.CustomerID, p.Amount, p.Note)
+	if err != nil {
+		return nil, fmt.Errorf("create payment: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("payment last id: %w", err)
+	}
+	created := &model.CustomerPayment{}
+	err = r.db.QueryRowContext(ctx,
+		`SELECT id, customer_id, amount, COALESCE(note,''), created_at FROM customer_payments WHERE id = ?`, id).
+		Scan(&created.ID, &created.CustomerID, &created.Amount, &created.Note, &created.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get created payment: %w", err)
+	}
+	return created, nil
+}
+
+// ListCreditSales returns all credit sales for a customer (completed only), most recent first.
+func (r *customerRepo) ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, user_id, customer_id, COALESCE(register_id, 0), subtotal, discount, tax, total,
+		        payment_method, status, created_at
+		 FROM sales
+		 WHERE customer_id = ? AND payment_method = 'credit' AND status = 'completed'
+		 ORDER BY created_at DESC`, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("list credit sales: %w", err)
+	}
+	defer rows.Close()
+
+	var sales []*model.Sale
+	for rows.Next() {
+		s := &model.Sale{}
+		var regID int64
+		if err := rows.Scan(&s.ID, &s.UserID, &s.CustomerID, &regID,
+			&s.Subtotal, &s.Discount, &s.Tax, &s.Total,
+			&s.PaymentMethod, &s.Status, &s.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan credit sale: %w", err)
+		}
+		if regID != 0 {
+			s.RegisterID = &regID
+		}
+		sales = append(sales, s)
+	}
+	return sales, rows.Err()
+}

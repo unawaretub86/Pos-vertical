@@ -674,22 +674,23 @@ Tabla de clientes (`.table-wrap`):
 ### 3.2 Pagos de Crédito (Abonos)
 
 **Backend:**
-- [ ] `GET /api/customers/:id/payments` — historial de pagos del cliente
-- [ ] `POST /api/customers/:id/payments` — registrar abono
+- [x] `GET /api/customers/:id/payments` — historial de pagos del cliente
+- [x] `POST /api/customers/:id/payments` — registrar abono
+- [x] `GET /api/customers/:id/detail` — endpoint combinado: cliente + balance + ventas crédito + pagos
 
 **Frontend — Detalle de Cliente (`/customers/:id`):**
-- [ ] Lista de ventas a crédito del cliente
-- [ ] Lista de abonos realizados
-- [ ] Formulario para registrar abono (parcial o total)
-- [ ] Input monto abono con validación (no > saldo)
-- [ ] Generación de recibo de abono
-- [ ] Toast "Abono registrado" al guardar
+- [x] Lista de ventas a crédito del cliente
+- [x] Lista de abonos realizados
+- [x] Formulario para registrar abono (parcial o total)
+- [x] Input monto abono con validación (no > saldo)
+- [x] Generación de recibo de abono
+- [x] Toast "Abono registrado" al guardar
 
 **DoD:**
-- [ ] Abono reduce el saldo del cliente correctamente
-- [ ] No se puede abonar más de lo que se debe
-- [ ] Se genera recibo por cada abono
-- [ ] Historial de abonos visible en detalle del cliente
+- [x] Abono reduce el saldo del cliente correctamente
+- [x] No se puede abonar más de lo que se debe
+- [x] Se genera recibo por cada abono
+- [x] Historial de abonos visible en detalle del cliente
 
 ---
 

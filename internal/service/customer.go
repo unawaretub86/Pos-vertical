@@ -68,3 +68,37 @@ func (s *CustomerService) Balance(ctx context.Context, id int64) (float64, error
 func (s *CustomerService) TotalPortfolioBalance(ctx context.Context) (float64, error) {
 	return s.repo.TotalPortfolioBalance(ctx)
 }
+
+func (s *CustomerService) ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error) {
+	return s.repo.ListPayments(ctx, customerID)
+}
+
+func (s *CustomerService) CreatePayment(ctx context.Context, customerID int64, amount float64, note string) (*model.CustomerPayment, error) {
+	if amount <= 0 {
+		return nil, errors.New("el monto del abono debe ser mayor a cero")
+	}
+
+	// Verify customer exists
+	if _, err := s.repo.GetByID(ctx, customerID); err != nil {
+		return nil, errors.New("cliente no encontrado")
+	}
+
+	// Validate amount does not exceed current balance
+	balance, err := s.repo.Balance(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	if amount > balance {
+		return nil, errors.New("el monto del abono no puede ser mayor al saldo pendiente")
+	}
+
+	return s.repo.CreatePayment(ctx, &model.CustomerPayment{
+		CustomerID: customerID,
+		Amount:     amount,
+		Note:       strings.TrimSpace(note),
+	})
+}
+
+func (s *CustomerService) ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error) {
+	return s.repo.ListCreditSales(ctx, customerID)
+}

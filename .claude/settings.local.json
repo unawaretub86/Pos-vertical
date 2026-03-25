@@ -19,7 +19,9 @@
       "Bash(python -m scripts.aggregate_benchmark \"C:/Users/ANDREYO/.claude/skills/ralph-workspace/iteration-1\" --skill-name ralph)",
       "Bash(find c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/src -name *.tsx)",
       "Bash(make build:*)",
-      "Bash(sqlite3 data.db \"SELECT id, customer_id, payment_method, total FROM sales ORDER BY id DESC LIMIT 5;\")"
+      "Bash(sqlite3 data.db \"SELECT id, customer_id, payment_method, total FROM sales ORDER BY id DESC LIMIT 5;\")",
+      "Bash(cp \"c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/CustomerDetailClient.tsx\" \"c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/page.tsx\")",
+      "Bash(rm \"c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/CustomerDetailClient.tsx\")"
     ]
   }
 }

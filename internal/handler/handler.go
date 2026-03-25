@@ -102,12 +102,15 @@ func (h *Handler) Routes() http.Handler {
 		// Customers (all authenticated users can read; admin to write)
 		r.Get("/customers", h.listCustomers)
 		r.Get("/customers/{id}", h.getCustomer)
+		r.Get("/customers/{id}/detail", h.getCustomerDetail)
 		r.Get("/customers/{id}/balance", h.getCustomerBalance)
+		r.Get("/customers/{id}/payments", h.listCustomerPayments)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Post("/customers", h.createCustomer)
 			r.Put("/customers/{id}", h.updateCustomer)
 			r.Delete("/customers/{id}", h.deleteCustomer)
+			r.Post("/customers/{id}/payments", h.createCustomerPayment)
 		})
 	})
 

@@ -43,4 +43,7 @@ type CustomerRepository interface {
 	Delete(ctx context.Context, id int64) error
 	Balance(ctx context.Context, id int64) (float64, error)
 	TotalPortfolioBalance(ctx context.Context) (float64, error)
+	ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error)
+	CreatePayment(ctx context.Context, p *model.CustomerPayment) (*model.CustomerPayment, error)
+	ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error)
 }
