@@ -55,6 +55,8 @@ func (db *DB) migrate() error {
 		return nil
 	}
 
+	// Checkpoint the WAL before backup so the copy includes all committed data.
+	_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
 	if err := backupDB(db.path); err != nil {
 		return fmt.Errorf("backup before migration: %w", err)
 	}

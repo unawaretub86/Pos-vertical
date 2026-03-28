@@ -1,3 +1,5 @@
+//go:generate goversioninfo -icon=app.ico -o resource.syso
+
 package main
 
 import (
@@ -5,6 +7,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"github.com/andreyo/pos/internal/database"
 	"github.com/andreyo/pos/internal/handler"
@@ -35,8 +38,11 @@ func main() {
 	addr := "localhost:8080"
 	log.Printf("POS server starting at http://%s", addr)
 
-	// Open browser
-	go openBrowser("http://" + addr)
+	// Open browser after server starts
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		openBrowser("http://" + addr)
+	}()
 
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server error: %v", err)

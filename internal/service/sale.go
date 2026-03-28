@@ -41,15 +41,23 @@ func (s *SaleService) Create(ctx context.Context, sale *model.Sale) (*model.Sale
 	}
 	sale.RegisterID = &reg.ID
 
-	// Recalculate and validate totals server-side
-	var subtotal float64
+	// Recalculate totals server-side (subtotal, tax from product tax_rate, total)
+	var subtotal, tax float64
 	for i := range sale.Items {
 		itemSub := sale.Items[i].Quantity*sale.Items[i].UnitPrice - sale.Items[i].Discount
 		sale.Items[i].Subtotal = itemSub
 		subtotal += itemSub
+
+		product, err := s.productRepo.GetByID(ctx, sale.Items[i].ProductID)
+		if err != nil {
+			return nil, fmt.Errorf("producto no encontrado (id=%d): %w", sale.Items[i].ProductID, err)
+		}
+		sale.Items[i].TaxRate = product.TaxRate
+		tax += itemSub * product.TaxRate
 	}
 	sale.Subtotal = subtotal
-	recalcTotal := subtotal - sale.Discount + sale.Tax
+	sale.Tax = tax
+	recalcTotal := subtotal - sale.Discount + tax
 	if math.Abs(recalcTotal-sale.Total) > 1 {
 		return nil, fmt.Errorf("total inconsistente: esperado %.0f, recibido %.0f", recalcTotal, sale.Total)
 	}

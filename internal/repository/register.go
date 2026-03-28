@@ -21,6 +21,8 @@ type RegisterRepository interface {
 	SumCashSales(ctx context.Context, registerID int64) (float64, error)
 	// SumCashOut returns the sum of cash_out movements for a register.
 	SumCashOut(ctx context.Context, registerID int64) (float64, error)
+	// SumCashIn returns the sum of cash_in movements for a register.
+	SumCashIn(ctx context.Context, registerID int64) (float64, error)
 }
 
 type registerRepo struct {
@@ -143,6 +145,14 @@ func (r *registerRepo) SumCashOut(ctx context.Context, registerID int64) (float6
 	var sum float64
 	err := r.db.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(amount), 0) FROM register_movements WHERE register_id = ? AND type = 'cash_out'`,
+		registerID).Scan(&sum)
+	return sum, err
+}
+
+func (r *registerRepo) SumCashIn(ctx context.Context, registerID int64) (float64, error) {
+	var sum float64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(amount), 0) FROM register_movements WHERE register_id = ? AND type = 'cash_in'`,
 		registerID).Scan(&sum)
 	return sum, err
 }

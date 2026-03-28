@@ -34,7 +34,9 @@ func (m *mockSaleRepo) Void(_ context.Context, _ int64, _ int64) (*model.Sale, e
 	return m.created, nil
 }
 
-type mockProductRepo struct{}
+type mockProductRepo struct {
+	taxRate float64 // TaxRate returned by GetByID; defaults to 0
+}
 
 func (m *mockProductRepo) Create(_ context.Context, p *model.Product) (*model.Product, error) {
 	return p, nil
@@ -42,8 +44,8 @@ func (m *mockProductRepo) Create(_ context.Context, p *model.Product) (*model.Pr
 func (m *mockProductRepo) List(_ context.Context, _ repository.ProductFilter) ([]*model.Product, error) {
 	return nil, nil
 }
-func (m *mockProductRepo) GetByID(_ context.Context, _ int64) (*model.Product, error) {
-	return nil, nil
+func (m *mockProductRepo) GetByID(_ context.Context, id int64) (*model.Product, error) {
+	return &model.Product{ID: id, TaxRate: m.taxRate, Type: "product", Stock: 9999}, nil
 }
 func (m *mockProductRepo) Update(_ context.Context, p *model.Product) (*model.Product, error) {
 	return p, nil
@@ -82,6 +84,7 @@ func (m *mockRegisterRepo) ListMovements(_ context.Context, _ int64) ([]*model.R
 }
 func (m *mockRegisterRepo) SumCashSales(_ context.Context, _ int64) (float64, error) { return 0, nil }
 func (m *mockRegisterRepo) SumCashOut(_ context.Context, _ int64) (float64, error)   { return 0, nil }
+func (m *mockRegisterRepo) SumCashIn(_ context.Context, _ int64) (float64, error)    { return 0, nil }
 
 // --- helpers ---
 
@@ -314,5 +317,86 @@ func TestSaleService_Create_RepoError_Propagates(t *testing.T) {
 	_, err := svc.Create(context.Background(), validSale())
 	if err == nil {
 		t.Fatal("expected error from repo")
+	}
+}
+
+// --- B3: IVA / tax_rate tests ---
+
+func TestSaleService_Create_TaxCalculatedServerSide(t *testing.T) {
+	// Product has 19% IVA. 2 units × $100 = $200 subtotal → tax = $38, total = $238.
+	svc := NewSaleService(
+		&mockSaleRepo{},
+		&mockProductRepo{taxRate: 0.19},
+		&mockRegisterRepo{openRegister: openRegister()},
+	)
+	sale := &model.Sale{
+		PaymentMethod: "cash",
+		Total:         238, // frontend sends correct total
+		Items: []model.SaleItem{
+			{ProductID: 1, Quantity: 2, UnitPrice: 100},
+		},
+	}
+	result, err := svc.Create(context.Background(), sale)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Tax != 38 {
+		t.Errorf("expected tax 38, got %.2f", result.Tax)
+	}
+	if result.Total != 238 {
+		t.Errorf("expected total 238, got %.2f", result.Total)
+	}
+	if result.Items[0].TaxRate != 0.19 {
+		t.Errorf("expected item tax_rate 0.19, got %.2f", result.Items[0].TaxRate)
+	}
+}
+
+func TestSaleService_Create_FrontendTaxZeroOverriddenByBackend(t *testing.T) {
+	// Frontend sends tax=0 but product has 19% IVA — backend must override.
+	svc := NewSaleService(
+		&mockSaleRepo{},
+		&mockProductRepo{taxRate: 0.19},
+		&mockRegisterRepo{openRegister: openRegister()},
+	)
+	sale := &model.Sale{
+		PaymentMethod: "cash",
+		Tax:           0,    // frontend says no tax
+		Total:         238,  // but sends correct total anyway
+		Items: []model.SaleItem{
+			{ProductID: 1, Quantity: 2, UnitPrice: 100},
+		},
+	}
+	result, err := svc.Create(context.Background(), sale)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Tax != 38 {
+		t.Errorf("expected tax overridden to 38, got %.2f", result.Tax)
+	}
+}
+
+func TestSaleService_Create_ServiceTaxZeroProductNoIVA(t *testing.T) {
+	// Product with tax_rate=0 → tax is 0, total equals subtotal.
+	svc := NewSaleService(
+		&mockSaleRepo{},
+		&mockProductRepo{taxRate: 0},
+		&mockRegisterRepo{openRegister: openRegister()},
+	)
+	sale := &model.Sale{
+		PaymentMethod: "cash",
+		Total:         20,
+		Items: []model.SaleItem{
+			{ProductID: 1, Quantity: 2, UnitPrice: 10},
+		},
+	}
+	result, err := svc.Create(context.Background(), sale)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Tax != 0 {
+		t.Errorf("expected tax 0, got %.2f", result.Tax)
+	}
+	if result.Items[0].TaxRate != 0 {
+		t.Errorf("expected item tax_rate 0, got %.2f", result.Items[0].TaxRate)
 	}
 }

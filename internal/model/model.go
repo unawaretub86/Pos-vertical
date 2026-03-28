@@ -86,6 +86,7 @@ type SaleItem struct {
 	UnitPrice float64 `json:"unit_price"`
 	Discount  float64 `json:"discount"`
 	Subtotal  float64 `json:"subtotal"`
+	TaxRate   float64 `json:"tax_rate"`
 }
 
 type Register struct {

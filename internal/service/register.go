@@ -17,11 +17,12 @@ var (
 
 // RegisterSummary aggregates the register state for display.
 type RegisterSummary struct {
-	Register   *model.Register          `json:"register"`
-	CashSales  float64                  `json:"cash_sales"`
-	CashOut    float64                  `json:"cash_out"`
-	Expected   float64                  `json:"expected"`
-	Movements  []*model.RegisterMovement `json:"movements"`
+	Register  *model.Register           `json:"register"`
+	CashSales float64                   `json:"cash_sales"`
+	CashIn    float64                   `json:"cash_in"`
+	CashOut   float64                   `json:"cash_out"`
+	Expected  float64                   `json:"expected"`
+	Movements []*model.RegisterMovement `json:"movements"`
 }
 
 // RegisterService handles business logic for cash registers.
@@ -52,13 +53,17 @@ func (s *RegisterService) Open(ctx context.Context, userID int64, openingAmount 
 		return nil, err
 	}
 
-	// Record opening movement
-	_, _ = s.repo.AddMovement(ctx, &model.RegisterMovement{
+	// Record opening movement — if this fails, roll back by marking the register closed
+	// so the system doesn't end up in an inconsistent state.
+	if _, err := s.repo.AddMovement(ctx, &model.RegisterMovement{
 		RegisterID:  reg.ID,
 		Type:        "opening",
 		Amount:      openingAmount,
 		Description: "Apertura de caja",
-	})
+	}); err != nil {
+		_, _ = s.repo.Close(ctx, reg.ID, 0, 0, 0)
+		return nil, fmt.Errorf("registrar movimiento de apertura: %w", err)
+	}
 
 	return reg, nil
 }
@@ -88,6 +93,10 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 	if err != nil {
 		return nil, err
 	}
+	cashIn, err := s.repo.SumCashIn(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	cashOut, err := s.repo.SumCashOut(ctx, id)
 	if err != nil {
 		return nil, err
@@ -96,10 +105,11 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 	if err != nil {
 		return nil, err
 	}
-	expected := reg.OpeningAmount + cashSales - cashOut
+	expected := reg.OpeningAmount + cashSales + cashIn - cashOut
 	return &RegisterSummary{
 		Register:  reg,
 		CashSales: cashSales,
+		CashIn:    cashIn,
 		CashOut:   cashOut,
 		Expected:  expected,
 		Movements: movements,
@@ -117,8 +127,9 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 	}
 
 	cashSales, _ := s.repo.SumCashSales(ctx, id)
+	cashIn, _ := s.repo.SumCashIn(ctx, id)
 	cashOut, _ := s.repo.SumCashOut(ctx, id)
-	expected := reg.OpeningAmount + cashSales - cashOut
+	expected := reg.OpeningAmount + cashSales + cashIn - cashOut
 	difference := actualClose - expected
 
 	closed, err := s.repo.Close(ctx, id, actualClose, expected, difference)
@@ -129,6 +140,7 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 	return &RegisterSummary{
 		Register:  closed,
 		CashSales: cashSales,
+		CashIn:    cashIn,
 		CashOut:   cashOut,
 		Expected:  expected,
 		Movements: movements,

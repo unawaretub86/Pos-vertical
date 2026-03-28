@@ -11,9 +11,10 @@ import (
 
 // SaleFilter controls listing behavior.
 type SaleFilter struct {
-	From  *time.Time
-	To    *time.Time
-	Limit int
+	From          *time.Time
+	To            *time.Time
+	Limit         int
+	IncludeVoided bool // when false (default), only 'completed' sales are returned
 }
 
 // SaleRepository defines operations for sales.
@@ -63,9 +64,9 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		item.SaleID = saleID
 
 		_, err := tx.ExecContext(ctx, `
-			INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, discount, subtotal)
-			VALUES (?, ?, ?, ?, ?, ?)`,
-			item.SaleID, item.ProductID, item.Quantity, item.UnitPrice, item.Discount, item.Subtotal,
+			INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, discount, subtotal, tax_rate)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			item.SaleID, item.ProductID, item.Quantity, item.UnitPrice, item.Discount, item.Subtotal, item.TaxRate,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("sale_item insert: %w", err)
@@ -124,6 +125,9 @@ func (r *saleRepo) List(ctx context.Context, filter SaleFilter) ([]*model.Sale, 
 		FROM sales WHERE 1=1`
 	args := []any{}
 
+	if !filter.IncludeVoided {
+		query += " AND status = 'completed'"
+	}
 	if filter.From != nil {
 		query += " AND created_at >= ?"
 		args = append(args, *filter.From)
@@ -170,7 +174,7 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 
 	// Load items
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, sale_id, product_id, quantity, unit_price, discount, subtotal
+		SELECT id, sale_id, product_id, quantity, unit_price, discount, subtotal, tax_rate
 		FROM sale_items WHERE sale_id = ? ORDER BY id`, id)
 	if err != nil {
 		return nil, fmt.Errorf("sale items list: %w", err)
@@ -180,7 +184,7 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 	for rows.Next() {
 		var item model.SaleItem
 		if err := rows.Scan(&item.ID, &item.SaleID, &item.ProductID,
-			&item.Quantity, &item.UnitPrice, &item.Discount, &item.Subtotal); err != nil {
+			&item.Quantity, &item.UnitPrice, &item.Discount, &item.Subtotal, &item.TaxRate); err != nil {
 			return nil, fmt.Errorf("sale item scan: %w", err)
 		}
 		s.Items = append(s.Items, item)
