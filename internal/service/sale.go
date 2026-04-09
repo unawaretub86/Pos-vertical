@@ -53,6 +53,9 @@ func (s *SaleService) Create(ctx context.Context, sale *model.Sale) (*model.Sale
 		if err != nil {
 			return nil, fmt.Errorf("producto no encontrado (id=%d): %w", sale.Items[i].ProductID, err)
 		}
+		if product.Type == "product" && sale.Items[i].Quantity > product.Stock {
+			return nil, fmt.Errorf("stock insuficiente para el producto '%s' (disponible: %.0f, solicitado: %.0f)", product.Name, product.Stock, sale.Items[i].Quantity)
+		}
 		sale.Items[i].TaxRate = product.TaxRate
 		tax += itemSub * product.TaxRate
 

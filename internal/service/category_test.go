@@ -2,13 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/andreyo/pos/internal/model"
 )
 
 type stubCategoryRepo struct {
-	last *model.Category
+	last      *model.Category
+	deleteErr error
 }
 
 func (s *stubCategoryRepo) Create(_ context.Context, name string) (*model.Category, error) {
@@ -29,7 +31,7 @@ func (s *stubCategoryRepo) Update(_ context.Context, id int64, name string) (*mo
 func (s *stubCategoryRepo) UpdateFull(_ context.Context, id int64, name, desc string) (*model.Category, error) {
 	return &model.Category{ID: id, Name: name, Description: desc}, nil
 }
-func (s *stubCategoryRepo) Delete(_ context.Context, _ int64) error { return nil }
+func (s *stubCategoryRepo) Delete(_ context.Context, _ int64) error { return s.deleteErr }
 
 func newCategorySvc() (*CategoryService, *stubCategoryRepo) {
 	r := &stubCategoryRepo{}
@@ -98,5 +100,13 @@ func TestCategoryService_GetByID_OK(t *testing.T) {
 	}
 	if cat.ID != 42 {
 		t.Errorf("expected ID 42, got %d", cat.ID)
+	}
+}
+
+func TestCategoryService_Delete_WithAssignedProducts_ReturnsError(t *testing.T) {
+	r := &stubCategoryRepo{deleteErr: errors.New("foreign key constraint")}
+	svc := NewCategoryService(r)
+	if err := svc.Delete(context.Background(), 1); err == nil {
+		t.Fatal("expected error when deleting category with assigned products")
 	}
 }

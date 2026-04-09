@@ -37,6 +37,7 @@ func (m *mockSaleRepo) Void(_ context.Context, _ int64, _ int64) (*model.Sale, e
 type mockProductRepo struct {
 	taxRate   float64 // TaxRate returned by GetByID; defaults to 0
 	salePrice float64 // SalePrice returned by GetByID; defaults to 0
+	stock     float64 // Stock returned by GetByID; 0 means use default (9999)
 }
 
 func (m *mockProductRepo) Create(_ context.Context, p *model.Product) (*model.Product, error) {
@@ -46,7 +47,11 @@ func (m *mockProductRepo) List(_ context.Context, _ repository.ProductFilter) ([
 	return nil, nil
 }
 func (m *mockProductRepo) GetByID(_ context.Context, id int64) (*model.Product, error) {
-	return &model.Product{ID: id, TaxRate: m.taxRate, SalePrice: m.salePrice, Type: "product", Stock: 9999}, nil
+	stock := m.stock
+	if stock == 0 {
+		stock = 9999
+	}
+	return &model.Product{ID: id, TaxRate: m.taxRate, SalePrice: m.salePrice, Type: "product", Stock: stock}, nil
 }
 func (m *mockProductRepo) Update(_ context.Context, p *model.Product) (*model.Product, error) {
 	return p, nil
@@ -399,5 +404,25 @@ func TestSaleService_Create_ServiceTaxZeroProductNoIVA(t *testing.T) {
 	}
 	if result.Items[0].TaxRate != 0 {
 		t.Errorf("expected item tax_rate 0, got %.2f", result.Items[0].TaxRate)
+	}
+}
+
+func TestSaleService_Create_ExceedsStock_ReturnsError(t *testing.T) {
+	// Product has only 1 unit in stock; sale requests 5.
+	svc := NewSaleService(
+		&mockSaleRepo{},
+		&mockProductRepo{salePrice: 10, stock: 1},
+		&mockRegisterRepo{openRegister: openRegister()},
+	)
+	sale := &model.Sale{
+		PaymentMethod: "cash",
+		Total:         50,
+		Items: []model.SaleItem{
+			{ProductID: 1, Quantity: 5, UnitPrice: 10},
+		},
+	}
+	_, err := svc.Create(context.Background(), sale)
+	if err == nil {
+		t.Fatal("expected error: quantity exceeds available stock")
 	}
 }

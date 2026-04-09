@@ -51,6 +51,8 @@ A single-binary POS application (`pos.exe`) that runs entirely on the client's m
 |-------|-------------------|
 | As an owner, I want to create products with name, category, price, cost, and unit of measure | - CRUD operations for products - Fields: name, category, sale price, wholesale price (optional), cost, type (product/service), unit (unit/kg/lb/liter), minimum stock - Validation: name required, price > 0, cost >= 0 |
 | As a cashier, I want to search products by name or code in < 1 second | - Search input with real-time filtering - Matches on product name or internal code - Results appear as user types (debounced 200ms) |
+| As an owner, I want to assign a barcode to a product | - Optional `barcode` field in product form - Field is unique (no two products share the same barcode) - Can be entered by typing or by scanning with USB scanner while the field is focused |
+| As a cashier, I want to scan a barcode to add a product to the cart | - Barcode scanner input detected on the POS search field - If barcode matches a product → product added to cart immediately - If barcode has no match → barcode text stays in search field, normal name search runs - No extra steps required for Laura |
 | As an owner, I want to manage custom categories | - CRUD for categories - Products reference category by ID - Deleting a category requires reassigning its products |
 
 #### Point of Sale
@@ -113,7 +115,6 @@ A single-binary POS application (`pos.exe`) that runs entirely on the client's m
 ### Non-Goals (MVP)
 
 - **No DIAN electronic invoicing** — complex regulatory project, separate effort
-- **No barcode scanner support** — manual search is sufficient for MVP
 - **No multi-branch** — requires cloud sync infrastructure
 - **No supplier/purchase management** — manual stock entry covers MVP needs
 - **No multiple price lists** — two prices (regular + wholesale) are enough
@@ -172,7 +173,7 @@ users              (id, username, password_hash, role, created_at)
 
 categories         (id, name, created_at)
 
-products           (id, name, code, category_id, type[product|service],
+products           (id, name, code, barcode, category_id, type[product|service],
                     sale_price, wholesale_price, cost, unit[unit|kg|lb|liter],
                     stock, min_stock, tax_rate, active, created_at)
 
@@ -224,6 +225,7 @@ stock_entries      (id, product_id, quantity, note, created_at)
 | `/api/categories` | CRUD | Category management |
 | `/api/products` | CRUD | Product management |
 | `/api/products/search?q=` | GET | Product search |
+| `/api/products/barcode/:barcode` | GET | Product lookup by barcode |
 | `/api/products/low-stock` | GET | Products below min_stock |
 | `/api/customers` | CRUD | Customer management |
 | `/api/customers/:id/balance` | GET | Customer debt balance |
@@ -339,6 +341,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 | 1 | Schema inicial completo (estado actual) |
 | 2 | `ALTER TABLE sales ADD COLUMN voided_by INTEGER REFERENCES users(id)` + `ALTER TABLE sales ADD COLUMN voided_at DATETIME` + `ALTER TABLE products ADD CHECK (stock >= 0)` |
 | 3 | `ALTER TABLE sale_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0` |
+| 4 | `ALTER TABLE products ADD COLUMN barcode TEXT UNIQUE` |
 
 #### Proceso de actualización en campo (MVP — manual):
 ```
@@ -396,7 +399,7 @@ Las siguientes decisiones de arquitectura se toman hoy para no tener que reescri
 - Target: functional POS usable by a real business
 
 **v1.1 — Polish**
-- Barcode scanner support
+- ✅ Barcode scanner support (USB HID, campo `barcode` separado de `code`, fallback a búsqueda por nombre si no hay match)
 - CSV export for reports
 - Automatic local backup (scheduled copy of data.db)
 - UX improvements based on first client feedback

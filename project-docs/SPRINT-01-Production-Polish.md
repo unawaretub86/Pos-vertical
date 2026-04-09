@@ -72,8 +72,8 @@
 - **Ref:** PLAN.md línea 671
 
 ### US-008: Settings improvements
-- [ ] Link a gestión de usuarios desde settings
-- [ ] Logo se actualiza dinámicamente en sidebar al cambiarlo
+- [x] Link a gestión de usuarios desde settings
+- [x] Logo se actualiza dinámicamente en sidebar al cambiarlo
 - **Ref:** PLAN.md líneas 961, 967
 
 ---
@@ -81,9 +81,9 @@
 ## Prioridad 4 — Testing
 
 ### US-009: Missing unit tests (3 cases)
-- [ ] Test: Venta con cantidad > stock disponible
-- [ ] Test: Eliminar categoría con productos asignados
-- [ ] Test: Abrir segunda caja con una ya abierta
+- [x] Test: Venta con cantidad > stock disponible
+- [x] Test: Eliminar categoría con productos asignados
+- [x] Test: Abrir segunda caja con una ya abierta
 - **Ref:** PLAN.md líneas 1028-1033
 
 ---
@@ -99,5 +99,5 @@
 | US-005 | Admin price override | ✅ Completa | 2026-03-31 |
 | US-006 | Register movements filter | ✅ Completa | 2026-03-31 |
 | US-007 | Voided sales filter | ✅ Completa | 2026-04-09 |
-| US-008 | Settings improvements | ⬜ Pendiente | — |
-| US-009 | Missing unit tests | ⬜ Pendiente | — |
+| US-008 | Settings improvements | ✅ Completa | 2026-04-09 |
+| US-009 | Missing unit tests | ✅ Completa | 2026-04-09 |
