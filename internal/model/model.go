@@ -79,14 +79,25 @@ type Sale struct {
 }
 
 type SaleItem struct {
-	ID        int64   `json:"id"`
-	SaleID    int64   `json:"sale_id"`
-	ProductID int64   `json:"product_id"`
-	Quantity  float64 `json:"quantity"`
-	UnitPrice float64 `json:"unit_price"`
-	Discount  float64 `json:"discount"`
-	Subtotal  float64 `json:"subtotal"`
-	TaxRate   float64 `json:"tax_rate"`
+	ID            int64   `json:"id"`
+	SaleID        int64   `json:"sale_id"`
+	ProductID     int64   `json:"product_id"`
+	Quantity      float64 `json:"quantity"`
+	UnitPrice     float64 `json:"unit_price"`
+	OriginalPrice float64 `json:"original_price,omitempty"`
+	Discount      float64 `json:"discount"`
+	Subtotal      float64 `json:"subtotal"`
+	TaxRate       float64 `json:"tax_rate"`
+}
+
+type AuditLog struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Action    string    `json:"action"`
+	Entity    string    `json:"entity"`
+	EntityID  int64     `json:"entity_id"`
+	Details   string    `json:"details"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Register struct {

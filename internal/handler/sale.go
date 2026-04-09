@@ -49,6 +49,9 @@ func (h *Handler) listSales(w http.ResponseWriter, r *http.Request) {
 			filter.Limit = l
 		}
 	}
+	if r.URL.Query().Get("include_voided") == "true" {
+		filter.IncludeVoided = true
+	}
 	sales, err := h.sales.List(r.Context(), filter)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "error listando ventas")

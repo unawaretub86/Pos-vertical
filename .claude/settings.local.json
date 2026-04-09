@@ -27,7 +27,11 @@
       "Bash(grep -n \"getOpenRegister\\\\|ErrNoOpen\\\\|no.*caja\\\\|not found\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/handler/register.go c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/service/*.go)",
       "Bash(grep -n \"Summary\\\\|RegisterSummary\\\\|CurrentAmount\\\\|current_amount\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/service/register.go c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/repository/*.go)",
       "Bash(grep -n \"type DB\\\\|\\\\.DB \" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/database/*.go)",
-      "Bash(go run:*)"
+      "Bash(go run:*)",
+      "Bash(npx next:*)",
+      "Bash(find /c/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical -type f \\\\\\(-name *.sql -o -name migrate* -o -name *schema* \\\\\\))",
+      "Bash(grep -n \"void\\\\|Void\\\\|anulad\\\\|Anulad\\\\|VoidSale\\\\|void_sale\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/page.tsx)",
+      "Bash(grep -n \"listSales\\\\|IncludeVoided\\\\|include_voided\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/handler/*.go)"
     ]
   }
 }

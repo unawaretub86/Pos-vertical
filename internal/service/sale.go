@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
 )
@@ -54,6 +55,15 @@ func (s *SaleService) Create(ctx context.Context, sale *model.Sale) (*model.Sale
 		}
 		sale.Items[i].TaxRate = product.TaxRate
 		tax += itemSub * product.TaxRate
+
+		// Detect price override
+		if math.Abs(sale.Items[i].UnitPrice-product.SalePrice) > 0.01 {
+			claims, _ := ctx.Value(appmw.ClaimsKey).(*model.Claims)
+			if claims == nil || claims.Role != "admin" {
+				return nil, fmt.Errorf("solo un administrador puede modificar el precio del producto '%s'", product.Name)
+			}
+			sale.Items[i].OriginalPrice = product.SalePrice
+		}
 	}
 	sale.Subtotal = subtotal
 	sale.Tax = tax
@@ -97,6 +107,12 @@ func validateSale(sale *model.Sale) error {
 		}
 		if item.UnitPrice < 0 {
 			return errors.New("el precio unitario no puede ser negativo")
+		}
+		if item.Discount < 0 {
+			return errors.New("el descuento por artículo no puede ser negativo")
+		}
+		if item.Discount > item.Quantity*item.UnitPrice {
+			return errors.New("el descuento por artículo no puede superar el subtotal del artículo")
 		}
 	}
 	return nil

@@ -64,12 +64,24 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		item.SaleID = saleID
 
 		_, err := tx.ExecContext(ctx, `
-			INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, discount, subtotal, tax_rate)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			item.SaleID, item.ProductID, item.Quantity, item.UnitPrice, item.Discount, item.Subtotal, item.TaxRate,
+			INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, original_price, discount, subtotal, tax_rate)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			item.SaleID, item.ProductID, item.Quantity, item.UnitPrice, item.OriginalPrice, item.Discount, item.Subtotal, item.TaxRate,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("sale_item insert: %w", err)
+		}
+
+		// Write audit log entry if price was overridden by admin
+		if item.OriginalPrice > 0 {
+			details := fmt.Sprintf(`{"product_id":%d,"original_price":%.2f,"override_price":%.2f}`, item.ProductID, item.OriginalPrice, item.UnitPrice)
+			_, err = tx.ExecContext(ctx,
+				`INSERT INTO audit_log (user_id, action, entity, entity_id, details) VALUES (?, 'price_override', 'sale_item', ?, ?)`,
+				sale.UserID, saleID, details,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("audit_log insert: %w", err)
+			}
 		}
 
 		// Only decrement stock for 'product' type items
@@ -174,7 +186,7 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 
 	// Load items
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, sale_id, product_id, quantity, unit_price, discount, subtotal, tax_rate
+		SELECT id, sale_id, product_id, quantity, unit_price, COALESCE(original_price, 0), discount, subtotal, tax_rate
 		FROM sale_items WHERE sale_id = ? ORDER BY id`, id)
 	if err != nil {
 		return nil, fmt.Errorf("sale items list: %w", err)
@@ -184,7 +196,7 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 	for rows.Next() {
 		var item model.SaleItem
 		if err := rows.Scan(&item.ID, &item.SaleID, &item.ProductID,
-			&item.Quantity, &item.UnitPrice, &item.Discount, &item.Subtotal, &item.TaxRate); err != nil {
+			&item.Quantity, &item.UnitPrice, &item.OriginalPrice, &item.Discount, &item.Subtotal, &item.TaxRate); err != nil {
 			return nil, fmt.Errorf("sale item scan: %w", err)
 		}
 		s.Items = append(s.Items, item)

@@ -26,6 +26,8 @@ var dbMigrations = []migration{
 	{version: 2, up: migration2},
 	{version: 3, up: migration3},
 	{version: 4, up: migration4},
+	{version: 5, up: migration5},
+	{version: 6, up: migration6},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -268,4 +270,24 @@ ALTER TABLE sale_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0;
 // migration4 adds optional default opening amount to business_config.
 const migration4 = `
 ALTER TABLE business_config ADD COLUMN default_opening_amount REAL NOT NULL DEFAULT 0;
+`
+
+// migration5 adds global discount toggle to business_config.
+const migration5 = `
+ALTER TABLE business_config ADD COLUMN allow_global_discount INTEGER NOT NULL DEFAULT 0;
+`
+
+// migration6 adds price override tracking to sale_items and creates the audit_log table.
+const migration6 = `
+ALTER TABLE sale_items ADD COLUMN original_price REAL NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS audit_log (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id    INTEGER NOT NULL REFERENCES users(id),
+	action     TEXT NOT NULL,
+	entity     TEXT NOT NULL,
+	entity_id  INTEGER NOT NULL,
+	details    TEXT,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `

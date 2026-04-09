@@ -35,7 +35,8 @@ func (m *mockSaleRepo) Void(_ context.Context, _ int64, _ int64) (*model.Sale, e
 }
 
 type mockProductRepo struct {
-	taxRate float64 // TaxRate returned by GetByID; defaults to 0
+	taxRate   float64 // TaxRate returned by GetByID; defaults to 0
+	salePrice float64 // SalePrice returned by GetByID; defaults to 0
 }
 
 func (m *mockProductRepo) Create(_ context.Context, p *model.Product) (*model.Product, error) {
@@ -45,7 +46,7 @@ func (m *mockProductRepo) List(_ context.Context, _ repository.ProductFilter) ([
 	return nil, nil
 }
 func (m *mockProductRepo) GetByID(_ context.Context, id int64) (*model.Product, error) {
-	return &model.Product{ID: id, TaxRate: m.taxRate, Type: "product", Stock: 9999}, nil
+	return &model.Product{ID: id, TaxRate: m.taxRate, SalePrice: m.salePrice, Type: "product", Stock: 9999}, nil
 }
 func (m *mockProductRepo) Update(_ context.Context, p *model.Product) (*model.Product, error) {
 	return p, nil
@@ -107,7 +108,7 @@ func validSale() *model.Sale {
 func newSvc() *SaleService {
 	return NewSaleService(
 		&mockSaleRepo{},
-		&mockProductRepo{},
+		&mockProductRepo{salePrice: 10}, // matches validSale() UnitPrice
 		&mockRegisterRepo{openRegister: openRegister()},
 	)
 }
@@ -311,7 +312,7 @@ func TestSaleService_Create_CreditWithoutCustomer_ReturnsError(t *testing.T) {
 func TestSaleService_Create_RepoError_Propagates(t *testing.T) {
 	svc := NewSaleService(
 		&mockSaleRepo{createErr: errors.New("db failure")},
-		&mockProductRepo{},
+		&mockProductRepo{salePrice: 10},
 		&mockRegisterRepo{openRegister: openRegister()},
 	)
 	_, err := svc.Create(context.Background(), validSale())
@@ -326,7 +327,7 @@ func TestSaleService_Create_TaxCalculatedServerSide(t *testing.T) {
 	// Product has 19% IVA. 2 units × $100 = $200 subtotal → tax = $38, total = $238.
 	svc := NewSaleService(
 		&mockSaleRepo{},
-		&mockProductRepo{taxRate: 0.19},
+		&mockProductRepo{taxRate: 0.19, salePrice: 100},
 		&mockRegisterRepo{openRegister: openRegister()},
 	)
 	sale := &model.Sale{
@@ -355,7 +356,7 @@ func TestSaleService_Create_FrontendTaxZeroOverriddenByBackend(t *testing.T) {
 	// Frontend sends tax=0 but product has 19% IVA — backend must override.
 	svc := NewSaleService(
 		&mockSaleRepo{},
-		&mockProductRepo{taxRate: 0.19},
+		&mockProductRepo{taxRate: 0.19, salePrice: 100},
 		&mockRegisterRepo{openRegister: openRegister()},
 	)
 	sale := &model.Sale{
@@ -379,7 +380,7 @@ func TestSaleService_Create_ServiceTaxZeroProductNoIVA(t *testing.T) {
 	// Product with tax_rate=0 → tax is 0, total equals subtotal.
 	svc := NewSaleService(
 		&mockSaleRepo{},
-		&mockProductRepo{taxRate: 0},
+		&mockProductRepo{taxRate: 0, salePrice: 10},
 		&mockRegisterRepo{openRegister: openRegister()},
 	)
 	sale := &model.Sale{
