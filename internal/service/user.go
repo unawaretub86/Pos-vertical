@@ -113,6 +113,29 @@ func (s *UserService) Update(ctx context.Context, id int64, username, role strin
 	return s.repo.GetByID(ctx, id)
 }
 
+func (s *UserService) ChangePassword(ctx context.Context, id int64, currentPassword, newPassword string) error {
+	newPassword = strings.TrimSpace(newPassword)
+	if len(newPassword) < 6 {
+		return errors.New("la nueva contraseña debe tener al menos 6 caracteres")
+	}
+
+	user, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return errors.New("usuario no encontrado")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return errors.New("contraseña actual incorrecta")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("error procesando contraseña")
+	}
+
+	return s.repo.UpdatePassword(ctx, id, string(hash))
+}
+
 func (s *UserService) Deactivate(ctx context.Context, id int64) error {
 	existing, err := s.repo.GetByID(ctx, id)
 	if err != nil {

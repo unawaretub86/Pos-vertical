@@ -22,6 +22,7 @@ type Product struct {
 	ID             int64    `json:"id"`
 	Name           string   `json:"name"`
 	Code           string   `json:"code"`
+	Barcode        string   `json:"barcode"`
 	CategoryID     *int64   `json:"category_id"`
 	Type           string   `json:"type"`
 	SalePrice      float64  `json:"sale_price"`

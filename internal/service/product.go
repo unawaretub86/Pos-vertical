@@ -45,6 +45,10 @@ func (s *ProductService) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
+func (s *ProductService) GetByBarcode(ctx context.Context, barcode string) (*model.Product, error) {
+	return s.repo.GetByBarcode(ctx, barcode)
+}
+
 func (s *ProductService) LowStock(ctx context.Context) ([]*model.Product, error) {
 	return s.repo.LowStock(ctx)
 }

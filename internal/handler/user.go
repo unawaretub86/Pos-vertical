@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/model"
 	"github.com/go-chi/chi/v5"
 )
@@ -86,4 +87,22 @@ func (h *Handler) deactivateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusOK, map[string]string{"message": "usuario desactivado"})
+}
+
+// changeMyPassword PUT /users/me/password — any authenticated user
+func (h *Handler) changeMyPassword(w http.ResponseWriter, r *http.Request) {
+	claims := appmw.GetClaims(r)
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := decode(r, &req); err != nil {
+		respondError(w, http.StatusBadRequest, "request inválido")
+		return
+	}
+	if err := h.users.ChangePassword(r.Context(), claims.UserID, req.CurrentPassword, req.NewPassword); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, map[string]string{"message": "contraseña actualizada"})
 }

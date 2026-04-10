@@ -12,6 +12,9 @@ import (
 type stubRegisterRepo struct {
 	openRegister *model.Register // nil means no open register
 	created      *model.Register
+	cashSales    float64
+	cashIn       float64
+	cashOut      float64
 }
 
 func (s *stubRegisterRepo) Create(_ context.Context, r *model.Register) (*model.Register, error) {
@@ -21,7 +24,10 @@ func (s *stubRegisterRepo) Create(_ context.Context, r *model.Register) (*model.
 }
 func (s *stubRegisterRepo) List(_ context.Context) ([]*model.Register, error) { return nil, nil }
 func (s *stubRegisterRepo) GetByID(_ context.Context, _ int64) (*model.Register, error) {
-	return nil, nil
+	if s.openRegister != nil {
+		return s.openRegister, nil
+	}
+	return &model.Register{ID: 1, Status: "open", OpeningAmount: 100}, nil
 }
 func (s *stubRegisterRepo) GetOpen(_ context.Context) (*model.Register, error) {
 	if s.openRegister == nil {
@@ -38,9 +44,16 @@ func (s *stubRegisterRepo) AddMovement(_ context.Context, mv *model.RegisterMove
 func (s *stubRegisterRepo) ListMovements(_ context.Context, _ int64) ([]*model.RegisterMovement, error) {
 	return nil, nil
 }
-func (s *stubRegisterRepo) SumCashSales(_ context.Context, _ int64) (float64, error) { return 0, nil }
-func (s *stubRegisterRepo) SumCashOut(_ context.Context, _ int64) (float64, error)   { return 0, nil }
-func (s *stubRegisterRepo) SumCashIn(_ context.Context, _ int64) (float64, error)    { return 0, nil }
+func (s *stubRegisterRepo) SumCashSales(_ context.Context, _ int64) (float64, error) {
+	return s.cashSales, nil
+}
+func (s *stubRegisterRepo) SumCashOut(_ context.Context, _ int64) (float64, error) {
+	return s.cashOut, nil
+}
+func (s *stubRegisterRepo) SumCashIn(_ context.Context, _ int64) (float64, error) {
+	return s.cashIn, nil
+}
+
 
 func TestRegisterService_Open_AlreadyOpen_ReturnsError(t *testing.T) {
 	// A register is already open — opening a second one must fail.
@@ -66,5 +79,64 @@ func TestRegisterService_Open_NoExistingRegister_Succeeds(t *testing.T) {
 	}
 	if reg == nil {
 		t.Fatal("expected a register to be returned")
+	}
+}
+
+func TestRegisterService_Summary_IncludesCashIn(t *testing.T) {
+	// opening=100, cashSales=200, cashIn=50, cashOut=30
+	// expected = 100 + 200 + 50 - 30 = 320
+	repo := &stubRegisterRepo{
+		openRegister: &model.Register{ID: 1, Status: "open", OpeningAmount: 100},
+		cashSales:    200,
+		cashIn:       50,
+		cashOut:      30,
+	}
+	svc := NewRegisterService(repo)
+
+	summary, err := svc.Summary(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary.Expected != 320 {
+		t.Errorf("expected 320, got %.2f", summary.Expected)
+	}
+}
+
+func TestRegisterService_Summary_NoCashIn_Unchanged(t *testing.T) {
+	// opening=500, cashSales=100, cashIn=0, cashOut=50
+	// expected = 500 + 100 + 0 - 50 = 550
+	repo := &stubRegisterRepo{
+		openRegister: &model.Register{ID: 1, Status: "open", OpeningAmount: 500},
+		cashSales:    100,
+		cashOut:      50,
+	}
+	svc := NewRegisterService(repo)
+
+	summary, err := svc.Summary(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary.Expected != 550 {
+		t.Errorf("expected 550, got %.2f", summary.Expected)
+	}
+}
+
+func TestRegisterService_Close_ExpectedIncludesCashIn(t *testing.T) {
+	// opening=100, cashSales=200, cashIn=50, cashOut=30 → expected=320
+	// actual=320 → difference=0
+	repo := &stubRegisterRepo{
+		openRegister: &model.Register{ID: 1, Status: "open", OpeningAmount: 100},
+		cashSales:    200,
+		cashIn:       50,
+		cashOut:      30,
+	}
+	svc := NewRegisterService(repo)
+
+	summary, err := svc.Close(context.Background(), 1, 320)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary.Expected != 320 {
+		t.Errorf("expected expected_close=320, got %.2f", summary.Expected)
 	}
 }

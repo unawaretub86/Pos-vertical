@@ -46,6 +46,10 @@ func (m *mockProductRepo) Create(_ context.Context, p *model.Product) (*model.Pr
 func (m *mockProductRepo) List(_ context.Context, _ repository.ProductFilter) ([]*model.Product, error) {
 	return nil, nil
 }
+func (m *mockProductRepo) GetByBarcode(_ context.Context, _ string) (*model.Product, error) {
+	return nil, repository.ErrNotFound
+}
+
 func (m *mockProductRepo) GetByID(_ context.Context, id int64) (*model.Product, error) {
 	stock := m.stock
 	if stock == 0 {

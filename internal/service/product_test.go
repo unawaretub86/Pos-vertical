@@ -17,7 +17,12 @@ func (s *stubProductRepo) Create(_ context.Context, p *model.Product) (*model.Pr
 func (s *stubProductRepo) List(_ context.Context, _ repository.ProductFilter) ([]*model.Product, error) {
 	return nil, nil
 }
-func (s *stubProductRepo) GetByID(_ context.Context, _ int64) (*model.Product, error) { return nil, nil }
+func (s *stubProductRepo) GetByID(_ context.Context, _ int64) (*model.Product, error) {
+	return nil, nil
+}
+func (s *stubProductRepo) GetByBarcode(_ context.Context, _ string) (*model.Product, error) {
+	return nil, repository.ErrNotFound
+}
 func (s *stubProductRepo) Update(_ context.Context, p *model.Product) (*model.Product, error) {
 	return p, nil
 }

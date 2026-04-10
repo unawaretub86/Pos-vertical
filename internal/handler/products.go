@@ -117,6 +117,24 @@ func (h *Handler) updateProduct(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, updated)
 }
 
+func (h *Handler) getProductByBarcode(w http.ResponseWriter, r *http.Request) {
+	barcode := chi.URLParam(r, "barcode")
+	if barcode == "" {
+		respondError(w, http.StatusBadRequest, "barcode requerido")
+		return
+	}
+	p, err := h.products.GetByBarcode(r.Context(), barcode)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "producto no encontrado")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error buscando producto")
+		return
+	}
+	respond(w, http.StatusOK, p)
+}
+
 func (h *Handler) listLowStockProducts(w http.ResponseWriter, r *http.Request) {
 	products, err := h.products.LowStock(r.Context())
 	if err != nil {

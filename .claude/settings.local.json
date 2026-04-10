@@ -32,7 +32,10 @@
       "Bash(find /c/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical -type f \\\\\\(-name *.sql -o -name migrate* -o -name *schema* \\\\\\))",
       "Bash(grep -n \"void\\\\|Void\\\\|anulad\\\\|Anulad\\\\|VoidSale\\\\|void_sale\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/frontend/app/customers/[id]/page.tsx)",
       "Bash(grep -n \"listSales\\\\|IncludeVoided\\\\|include_voided\" c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/internal/handler/*.go)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(xargs grep:*)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(cat c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/web/*.go)"
     ]
   }
 }

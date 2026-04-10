@@ -31,4 +31,8 @@ See `PLAN.md` → Fase 0.0 for full token definitions, component specs, and typo
 
 | Sprint | Focus | Status |
 |--------|-------|--------|
-| SPRINT-01 | Production Polish & Gaps | 🟡 In Progress |
+| SPRINT-01 | Production Polish & Gaps | ✅ Completo |
+| SPRINT-02 | Active Bug Fixes & Schema Migration | ✅ Completo |
+| SPRINT-03 | v1.1 Polish: Barcode, CSV, Auto Backup | ✅ Completo |
+| SPRINT-04 | Prod Ready: Binary Integration & Polish | ✅ Completo |
+| SPRINT-05 | Mobile Responsive: Demo-Ready en Celular | ⬜ Pendiente |

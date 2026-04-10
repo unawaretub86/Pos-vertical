@@ -49,8 +49,11 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	forcePasswordChange := req.Password == "admin"
+
 	respond(w, http.StatusOK, map[string]any{
-		"token": token,
+		"token":                 token,
+		"force_password_change": forcePasswordChange,
 		"user": map[string]any{
 			"id":       user.ID,
 			"username": user.Username,

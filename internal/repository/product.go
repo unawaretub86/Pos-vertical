@@ -13,6 +13,11 @@ type productRepo struct {
 	db *sql.DB
 }
 
+// toNullString converts an empty string to a SQL NULL (needed for UNIQUE barcode column).
+func toNullString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
+}
+
 // NewProductRepository returns a SQLite-backed ProductRepository.
 func NewProductRepository(db *sql.DB) ProductRepository {
 	return &productRepo{db: db}
@@ -20,9 +25,9 @@ func NewProductRepository(db *sql.DB) ProductRepository {
 
 func (r *productRepo) Create(ctx context.Context, p *model.Product) (*model.Product, error) {
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO products (name, code, category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.Name, p.Code, p.CategoryID, p.Type, p.SalePrice, p.WholesalePrice,
+		INSERT INTO products (name, code, barcode, category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.Name, p.Code, toNullString(p.Barcode), p.CategoryID, p.Type, p.SalePrice, p.WholesalePrice,
 		p.Cost, p.Unit, p.Stock, p.MinStock, p.TaxRate, true,
 	)
 	if err != nil {
@@ -36,7 +41,7 @@ func (r *productRepo) Create(ctx context.Context, p *model.Product) (*model.Prod
 }
 
 func (r *productRepo) List(ctx context.Context, filter ProductFilter) ([]*model.Product, error) {
-	query := `SELECT id, name, code, category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at FROM products WHERE 1=1`
+	query := `SELECT id, name, code, COALESCE(barcode, ''), category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at FROM products WHERE 1=1`
 	args := []any{}
 
 	if filter.ActiveOnly {
@@ -72,7 +77,7 @@ func (r *productRepo) List(ctx context.Context, filter ProductFilter) ([]*model.
 
 func (r *productRepo) GetByID(ctx context.Context, id int64) (*model.Product, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, name, code, category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at
+		SELECT id, name, code, COALESCE(barcode, ''), category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at
 		FROM products WHERE id = ?`, id)
 	p, err := scanProduct(row)
 	if err == sql.ErrNoRows {
@@ -86,10 +91,10 @@ func (r *productRepo) GetByID(ctx context.Context, id int64) (*model.Product, er
 
 func (r *productRepo) Update(ctx context.Context, p *model.Product) (*model.Product, error) {
 	res, err := r.db.ExecContext(ctx, `
-		UPDATE products SET name=?, code=?, category_id=?, type=?, sale_price=?, wholesale_price=?,
+		UPDATE products SET name=?, code=?, barcode=?, category_id=?, type=?, sale_price=?, wholesale_price=?,
 		cost=?, unit=?, stock=?, min_stock=?, tax_rate=?, active=?
 		WHERE id=?`,
-		p.Name, p.Code, p.CategoryID, p.Type, p.SalePrice, p.WholesalePrice,
+		p.Name, p.Code, toNullString(p.Barcode), p.CategoryID, p.Type, p.SalePrice, p.WholesalePrice,
 		p.Cost, p.Unit, p.Stock, p.MinStock, p.TaxRate, p.Active, p.ID,
 	)
 	if err != nil {
@@ -118,7 +123,7 @@ func (r *productRepo) Delete(ctx context.Context, id int64) error {
 // LowStock returns all active products where stock <= min_stock.
 func (r *productRepo) LowStock(ctx context.Context) ([]*model.Product, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, code, category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at
+		SELECT id, name, code, COALESCE(barcode, ''), category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at
 		FROM products
 		WHERE active = 1 AND type = 'product' AND stock <= min_stock
 		ORDER BY stock ASC`)
@@ -146,8 +151,22 @@ type scanner interface {
 func scanProduct(s scanner) (*model.Product, error) {
 	p := &model.Product{}
 	return p, s.Scan(
-		&p.ID, &p.Name, &p.Code, &p.CategoryID, &p.Type,
+		&p.ID, &p.Name, &p.Code, &p.Barcode, &p.CategoryID, &p.Type,
 		&p.SalePrice, &p.WholesalePrice, &p.Cost, &p.Unit,
 		&p.Stock, &p.MinStock, &p.TaxRate, &p.Active, &p.CreatedAt,
 	)
+}
+
+func (r *productRepo) GetByBarcode(ctx context.Context, barcode string) (*model.Product, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, name, code, COALESCE(barcode, ''), category_id, type, sale_price, wholesale_price, cost, unit, stock, min_stock, tax_rate, active, created_at
+		FROM products WHERE barcode = ? AND active = 1`, barcode)
+	p, err := scanProduct(row)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("product get by barcode: %w", err)
+	}
+	return p, nil
 }

@@ -24,6 +24,9 @@ func main() {
 	}
 	defer db.Close()
 
+	// Start automatic daily backup scheduler
+	db.StartBackupScheduler()
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
