@@ -69,8 +69,8 @@ func (s *UserService) Update(ctx context.Context, id int64, username, role strin
 		return nil, errors.New("usuario no encontrado")
 	}
 
-	// Prevent removing last admin
-	if (existing.Role == "admin" && role != "admin") || (existing.Active && !active && existing.Role == "admin") {
+	// Prevent removing last active admin
+	if existing.Active && existing.Role == "admin" && (role != "admin" || !active) {
 		admins, err := s.repo.CountAdmins(ctx)
 		if err != nil {
 			return nil, err

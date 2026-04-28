@@ -24,7 +24,7 @@
 
 ### US-022: Sidebar colapsable con drawer en mobile
 
-- [ ] Convertir el sidebar en un drawer deslizante en pantallas < 768px
+- [x] Convertir el sidebar en un drawer deslizante en pantallas < 768px
 - **Acceptance Criteria:**
   - En pantallas ≥ 768px: sidebar fijo lateral de 220px (comportamiento actual, sin cambios)
   - En pantallas < 768px: sidebar oculto por defecto, se abre con botón hamburger (☰)
@@ -45,7 +45,7 @@
 
 ### US-023: Dashboard legible en 320px–430px
 
-- [ ] Corregir textos cortados y layout del dashboard en mobile
+- [x] Corregir textos cortados y layout del dashboard en mobile
 - **Problemas específicos (vistos en screenshot):**
   - Card "TRANSACCI..." — título cortado, necesita truncar con ellipsis o abreviar
   - "Ventas recientes — Todos los est..." — botón/texto cortado
@@ -67,7 +67,7 @@
 
 ### US-024: Punto de venta funcional en celular
 
-- [ ] El flujo de venta completo debe poder hacerse en mobile (320px–430px)
+- [x] El flujo de venta completo debe poder hacerse en mobile (320px–430px)
 - **Contexto:** El cajero puede estar en un local pequeño usando el celular como terminal
 - **Acceptance Criteria:**
   - El buscador de productos ocupa el ancho completo en mobile
@@ -85,7 +85,7 @@
 
 ### US-025: Clientes, Cartera e Inventario legibles en mobile
 
-- [ ] Las páginas más usadas por admin deben ser navegables en mobile
+- [x] Las páginas más usadas por admin deben ser navegables en mobile
 - **Scope:** Solo legibilidad y navegación básica — no se requiere edición en mobile
 - **Acceptance Criteria:**
   - `/customers`: lista de clientes con nombre, teléfono y saldo visible sin scroll horizontal
@@ -118,7 +118,7 @@ Al terminar, Andrey puede abrir el sistema en su celular, crear una venta de pru
 
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
-| US-022 | Sidebar drawer en mobile | ⬜ Pendiente | — |
-| US-023 | Dashboard mobile | ⬜ Pendiente | — |
-| US-024 | POS funcional en mobile | ⬜ Pendiente | — |
-| US-025 | Clientes/Cartera/Inventario mobile | ⬜ Pendiente | — |
+| US-022 | Sidebar drawer en mobile | ✅ Completo | 2026-04-09 |
+| US-023 | Dashboard mobile | ✅ Completo | 2026-04-09 |
+| US-024 | POS funcional en mobile | ✅ Completo | 2026-04-09 |
+| US-025 | Clientes/Cartera/Inventario mobile | ✅ Completo | 2026-04-10 |

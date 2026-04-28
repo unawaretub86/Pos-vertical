@@ -28,6 +28,7 @@ var dbMigrations = []migration{
 	{version: 4, up: migration4},
 	{version: 5, up: migration5},
 	{version: 6, up: migration6},
+	{version: 7, up: migration7},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -275,6 +276,12 @@ ALTER TABLE business_config ADD COLUMN default_opening_amount REAL NOT NULL DEFA
 // migration5 adds global discount toggle to business_config.
 const migration5 = `
 ALTER TABLE business_config ADD COLUMN allow_global_discount INTEGER NOT NULL DEFAULT 0;
+`
+
+// migration7 adds the barcode column to products (was missing from initial schema).
+const migration7 = `
+ALTER TABLE products ADD COLUMN barcode TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode) WHERE barcode IS NOT NULL;
 `
 
 // migration6 adds price override tracking to sale_items and creates the audit_log table.
