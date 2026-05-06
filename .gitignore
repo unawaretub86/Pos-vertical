@@ -1,0 +1,22 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+data.db
+data.db-wal
+data.db-shm
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+web/out/*
+!web/out/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
