@@ -2,6 +2,53 @@ package model
 
 import "time"
 
+// FiscalConfig stores electronic billing configuration. Single-row table (id always = 1).
+type FiscalConfig struct {
+	ID               int64      `json:"id"`
+	Enabled          bool       `json:"enabled"`
+	NIT              string     `json:"nit"`
+	RazonSocial      string     `json:"razon_social"`
+	Direccion        string     `json:"direccion"`
+	CIIU             string     `json:"ciiu"`
+	ResolucionDIAN   string     `json:"resolucion_dian"`
+	Prefijo          string     `json:"prefijo"`
+	RangoDesde       int64      `json:"rango_desde"`
+	RangoHasta       int64      `json:"rango_hasta"`
+	FechaResolucion  *time.Time `json:"fecha_resolucion"`
+	FechaVencimiento *time.Time `json:"fecha_vencimiento"`
+	ClaveTecnica     string     `json:"clave_tecnica"`
+	Ambiente         string     `json:"ambiente"` // "test" | "production"
+	SoftwareID       string     `json:"software_id"`
+	SoftwarePIN      string     `json:"software_pin"`
+	Provider         string     `json:"provider"` // "factus"
+	ProviderClientID string     `json:"provider_client_id"`
+	ProviderSecret   string     `json:"-"`
+	WebhookURL       string     `json:"webhook_url"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// ElectronicDocument tracks the DIAN status of an electronic document.
+type ElectronicDocument struct {
+	ID              string     `json:"id"` // UUID v4
+	SaleID          int64      `json:"sale_id"`
+	Type            string     `json:"type"`   // "doc_equivalente" | "nota_credito"
+	Status          string     `json:"status"` // "draft"|"pending"|"accepted"|"rejected"|"cancelled"
+	Provider        string     `json:"provider"`
+	ProviderID      string     `json:"provider_id"`
+	CUDE            string     `json:"cude"`
+	Number          string     `json:"number"` // "POS-000001"
+	XMLURL          string     `json:"xml_url"`
+	PDFURL          string     `json:"pdf_url"`
+	DIANResponse    string     `json:"dian_response"`
+	RejectionReason string     `json:"rejection_reason"`
+	RetryCount      int        `json:"retry_count"`
+	IssuedAt        *time.Time `json:"issued_at"`
+	AcceptedAt      *time.Time `json:"accepted_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
 type User struct {
 	ID           int64     `json:"id"`
 	Username     string    `json:"username"`

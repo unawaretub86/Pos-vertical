@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,32 +13,36 @@ import (
 )
 
 func (h *Handler) createSale(w http.ResponseWriter, r *http.Request) {
-	var sale model.Sale
-	if err := decode(r, &sale); err != nil {
+	var req struct {
+		model.Sale
+		BuyerEmail string `json:"buyer_email"`
+	}
+	if err := decode(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "request inválido")
 		return
 	}
 
-	// Set the user from JWT claims
 	claims := appmw.GetClaims(r)
 	if claims != nil {
-		sale.UserID = claims.UserID
+		req.Sale.UserID = claims.UserID
 	}
 
-	// Compute subtotals for items
 	var subtotal float64
-	for i := range sale.Items {
-		item := &sale.Items[i]
+	for i := range req.Sale.Items {
+		item := &req.Sale.Items[i]
 		item.Subtotal = item.UnitPrice*item.Quantity - item.Discount
 		subtotal += item.Subtotal
 	}
-	sale.Subtotal = subtotal
-	sale.Total = subtotal - sale.Discount + sale.Tax
+	req.Sale.Subtotal = subtotal
+	req.Sale.Total = subtotal - req.Sale.Discount + req.Sale.Tax
 
-	created, err := h.sales.Create(r.Context(), &sale)
+	created, err := h.sales.Create(r.Context(), &req.Sale)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if h.factelect != nil {
+		go h.factelect.EmitFromSale(r.Context(), created.ID, req.BuyerEmail)
 	}
 	respond(w, http.StatusCreated, created)
 }
@@ -76,6 +81,53 @@ func (h *Handler) voidSale(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "venta no encontrada")
 		return
 	}
+	var cnErr *repository.ErrRequiresCreditNote
+	if errors.As(err, &cnErr) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]any{
+			"error":                "sale_has_accepted_invoice",
+			"message":              cnErr.Error(),
+			"document_id":          cnErr.DocumentID,
+			"cude":                 cnErr.CUDE,
+			"requires_credit_note": true,
+		})
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, sale)
+}
+
+func (h *Handler) voidSaleWithCreditNote(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var body struct {
+		Motive string `json:"motive"`
+	}
+	if err := decode(r, &body); err != nil || body.Motive == "" {
+		respondError(w, http.StatusBadRequest, "motive requerido")
+		return
+	}
+	if h.factelect == nil {
+		respondError(w, http.StatusBadRequest, "facturación electrónica no habilitada")
+		return
+	}
+	if _, err := h.factelect.CreateCreditNote(r.Context(), id, body.Motive); err != nil {
+		respondError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	claims := appmw.GetClaims(r)
+	var userID int64
+	if claims != nil {
+		userID = claims.UserID
+	}
+	sale, err := h.sales.Void(r.Context(), id, userID)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return

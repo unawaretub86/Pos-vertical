@@ -23,6 +23,12 @@ type SaleService struct {
 	repo         repository.SaleRepository
 	productRepo  repository.ProductRepository
 	registerRepo repository.RegisterRepository
+	eledocRepo   repository.ElectronicDocRepository // nil if FE disabled
+}
+
+// WithElectronicDocs wires the electronic doc repository without changing the constructor.
+func (s *SaleService) WithElectronicDocs(r repository.ElectronicDocRepository) {
+	s.eledocRepo = r
 }
 
 // NewSaleService creates a SaleService backed by the given repositories.
@@ -91,6 +97,16 @@ func (s *SaleService) GetByID(ctx context.Context, id int64) (*model.Sale, error
 }
 
 func (s *SaleService) Void(ctx context.Context, saleID int64, userID int64) (*model.Sale, error) {
+	if s.eledocRepo != nil {
+		doc, err := s.eledocRepo.GetBySaleID(ctx, saleID)
+		if err == nil && doc != nil &&
+			(doc.Status == "accepted" || doc.Status == "pending") {
+			return nil, &repository.ErrRequiresCreditNote{
+				DocumentID: doc.ID,
+				CUDE:       doc.CUDE,
+			}
+		}
+	}
 	return s.repo.Void(ctx, saleID, userID)
 }
 

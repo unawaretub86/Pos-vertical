@@ -10,6 +10,7 @@ type BusinessConfig struct {
 	Logo                 string  `json:"logo"`
 	Address              string  `json:"address"`
 	NIT                  string  `json:"nit"`
+	CIIU                 string  `json:"ciiu"`
 	Currency             string  `json:"currency"`
 	TicketHeader         string  `json:"ticket_header"`
 	TicketFooter         string  `json:"ticket_footer"`
@@ -29,12 +30,12 @@ func NewSetupRepository(db *sql.DB) *SetupRepository {
 func (r *SetupRepository) Get() (*BusinessConfig, error) {
 	row := r.db.QueryRow(`
 		SELECT id, name, COALESCE(logo,''), COALESCE(address,''), COALESCE(nit,''),
-		       currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
+		       COALESCE(ciiu,''), currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
 		       COALESCE(default_opening_amount, 0), COALESCE(allow_global_discount, 0)
 		FROM business_config WHERE id = 1`)
 	cfg := &BusinessConfig{}
 	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT,
-		&cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount)
+		&cfg.CIIU, &cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount)
 	if err == sql.ErrNoRows {
 		cfg.Currency = "COP"
 		cfg.Configured = false

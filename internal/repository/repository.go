@@ -55,6 +55,15 @@ type StockEntryRepository interface {
 	Create(ctx context.Context, entry *model.StockEntry) (*model.StockEntry, error)
 }
 
+// ElectronicDocRepository handles persistence of electronic documents.
+type ElectronicDocRepository interface {
+	Create(ctx context.Context, doc *model.ElectronicDocument) error
+	GetBySaleID(ctx context.Context, saleID int64) (*model.ElectronicDocument, error)
+	GetByProviderID(ctx context.Context, providerID string) (*model.ElectronicDocument, error)
+	Update(ctx context.Context, doc *model.ElectronicDocument) error
+	ListByStatus(ctx context.Context, status string, limit int) ([]*model.ElectronicDocument, error)
+}
+
 // CustomerRepository defines CRUD operations for customers.
 type CustomerRepository interface {
 	List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error)
