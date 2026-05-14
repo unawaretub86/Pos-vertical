@@ -35,7 +35,8 @@
       "WebSearch",
       "Bash(xargs grep:*)",
       "Bash(echo \"EXIT:$?\")",
-      "Bash(cat c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/web/*.go)"
+      "Bash(cat c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/web/*.go)",
+      "Bash(npx skills *)"
     ]
   }
 }
