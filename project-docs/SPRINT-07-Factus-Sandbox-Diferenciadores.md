@@ -12,7 +12,7 @@
 
 | US | Nombre | Track | Estado | Fecha |
 |----|--------|-------|--------|-------|
-| US-033 | Factus: numbering_range_id y municipality_id configurables | Factus | ⬜ Pendiente | — |
+| US-033 | Factus: numbering_range_id y municipality_id configurables | Factus | ✅ Completo | 2026-05-13 |
 | US-034 | Factus: validación completa en sandbox | Factus | ⬜ Pendiente | — |
 | US-035 | WhatsApp: botón de cobro con link directo | Diferenciadores | ⬜ Pendiente | — |
 | US-036 | Clientes: notas y tope de crédito | Diferenciadores | ⬜ Pendiente | — |
@@ -32,20 +32,20 @@
 **Problema actual:** `internal/factelect/client.go:205` tiene `"numbering_range_id": 0` hardcoded. Factus rechaza `0`. `municipality_id: 149` (Bogotá) está hardcoded en línea 197.
 
 **Acceptance Criteria:**
-- [ ] `FiscalConfig` model tiene campos `NumberingRangeID int` y `MunicipalityID int`
-- [ ] Migration SQL agrega ambas columnas (`municipality_id` con default `149`)
-- [ ] `GET /api/fiscal-config` retorna ambos campos
-- [ ] `PUT /api/fiscal-config` acepta y persiste ambos campos
-- [ ] `billRequestToFactus` usa `cfg.NumberingRangeID` y `cfg.MunicipalityID` (sin hardcoding)
-- [ ] UI muestra campo "ID Rango de Numeración" con tooltip: "Encuéntralo en tu cuenta Factus → Numeración"
-- [ ] UI muestra campo "Municipio DIAN (ID)" con default 149
-- [ ] Campo `NumberingRangeID` es requerido cuando facturación está habilitada
+- [x] `FiscalConfig` model tiene campos `NumberingRangeID int` y `MunicipalityID int`
+- [x] Migration SQL agrega ambas columnas (`municipality_id` con default `149`)
+- [x] `GET /api/fiscal-config` retorna ambos campos
+- [x] `PUT /api/fiscal-config` acepta y persiste ambos campos
+- [x] `billRequestToFactus` usa `cfg.NumberingRangeID` y `cfg.MunicipalityID` (sin hardcoding)
+- [x] UI muestra campo "ID Rango de Numeración" con tooltip: "Encuéntralo en tu cuenta Factus → Numeración"
+- [x] UI muestra campo "Municipio DIAN (ID)" con default 149
+- [x] Campo `NumberingRangeID` es requerido cuando facturación está habilitada
 
 **DoD:**
-- [ ] Migration v9 aplicada sin errores
-- [ ] Unit test: `billRequestToFactus` con `NumberingRangeID=5` → payload tiene `"numbering_range_id": 5`
-- [ ] No existe ningún `0` hardcoded como `numbering_range_id` en el paquete `factelect`
-- [ ] No existe `149` hardcoded como `municipality_id` en el paquete `factelect`
+- [x] Migration v9 aplicada sin errores
+- [x] Unit test: `billRequestToFactus` con `NumberingRangeID=5` → payload tiene `"numbering_range_id": 5`
+- [x] No existe ningún `0` hardcoded como `numbering_range_id` en el paquete `factelect`
+- [x] No existe `149` hardcoded como `municipality_id` en el paquete `factelect`
 
 ---
 

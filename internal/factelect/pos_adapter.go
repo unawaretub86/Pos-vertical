@@ -53,14 +53,16 @@ func (a *PosSaleAdapter) ToBillRequest(ctx context.Context, saleID int64, buyerE
 	}
 
 	issuer := IssuerInfo{
-		NIT:         setup.NIT,
-		RazonSocial: setup.Name,
-		Direccion:   setup.Address,
-		CIIU:        setup.CIIU,
-		SoftwareID:  cfg.SoftwareID,
-		SoftwarePIN: cfg.SoftwarePIN,
-		Resolucion:  cfg.ResolucionDIAN,
-		Prefijo:     cfg.Prefijo,
+		NIT:              setup.NIT,
+		RazonSocial:      setup.Name,
+		Direccion:        setup.Address,
+		CIIU:             setup.CIIU,
+		SoftwareID:       cfg.SoftwareID,
+		SoftwarePIN:      cfg.SoftwarePIN,
+		Resolucion:       cfg.ResolucionDIAN,
+		Prefijo:          cfg.Prefijo,
+		NumberingRangeID: cfg.NumberingRangeID,
+		MunicipalityID:   cfg.MunicipalityID,
 	}
 
 	buyer := a.buildBuyer(sale, buyerEmail)

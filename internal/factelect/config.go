@@ -31,7 +31,9 @@ func (r *fiscalConfigSQLite) Get(ctx context.Context) (*model.FiscalConfig, erro
 		       fecha_resolucion, fecha_vencimiento,
 		       clave_tecnica, ambiente, software_id, software_pin,
 		       provider, provider_client_id, provider_secret,
-		       COALESCE(webhook_url,''), created_at, updated_at
+		       COALESCE(webhook_url,''),
+		       COALESCE(numbering_range_id,0), COALESCE(municipality_id,149),
+		       created_at, updated_at
 		FROM fiscal_config WHERE id=1`,
 	).Scan(
 		&cfg.ID, &cfg.Enabled, &cfg.NIT, &cfg.RazonSocial, &cfg.Direccion, &cfg.CIIU,
@@ -39,7 +41,9 @@ func (r *fiscalConfigSQLite) Get(ctx context.Context) (*model.FiscalConfig, erro
 		&cfg.FechaResolucion, &cfg.FechaVencimiento,
 		&cfg.ClaveTecnica, &cfg.Ambiente, &cfg.SoftwareID, &cfg.SoftwarePIN,
 		&cfg.Provider, &cfg.ProviderClientID, &cfg.ProviderSecret,
-		&cfg.WebhookURL, &cfg.CreatedAt, &cfg.UpdatedAt,
+		&cfg.WebhookURL,
+		&cfg.NumberingRangeID, &cfg.MunicipalityID,
+		&cfg.CreatedAt, &cfg.UpdatedAt,
 	)
 	return &cfg, err
 }
@@ -53,14 +57,14 @@ func (r *fiscalConfigSQLite) Update(ctx context.Context, cfg *model.FiscalConfig
 			fecha_resolucion=?, fecha_vencimiento=?,
 			clave_tecnica=?, ambiente=?, software_id=?, software_pin=?,
 			provider=?, provider_client_id=?, provider_secret=?,
-			webhook_url=?, updated_at=?
+			webhook_url=?, numbering_range_id=?, municipality_id=?, updated_at=?
 		WHERE id=1`,
 		cfg.Enabled, cfg.NIT, cfg.RazonSocial, cfg.Direccion, cfg.CIIU,
 		cfg.ResolucionDIAN, cfg.Prefijo, cfg.RangoDesde, cfg.RangoHasta,
 		cfg.FechaResolucion, cfg.FechaVencimiento,
 		cfg.ClaveTecnica, cfg.Ambiente, cfg.SoftwareID, cfg.SoftwarePIN,
 		cfg.Provider, cfg.ProviderClientID, cfg.ProviderSecret,
-		cfg.WebhookURL, cfg.UpdatedAt,
+		cfg.WebhookURL, cfg.NumberingRangeID, cfg.MunicipalityID, cfg.UpdatedAt,
 	)
 	return err
 }

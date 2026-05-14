@@ -20,14 +20,16 @@ type BillRequest struct {
 
 // IssuerInfo holds the issuing business data (from fiscal_config + business_config).
 type IssuerInfo struct {
-	NIT         string
-	RazonSocial string
-	Direccion   string
-	CIIU        string
-	SoftwareID  string
-	SoftwarePIN string
-	Resolucion  string
-	Prefijo     string
+	NIT              string
+	RazonSocial      string
+	Direccion        string
+	CIIU             string
+	SoftwareID       string
+	SoftwarePIN      string
+	Resolucion       string
+	Prefijo          string
+	NumberingRangeID int
+	MunicipalityID   int
 }
 
 // BuyerInfo holds buyer data. IsAnonymous=true → "consumidor final".

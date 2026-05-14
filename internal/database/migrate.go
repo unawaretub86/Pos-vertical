@@ -30,6 +30,7 @@ var dbMigrations = []migration{
 	{version: 6, up: migration6},
 	{version: 7, up: migration7},
 	{version: 8, up: migration8},
+	{version: 9, up: migration9},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -341,6 +342,11 @@ CREATE TABLE IF NOT EXISTS electronic_documents (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_eledocs_sale_id ON electronic_documents(sale_id);
 CREATE INDEX IF NOT EXISTS idx_eledocs_status ON electronic_documents(status);
 CREATE INDEX IF NOT EXISTS idx_eledocs_provider_id ON electronic_documents(provider_id);
+`
+
+const migration9 = `
+ALTER TABLE fiscal_config ADD COLUMN numbering_range_id INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE fiscal_config ADD COLUMN municipality_id INTEGER NOT NULL DEFAULT 149;
 `
 
 // migration6 adds price override tracking to sale_items and creates the audit_log table.

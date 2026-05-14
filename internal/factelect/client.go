@@ -193,7 +193,7 @@ func billRequestToFactus(req *BillRequest) map[string]any {
 		"email":                       req.Buyer.Email,
 		"phone":                       "",
 		"identification_document_id":  documentTypeID(req.Buyer.DocumentType),
-		"municipality_id":             149, // Bogotá default
+		"municipality_id":             req.Issuer.MunicipalityID,
 	}
 	if req.Buyer.IsAnonymous {
 		buyer["identification"] = "222222222222"
@@ -202,7 +202,7 @@ func billRequestToFactus(req *BillRequest) map[string]any {
 		buyer["identification_document_id"] = 3
 	}
 	return map[string]any{
-		"numbering_range_id": 0,
+		"numbering_range_id": req.Issuer.NumberingRangeID,
 		"reference_code":     "",
 		"observation":        req.Notes,
 		"payment_form":       "1",

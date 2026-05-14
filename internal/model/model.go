@@ -23,9 +23,11 @@ type FiscalConfig struct {
 	Provider         string     `json:"provider"` // "factus"
 	ProviderClientID string     `json:"provider_client_id"`
 	ProviderSecret   string     `json:"-"`
-	WebhookURL       string     `json:"webhook_url"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	WebhookURL         string     `json:"webhook_url"`
+	NumberingRangeID   int        `json:"numbering_range_id"`
+	MunicipalityID     int        `json:"municipality_id"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 // ElectronicDocument tracks the DIAN status of an electronic document.
