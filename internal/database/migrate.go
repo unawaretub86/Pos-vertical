@@ -31,6 +31,7 @@ var dbMigrations = []migration{
 	{version: 7, up: migration7},
 	{version: 8, up: migration8},
 	{version: 9, up: migration9},
+	{version: 10, up: migration10},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -61,9 +62,12 @@ func (db *DB) migrate() error {
 	}
 
 	// Checkpoint the WAL before backup so the copy includes all committed data.
-	_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
-	if err := backupDB(db.path); err != nil {
-		return fmt.Errorf("backup before migration: %w", err)
+	// Skip backup for in-memory databases (used in tests).
+	if db.path != ":memory:" {
+		_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+		if err := backupDB(db.path); err != nil {
+			return fmt.Errorf("backup before migration: %w", err)
+		}
 	}
 
 	for _, m := range pending {
@@ -347,6 +351,11 @@ CREATE INDEX IF NOT EXISTS idx_eledocs_provider_id ON electronic_documents(provi
 const migration9 = `
 ALTER TABLE fiscal_config ADD COLUMN numbering_range_id INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE fiscal_config ADD COLUMN municipality_id INTEGER NOT NULL DEFAULT 149;
+`
+
+const migration10 = `
+ALTER TABLE customers ADD COLUMN notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE customers ADD COLUMN credit_limit INTEGER;
 `
 
 // migration6 adds price override tracking to sale_items and creates the audit_log table.

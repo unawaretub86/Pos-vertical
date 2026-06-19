@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
@@ -95,9 +97,9 @@ func (c *Client) post(ctx context.Context, path string, body, out any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		var errBody map[string]any
-		_ = json.NewDecoder(resp.Body).Decode(&errBody)
-		return fmt.Errorf("factus %s status %d: %v", path, resp.StatusCode, errBody)
+		rawErr, _ := io.ReadAll(resp.Body)
+		slog.Error("factus error response", "path", path, "status", resp.StatusCode, "body", string(rawErr))
+		return fmt.Errorf("factus %s status %d: %s", path, resp.StatusCode, rawErr)
 	}
 	if out != nil {
 		return json.NewDecoder(resp.Body).Decode(out)
@@ -158,7 +160,13 @@ func (c *Client) CreateCreditNote(ctx context.Context, req *CreditNoteRequest) (
 }
 
 // ── Payload mapping ───────────────────────────────────────────────────────────
-// Field names must be verified against developers.factus.com.co before production use.
+// Verified fields (developers.factus.com.co):
+//   numbering_range_id  int       — from fiscal_config; must be non-zero
+//   tribute_id          int       — 1=IVA19%, 4=IVA5%, 22=Excluido/Exento
+//   unit_measure_id     int       — 70=Unidad (UND)
+//   identification_document_id int — 3=CC, 5=CE, 6=NIT, 7=TI, 10=PASAPORTE
+//   payment_method_code string    — "10"=Efectivo, "48"=Transferencia, "20"=Cheque
+//   payment_form        int       — 1=Contado, 2=Crédito
 
 func billRequestToFactus(req *BillRequest) map[string]any {
 	items := make([]map[string]any, 0, len(req.Items))
@@ -205,7 +213,7 @@ func billRequestToFactus(req *BillRequest) map[string]any {
 		"numbering_range_id": req.Issuer.NumberingRangeID,
 		"reference_code":     "",
 		"observation":        req.Notes,
-		"payment_form":       "1",
+		"payment_form":       1,
 		"payment_due_date":   req.IssuedAt.Format("2006-01-02"),
 		"buyer":              buyer,
 		"items":              items,

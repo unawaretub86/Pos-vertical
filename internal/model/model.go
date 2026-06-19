@@ -86,11 +86,13 @@ type Product struct {
 }
 
 type Customer struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Phone     string    `json:"phone"`
-	Address   string    `json:"address"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	Phone       string    `json:"phone"`
+	Address     string    `json:"address"`
+	Notes       string    `json:"notes"`
+	CreditLimit *int64    `json:"credit_limit"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // CustomerWithBalance extends Customer with on-the-fly credit balance data.

@@ -36,3 +36,7 @@ See `PLAN.md` → Fase 0.0 for full token definitions, component specs, and typo
 | SPRINT-03 | v1.1 Polish: Barcode, CSV, Auto Backup | ✅ Completo |
 | SPRINT-04 | Prod Ready: Binary Integration & Polish | ✅ Completo |
 | SPRINT-05 | Mobile Responsive: Demo-Ready en Celular | ⬜ Pendiente |
+| SPRINT-06 | Facturación Electrónica (Factus) | ✅ Completo |
+| SPRINT-07 | Factus Sandbox + Diferenciadores | ⚠️ Deuda: US-034 pendiente |
+| SPRINT-08 | Rentabilidad Real y Cartera Envejecida | ✅ Completo |
+| SPRINT-09 | Historial de Cliente, Pedidos y Catálogo | ⬜ Pendiente |

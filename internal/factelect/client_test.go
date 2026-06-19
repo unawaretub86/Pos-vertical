@@ -49,6 +49,22 @@ func TestBillRequestToFactus_NumberingRangeAndMunicipality(t *testing.T) {
 	}
 }
 
+func TestBillRequestToFactus_PaymentFormIsInt(t *testing.T) {
+	req := &BillRequest{
+		Issuer:         IssuerInfo{NumberingRangeID: 1, MunicipalityID: 149},
+		Buyer:          BuyerInfo{IsAnonymous: true},
+		Items:          []BillItem{{Description: "x", UnitCodeDIAN: "94", Quantity: 1, UnitPrice: 1000, Subtotal: 1000}},
+		Totals:         BillTotals{Subtotal: 1000, Total: 1000},
+		PaymentMethods: []PaymentMethod{{Method: "10", Amount: 1000}},
+		IssuedAt:       time.Now(),
+	}
+	payload := billRequestToFactus(req)
+	pf, ok := payload["payment_form"].(int)
+	if !ok || pf != 1 {
+		t.Errorf("payment_form must be int 1, got %T(%v)", payload["payment_form"], payload["payment_form"])
+	}
+}
+
 func TestBillRequestToFactus_NoHardcodedZeroOrBogota(t *testing.T) {
 	req := &BillRequest{
 		Issuer: IssuerInfo{

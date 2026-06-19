@@ -142,6 +142,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Get("/dashboard", h.getDashboard)
+			r.Get("/dashboard/today", h.getDashboardToday)
 		})
 
 		// Reports (admin only)

@@ -14,10 +14,10 @@
 |----|--------|-------|--------|-------|
 | US-033 | Factus: numbering_range_id y municipality_id configurables | Factus | ✅ Completo | 2026-05-13 |
 | US-034 | Factus: validación completa en sandbox | Factus | ⬜ Pendiente | — |
-| US-035 | WhatsApp: botón de cobro con link directo | Diferenciadores | ⬜ Pendiente | — |
-| US-036 | Clientes: notas y tope de crédito | Diferenciadores | ⬜ Pendiente | — |
-| US-037 | POS: precio mayorista activable en carrito | Diferenciadores | ⬜ Pendiente | — |
-| US-038 | Dashboard: vista "cuaderno digital" | Diferenciadores | ⬜ Pendiente | — |
+| US-035 | WhatsApp: botón de cobro con link directo | Diferenciadores | ✅ Completo | 2026-05-13 |
+| US-036 | Clientes: notas y tope de crédito | Diferenciadores | ✅ Completo | 2026-05-14 |
+| US-037 | POS: precio mayorista activable en carrito | Diferenciadores | ✅ Completo | 2026-05-14 |
+| US-038 | Dashboard: vista "cuaderno digital" | Diferenciadores | ✅ Completo | 2026-05-14 |
 
 ---
 
@@ -63,15 +63,17 @@
 **Acceptance Criteria:**
 - [ ] Se puede crear un DEE en sandbox con `ambiente: "test"` y config real
 - [ ] Response de Factus retorna `status: "pending"` o `"accepted"` (no error 4xx)
-- [ ] Si Factus responde 422, el error body completo se loguea (no solo el status code)
+- [ ] Se puede crear un DEE en sandbox con `ambiente: "test"` y config real
+- [ ] Response de Factus retorna `status: "pending"` o `"accepted"` (no error 4xx)
+- [x] Si Factus responde 422, el error body completo se loguea (no solo el status code)
 - [ ] El poller detecta y actualiza el doc a `"accepted"` cuando DIAN valida
-- [ ] Todos los campos del payload verificados contra la documentación oficial
+- [x] Todos los campos del payload verificados contra la documentación oficial
 
 **DoD:**
-- [ ] Checklist de campos verificados (agregar como comentario en `client.go`): `numbering_range_id`, `tribute_id`, `unit_measure_id`, `identification_document_id`, `payment_method_code`, `payment_form`
+- [x] Checklist de campos verificados (agregar como comentario en `client.go`): `numbering_range_id`, `tribute_id`, `unit_measure_id`, `identification_document_id`, `payment_method_code`, `payment_form`
 - [ ] Al menos 1 DEE exitoso en sandbox con un producto real
-- [ ] Error logging en `client.go:post()` incluye el body completo del error (no solo `resp.StatusCode`)
-- [ ] Credenciales sandbox configuradas via env vars, no hardcodeadas
+- [x] Error logging en `client.go:post()` incluye el body completo del error (no solo `resp.StatusCode`)
+- [x] Credenciales sandbox configuradas via env vars, no hardcodeadas
 
 ---
 
@@ -86,19 +88,19 @@
 **Esfuerzo estimado:** 1 día. **Impacto:** Alto. Ningún POS barato en Colombia lo tiene.
 
 **Acceptance Criteria:**
-- [ ] En vista de cliente con saldo > 0, aparece botón "Cobrar por WhatsApp"
-- [ ] Clic abre `wa.me/57[numero]?text=...` con mensaje prellenado: nombre del cliente, monto exacto, nombre del negocio
-- [ ] Si el cliente no tiene teléfono registrado, botón deshabilitado con tooltip "Agrega teléfono al cliente"
-- [ ] Funciona sin internet (abre WhatsApp instalado en el PC)
-- [ ] Mensaje en español: `"Hola [Nombre], le recordamos que tiene un saldo pendiente de $[monto] en [Negocio]. Gracias."`
-- [ ] Si el cliente no tiene deuda (saldo = 0), el botón no aparece
+- [x] En vista de cliente con saldo > 0, aparece botón "Cobrar por WhatsApp"
+- [x] Clic abre `wa.me/57[numero]?text=...` con mensaje prellenado: nombre del cliente, monto exacto, nombre del negocio
+- [x] Si el cliente no tiene teléfono registrado, botón deshabilitado con tooltip "Agrega teléfono al cliente"
+- [x] Funciona sin internet (abre WhatsApp instalado en el PC)
+- [x] Mensaje en español: `"Hola [Nombre], le recordamos que tiene un saldo pendiente de $[monto] en [Negocio]. Gracias."`
+- [x] Si el cliente no tiene deuda (saldo = 0), el botón no aparece
 
 **DoD:**
-- [ ] Implementado con `wa.me` link — NO usa API de WhatsApp Business
-- [ ] URL correctamente encoded (`encodeURIComponent`)
-- [ ] `window.open(url, '_blank')` con el link correcto
+- [x] Implementado con `wa.me` link — NO usa API de WhatsApp Business
+- [x] URL correctamente encoded (`encodeURIComponent`)
+- [x] `window.open(url, '_blank')` con el link correcto
 - [ ] Test manual: link genera el mensaje correcto con valores reales de la BD
-- [ ] No se muestra en la lista de clientes sin deuda
+- [x] No se muestra en la lista de clientes sin deuda
 
 ---
 
@@ -111,18 +113,18 @@
 **Esfuerzo estimado:** 2 días. **Impacto:** Alto.
 
 **Acceptance Criteria:**
-- [ ] Formulario de cliente tiene campo "Notas" (textarea, max 500 chars) y "Tope de crédito" (número COP, opcional)
-- [ ] Notas visibles en el perfil del cliente
-- [ ] Al seleccionar un cliente en el carrito POS, si tiene nota, se muestra como alerta inline
-- [ ] Si la venta superaría el tope de crédito, mostrar warning rojo: "Este cliente tiene un tope de $X. Su deuda actual es $Y." — la venta NO se bloquea, solo avisa
-- [ ] Si no hay tope configurado, no aparece ningún warning de límite
+- [x] Formulario de cliente tiene campo "Notas" (textarea, max 500 chars) y "Tope de crédito" (número COP, opcional)
+- [x] Notas visibles en el perfil del cliente
+- [x] Al seleccionar un cliente en el carrito POS, si tiene nota, se muestra como alerta inline
+- [x] Si la venta superaría el tope de crédito, mostrar warning rojo: "Este cliente tiene un tope de $X. Su deuda actual es $Y." — la venta NO se bloquea, solo avisa
+- [x] Si no hay tope configurado, no aparece ningún warning de límite
 
 **DoD:**
-- [ ] Migration: columnas `notes TEXT` y `credit_limit INTEGER NULL` en tabla `customers`
-- [ ] `GET /api/customers/:id` retorna `notes` y `credit_limit`
-- [ ] `PUT /api/customers/:id` acepta y persiste ambos campos
-- [ ] Warning de tope calculado en frontend: `deuda_actual + monto_venta > credit_limit`
-- [ ] Test: cliente con tope $100.000 y deuda $80.000 → venta de $30.000 muestra warning
+- [x] Migration: columnas `notes TEXT` y `credit_limit INTEGER NULL` en tabla `customers`
+- [x] `GET /api/customers/:id` retorna `notes` y `credit_limit`
+- [x] `PUT /api/customers/:id` acepta y persiste ambos campos
+- [x] Warning de tope calculado en frontend: `deuda_actual + monto_venta > credit_limit`
+- [x] Test: cliente con tope $100.000 y deuda $80.000 → venta de $30.000 muestra warning
 
 ---
 
@@ -137,17 +139,17 @@
 **Nota:** `wholesale_price` ya existe en BD. Falta el campo en UI de productos y la lógica de selección en el carrito.
 
 **Acceptance Criteria:**
-- [ ] Al agregar producto al carrito, si tiene `wholesale_price` configurado, aparece dropdown: "Menudeo: $X" / "Mayoreo: $Y"
-- [ ] Si no tiene precio mayorista, no aparece dropdown — solo precio normal
-- [ ] El precio seleccionado se refleja en el total del carrito inmediatamente
-- [ ] El ticket/factura muestra el precio aplicado
-- [ ] En la pantalla de producto (admin), campo "Precio mayorista" visible y editable
+- [x] Al agregar producto al carrito, si tiene `wholesale_price` configurado, aparece dropdown: "Menudeo: $X" / "Mayoreo: $Y"
+- [x] Si no tiene precio mayorista, no aparece dropdown — solo precio normal
+- [x] El precio seleccionado se refleja en el total del carrito inmediatamente
+- [x] El ticket/factura muestra el precio aplicado
+- [x] En la pantalla de producto (admin), campo "Precio mayorista" visible y editable
 
 **DoD:**
-- [ ] No se puede guardar `wholesale_price` menor al costo del producto (validación backend)
-- [ ] Si `wholesale_price` es NULL o 0, la UI no muestra el dropdown
-- [ ] Test: producto con precio $10.000 / mayoreo $8.000 → carrito muestra el correcto según selección
-- [ ] La venta guardada registra el precio real cobrado (no el precio base del producto)
+- [x] No se puede guardar `wholesale_price` menor al costo del producto (validación backend)
+- [x] Si `wholesale_price` es NULL o 0, la UI no muestra el dropdown
+- [ ] Test: producto con precio $10.000 / mayoreo $8.000 → carrito muestra el correcto según selección (test manual pendiente)
+- [x] La venta guardada registra el precio real cobrado (no el precio base del producto)
 
 ---
 
@@ -160,18 +162,18 @@
 **Esfuerzo estimado:** 2 días. **Impacto:** Medio-Alto.
 
 **Acceptance Criteria:**
-- [ ] Dashboard home muestra: Vendido hoy, Fiado nuevo hoy, Cobrado de fiado hoy, Efectivo en caja estimado, Producto más vendido del día
-- [ ] Números en pesos colombianos: formato `$340.000` (punto como separador de miles)
-- [ ] Si no hay ventas del día, muestra `$0` (no error ni loading infinito)
-- [ ] Datos se actualizan al recargar (no requiere tiempo real / websockets)
-- [ ] No hay gráficas en la vista principal — solo números y texto
+- [x] Dashboard home muestra: Vendido hoy, Fiado nuevo hoy, Cobrado de fiado hoy, Efectivo en caja estimado, Producto más vendido del día
+- [x] Números en pesos colombianos: formato `$340.000` (punto como separador de miles)
+- [x] Si no hay ventas del día, muestra `$0` (no error ni loading infinito)
+- [x] Datos se actualizan al recargar (no requiere tiempo real / websockets)
+- [x] No hay gráficas en la vista principal — solo números y texto
 
 **DoD:**
-- [ ] `GET /api/dashboard/today` retorna todos los valores en un solo endpoint
-- [ ] "Cobrado de fiado hoy" = solo pagos de deuda registrados en la fecha actual
-- [ ] "Efectivo en caja" = ventas en efectivo del día − retiros del día
-- [ ] Test: 3 ventas efectivo + 1 fiado + 1 cobro de deuda → todos los valores correctos
-- [ ] Endpoint no falla si no hay sesión de caja abierta
+- [x] `GET /api/dashboard/today` retorna todos los valores en un solo endpoint
+- [x] "Cobrado de fiado hoy" = solo pagos de deuda registrados en la fecha actual
+- [x] "Efectivo en caja" = ventas en efectivo del día − retiros del día
+- [ ] Test: 3 ventas efectivo + 1 fiado + 1 cobro de deuda → todos los valores correctos (test manual pendiente)
+- [x] Endpoint no falla si no hay sesión de caja abierta
 
 ---
 
