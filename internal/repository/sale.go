@@ -278,7 +278,7 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 	// Register reversal movement
 	if registerID.Valid {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO register_movements (register_id, type, amount, description) VALUES (?, 'withdrawal', ?, ?)`,
+			`INSERT INTO register_movements (register_id, type, amount, description) VALUES (?, 'cash_out', ?, ?)`,
 			registerID.Int64, total, fmt.Sprintf("Anulación venta #%d", saleID)); err != nil {
 			return nil, fmt.Errorf("void register movement: %w", err)
 		}

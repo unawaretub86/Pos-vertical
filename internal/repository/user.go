@@ -39,8 +39,8 @@ func (r *userRepo) List(ctx context.Context) ([]*model.User, error) {
 func (r *userRepo) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	u := &model.User{}
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, username, role, active, created_at FROM users WHERE id = ?`, id).
-		Scan(&u.ID, &u.Username, &u.Role, &u.Active, &u.CreatedAt)
+		`SELECT id, username, password_hash, role, active, created_at FROM users WHERE id = ?`, id).
+		Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.Active, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

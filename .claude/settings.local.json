@@ -36,7 +36,25 @@
       "Bash(xargs grep:*)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(cat c:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/web/*.go)",
-      "Bash(npx skills *)"
+      "Bash(npx skills *)",
+      "Bash(xargs -I{} echo {})",
+      "Bash(gh api *)",
+      "WebFetch(domain:skills.sh)",
+      "Bash(git -C \"C:/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical\" log --oneline -5 -- package.json)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('postman/POS-Vertical.postman_collection.json', encoding='utf-8'\\)\\); json.load\\(open\\('postman/POS-Vertical.postman_environment.json', encoding='utf-8'\\)\\); print\\('OK'\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(npm --version)",
+      "Bash(go version *)",
+      "Bash(npm install *)",
+      "Bash(./pos-test.exe)",
+      "Bash(curl *)",
+      "Bash(newman run *)",
+      "PowerShell(Get-Process *)",
+      "Bash(echo \"--- create product ---\")",
+      "Bash(python3)",
+      "Bash(rm -f data.db data.db-*)",
+      "Bash(rm -rf data.db.backup-*)",
+      "Bash(PowerShell.exe -Command \"Get-Process pos-test -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 500\")"
     ]
   }
 }

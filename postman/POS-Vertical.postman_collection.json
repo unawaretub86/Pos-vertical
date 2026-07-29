@@ -1,0 +1,2940 @@
+{
+  "info": {
+    "name": "POS Vertical API",
+    "description": "Coleccion generada del codigo real (internal/handler). Cubre todos los endpoints REST expuestos por cmd/pos (chi router, puerto 8080). Complementa qa-checklist.md (UI manual) con pruebas API automatizadas (asserts en cada request).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('No error de servidor (5xx)', function () {",
+          "    pm.expect(pm.response.code).to.be.below(500);",
+          "});",
+          "pm.test('Content-Type es JSON (si hay body)', function () {",
+          "    if (pm.response.body && pm.response.body.length > 0) {",
+          "        const ct = pm.response.headers.get('Content-Type') || '';",
+          "        if (pm.response.code !== 307) {",
+          "            pm.expect(ct).to.include('application/json');",
+          "        }",
+          "    }",
+          "});",
+          "pm.test('Tiempo de respuesta < 2000ms', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "username",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "admin",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "barcode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "registerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saleId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cashierToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Auth",
+      "item": [
+        {
+          "name": "POST /auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login exitoso (200)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Responde token JWT valido', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.token).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.token.split('.').length).to.eql(3);",
+                  "    pm.environment.set('authToken', data.token);",
+                  "});",
+                  "pm.test('Responde datos de usuario correctos', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.user.username).to.eql(pm.environment.get('username'));",
+                  "    pm.expect(data.user).to.have.property('id');",
+                  "    pm.expect(data.user).to.have.property('role');",
+                  "    pm.expect(data.force_password_change).to.be.a('boolean');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Publico. Sin Bearer token. Con clave incorrecta debe dar 401. Con clave == 'admin' la respuesta trae force_password_change=true."
+          }
+        },
+        {
+          "name": "GET /auth/me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Usuario coincide con el logueado', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.username).to.eql(pm.environment.get('username'));",
+                  "    pm.expect(data).to.have.property('id');",
+                  "    pm.expect(data).to.have.property('role');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('status = ok', function () {",
+                  "    pm.expect(pm.response.json().data.status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Setup",
+      "item": [
+        {
+          "name": "GET /setup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "setup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /setup (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Guarda los datos enviados', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.name).to.eql('Minimercado Demo');",
+                  "    pm.expect(data.currency).to.eql('COP');",
+                  "    pm.expect(data.nit).to.eql('900123456-7');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Minimercado Demo\",\n  \"address\": \"Calle 1 # 2-34\",\n  \"nit\": \"900123456-7\",\n  \"ciiu\": \"4711\",\n  \"currency\": \"COP\",\n  \"ticket_header\": \"Gracias por su compra\",\n  \"ticket_footer\": \"Vuelva pronto\",\n  \"default_opening_amount\": 50000,\n  \"allow_global_discount\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "setup"
+              ]
+            },
+            "description": "Requiere rol admin. name es obligatorio; currency default COP si viene vacio."
+          }
+        },
+        {
+          "name": "PUT /setup sin name (esperado 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza name vacio con 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('Trae mensaje de error', function () {",
+                  "    pm.expect(pm.response.json().error).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "setup"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Categories",
+      "item": [
+        {
+          "name": "GET /categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un array', function () {",
+                  "    pm.expect(pm.response.json().data === null || Array.isArray(pm.response.json().data)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /categories (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Categoria creada con datos correctos', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.id).to.be.a('number');",
+                  "    pm.expect(data.name).to.eql('Bebidas');",
+                  "    pm.expect(data.description).to.eql('Gaseosas, jugos, agua');",
+                  "    pm.environment.set('categoryId', data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bebidas\",\n  \"description\": \"Gaseosas, jugos, agua\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /categories/:id (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Categoria actualizada', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.id).to.eql(Number(pm.environment.get('categoryId')));",
+                  "    pm.expect(data.name).to.eql('Bebidas y lacteos');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bebidas y lacteos\",\n  \"description\": \"Actualizado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /categories/:id inexistente (esperado 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 categoria no encontrada', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No existe\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "999999"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Products",
+      "item": [
+        {
+          "name": "GET /products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un array', function () {",
+                  "    pm.expect(pm.response.json().data === null || Array.isArray(pm.response.json().data)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products?search=&active=true&category_id={{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "active",
+                  "value": "true"
+                },
+                {
+                  "key": "category_id",
+                  "value": "{{categoryId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /products/low-stock",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un array', function () {",
+                  "    pm.expect(pm.response.json().data === null || Array.isArray(pm.response.json().data)).to.be.true;",
+                  "});",
+                  "pm.test('Todos los items tienen stock < min_stock', function () {",
+                  "    (pm.response.json().data || []).forEach(function (p) {",
+                  "        pm.expect(p.stock).to.be.below(p.min_stock);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/low-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "low-stock"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /products (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Producto creado con datos correctos', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.id).to.be.a('number');",
+                  "    pm.expect(data.name).to.eql('Coca-Cola 400ml');",
+                  "    pm.expect(data.sale_price).to.eql(3000);",
+                  "    pm.expect(data.cost).to.eql(2000);",
+                  "    pm.expect(data.stock).to.eql(50);",
+                  "    pm.environment.set('productId', data.id);",
+                  "    pm.environment.set('barcode', data.barcode);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coca-Cola 400ml\",\n  \"code\": \"COC-400\",\n  \"barcode\": \"7702000000001\",\n  \"category_id\": {{categoryId}},\n  \"type\": \"product\",\n  \"sale_price\": 3000,\n  \"wholesale_price\": 2700,\n  \"cost\": 2000,\n  \"unit\": \"unit\",\n  \"stock\": 50,\n  \"min_stock\": 10,\n  \"tax_rate\": 0,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
+            },
+            "description": "Probar tambien: cost=0 (sin costo configurado), wholesale_price < cost (debe dar 400)."
+          }
+        },
+        {
+          "name": "GET /products/barcode/:barcode",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Barcode coincide', function () {",
+                  "    pm.expect(pm.response.json().data.barcode).to.eql(pm.environment.get('barcode'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/barcode/{{barcode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "barcode",
+                "{{barcode}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /products/:id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ID coincide', function () {",
+                  "    pm.expect(pm.response.json().data.id).to.eql(Number(pm.environment.get('productId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /products wholesale < cost (esperado 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza wholesale_price menor al costo', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test('Mensaje de error especifico', function () {",
+                  "    pm.expect(pm.response.json().error).to.include('mayorista');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Producto invalido\",\n  \"sale_price\": 5000,\n  \"wholesale_price\": 1000,\n  \"cost\": 3000,\n  \"stock\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /products/:id (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Precio actualizado', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.sale_price).to.eql(3200);",
+                  "    pm.expect(data.id).to.eql(Number(pm.environment.get('productId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coca-Cola 400ml\",\n  \"code\": \"COC-400\",\n  \"barcode\": \"7702000000001\",\n  \"category_id\": {{categoryId}},\n  \"type\": \"product\",\n  \"sale_price\": 3200,\n  \"wholesale_price\": 2800,\n  \"cost\": 2000,\n  \"unit\": \"unit\",\n  \"stock\": 50,\n  \"min_stock\": 10,\n  \"tax_rate\": 0,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /stock-entries (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Entrada de stock correcta', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.product_id).to.eql(Number(pm.environment.get('productId')));",
+                  "    pm.expect(data.quantity).to.eql(20);",
+                  "});",
+                  "pm.test('Stock del producto sube tras la entrada', function () {",
+                  "    pm.sendRequest({",
+                  "        url: pm.environment.get('baseUrl') + '/products/' + pm.environment.get('productId'),",
+                  "        method: 'GET',",
+                  "        header: { Authorization: 'Bearer ' + pm.environment.get('authToken') }",
+                  "    }, function (err, res) {",
+                  "        if (!err) {",
+                  "            pm.expect(res.json().data.stock).to.eql(70);",
+                  "        }",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": {{productId}},\n  \"quantity\": 20,\n  \"note\": \"Compra a proveedor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/stock-entries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-entries"
+              ]
+            },
+            "description": "quantity debe ser > 0. Verificar que stock del producto sube (50 -> 70)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Registers (caja)",
+      "item": [
+        {
+          "name": "POST /registers (abrir caja)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 (abierta) o 409 (ya habia una abierta)', function () {",
+                  "    pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "    pm.test('Caja creada con datos correctos', function () {",
+                  "        const data = pm.response.json().data;",
+                  "        pm.expect(data.status).to.eql('open');",
+                  "        pm.expect(data.opening_amount).to.eql(50000);",
+                  "        pm.environment.set('registerId', data.id);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"opening_amount\": 50000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers"
+              ]
+            },
+            "description": "Correr una segunda vez sin cerrar la primera: debe dar 409 (ErrRegisterAlreadyOpen)."
+          }
+        },
+        {
+          "name": "GET /registers/open",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Si hay caja abierta, status = open', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    if (data) {",
+                  "        pm.expect(data.register.status).to.eql('open');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/registers/open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers",
+                "open"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /registers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un array', function () {",
+                  "    pm.expect(pm.response.json().data === null || Array.isArray(pm.response.json().data)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/registers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /registers/:id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ID de caja coincide', function () {",
+                  "    pm.expect(pm.response.json().data.register.id).to.eql(Number(pm.environment.get('registerId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/registers/{{registerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers",
+                "{{registerId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /registers/:id/movements (cash_out)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Movimiento creado correctamente', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.type).to.eql('cash_out');",
+                  "    pm.expect(data.amount).to.eql(5000);",
+                  "    pm.expect(data.register_id).to.eql(Number(pm.environment.get('registerId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"cash_out\",\n  \"amount\": 5000,\n  \"description\": \"Pago domicilio\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registers/{{registerId}}/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers",
+                "{{registerId}}",
+                "movements"
+              ]
+            },
+            "description": "type debe ser 'cash_in' o 'cash_out'; cualquier otro valor debe dar 400."
+          }
+        },
+        {
+          "name": "POST /registers/:id/movements type invalido (esperado 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza type invalido con 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"transferencia\",\n  \"amount\": 1000,\n  \"description\": \"Tipo invalido\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registers/{{registerId}}/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers",
+                "{{registerId}}",
+                "movements"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /registers/:id/movements",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Incluye el movimiento cash_out creado', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data === null || Array.isArray(data)).to.be.true;",
+                  "    pm.expect(data.some(function (m) { return m.type === 'cash_out'; })).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/registers/{{registerId}}/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers",
+                "{{registerId}}",
+                "movements"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Customers (clientes y fiado)",
+      "item": [
+        {
+          "name": "GET /customers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Trae customers[] y total_portfolio', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.customers === null || Array.isArray(data.customers)).to.be.true;",
+                  "    pm.expect(data.total_portfolio).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/customers?q=&has_balance=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": ""
+                },
+                {
+                  "key": "has_balance",
+                  "value": "false"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /customers (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Cliente creado con datos correctos', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.id).to.be.a('number');",
+                  "    pm.expect(data.name).to.eql('Juan Perez');",
+                  "    pm.expect(data.credit_limit).to.eql(100000);",
+                  "    pm.environment.set('customerId', data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Juan Perez\",\n  \"phone\": \"3001234567\",\n  \"address\": \"Cra 5 #10-20\",\n  \"notes\": \"Cliente frecuente\",\n  \"credit_limit\": 100000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /customers/:id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ID coincide', function () {",
+                  "    pm.expect(pm.response.json().data.id).to.eql(Number(pm.environment.get('customerId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /customers/:id/detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Trae customer, balance, payments y credit_sales', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.customer.id).to.eql(Number(pm.environment.get('customerId')));",
+                  "    pm.expect(data.balance).to.be.a('number');",
+                  "    pm.expect(data.payments === null || Array.isArray(data.payments)).to.be.true;",
+                  "    pm.expect(data.credit_sales === null || Array.isArray(data.credit_sales)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}/detail",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}",
+                "detail"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /customers/:id/balance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('balance es numerico', function () {",
+                  "    pm.expect(pm.response.json().data.balance).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}",
+                "balance"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /customers/:id (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Datos actualizados', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.name).to.eql('Juan Perez Actualizado');",
+                  "    pm.expect(data.credit_limit).to.eql(150000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Juan Perez Actualizado\",\n  \"phone\": \"3001234567\",\n  \"address\": \"Cra 5 #10-20\",\n  \"notes\": \"\",\n  \"credit_limit\": 150000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Sales (ventas)",
+      "item": [
+        {
+          "name": "POST /sales (efectivo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Venta creada con totales calculados en servidor', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.id).to.be.a('number');",
+                  "    pm.expect(data.payment_method).to.eql('cash');",
+                  "    pm.expect(data.status).to.eql('completed');",
+                  "    pm.expect(data.subtotal).to.eql(6000);",
+                  "    pm.expect(data.total).to.eql(6000);",
+                  "    pm.expect(data.items).to.have.lengthOf(1);",
+                  "    pm.environment.set('saleId', data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"cash\",\n  \"discount\": 0,\n  \"tax\": 0,\n  \"cash_tendered\": 10000,\n  \"change_amount\": 4000,\n  \"reference\": \"\",\n  \"items\": [\n    {\n      \"product_id\": {{productId}},\n      \"quantity\": 2,\n      \"unit_price\": 3000,\n      \"discount\": 0,\n      \"tax_rate\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sales",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales"
+              ]
+            },
+            "description": "subtotal/total se calculan en el servidor a partir de items (2 x 3000 = 6000). Probar tambien con cantidades decimales (ej. 0.5) y con stock insuficiente."
+          }
+        },
+        {
+          "name": "POST /sales fiado SIN customer_id (esperado bloqueo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Caso critico qa-checklist #3: fiado sin cliente debe bloquear', function () {",
+                  "    pm.expect(pm.response.code).to.not.eql(201);",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"credit\",\n  \"discount\": 0,\n  \"tax\": 0,\n  \"items\": [\n    {\n      \"product_id\": {{productId}},\n      \"quantity\": 1,\n      \"unit_price\": 3000,\n      \"discount\": 0,\n      \"tax_rate\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sales",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales"
+              ]
+            },
+            "description": "Sin customer_id. Si este test FALLA (la venta se crea igual), es un bug de negocio critico segun qa-checklist.md seccion 3."
+          }
+        },
+        {
+          "name": "POST /sales (fiado con customer_id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Venta fiada asociada al cliente', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.payment_method).to.eql('credit');",
+                  "    pm.expect(data.customer_id).to.eql(Number(pm.environment.get('customerId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_method\": \"credit\",\n  \"customer_id\": {{customerId}},\n  \"discount\": 0,\n  \"tax\": 0,\n  \"items\": [\n    {\n      \"product_id\": {{productId}},\n      \"quantity\": 1,\n      \"unit_price\": 3000,\n      \"discount\": 0,\n      \"tax_rate\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sales",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales"
+              ]
+            },
+            "description": "Correr despues de crear un cliente (carpeta 08). Con customer_id valido debe crear normalmente."
+          }
+        },
+        {
+          "name": "POST /customers/:id/payments (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Pago registrado correctamente', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.amount).to.eql(3000);",
+                  "    pm.expect(data.customer_id).to.eql(Number(pm.environment.get('customerId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 3000,\n  \"note\": \"Abono parcial\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}",
+                "payments"
+              ]
+            },
+            "description": "Probar tambien con amount MAYOR al saldo de deuda: verificar comportamiento (bloquea / saldo a favor / error)."
+          }
+        },
+        {
+          "name": "GET /customers/:id/payments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Incluye el pago recien creado', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(data.some(function (p) { return p.amount === 3000; })).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}",
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /sales",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un array', function () {",
+                  "    pm.expect(pm.response.json().data === null || Array.isArray(pm.response.json().data)).to.be.true;",
+                  "});",
+                  "pm.test('include_voided=false no trae ventas anuladas', function () {",
+                  "    (pm.response.json().data || []).forEach(function (s) {",
+                  "        pm.expect(s.status).to.not.eql('voided');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/sales?limit=20&include_voided=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "include_voided",
+                  "value": "false"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /sales/:id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('ID coincide', function () {",
+                  "    pm.expect(pm.response.json().data.id).to.eql(Number(pm.environment.get('saleId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /sales/:id/ticket",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Ticket trae items y business', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.sale_id).to.eql(Number(pm.environment.get('saleId')));",
+                  "    pm.expect(data.items).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(data.business).to.have.property('name');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/ticket",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}",
+                "ticket"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /sales/:id/factura (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400: facturacion electronica no habilitada (factelect nil todo el proceso)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/factura",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}",
+                "factura"
+              ]
+            },
+            "description": "404 si facturacion electronica no esta habilitada o si la venta no tiene documento aun."
+          }
+        },
+        {
+          "name": "GET /sales/:id/factura/pdf (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404: facturacion electronica no habilitada', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/factura/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}",
+                "factura",
+                "pdf"
+              ]
+            },
+            "description": "307 redirect al PDF si existe; 404 si no. Nota: Postman sigue redirects por default, revisar historial de la request para ver el 307 real."
+          }
+        },
+        {
+          "name": "DELETE /sales/:id/void (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: anula directo (no hay documento fiscal aceptado)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Venta queda voided', function () {",
+                  "    pm.expect(pm.response.json().data.status).to.eql('voided');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/void",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}",
+                "void"
+              ]
+            },
+            "description": "Verificar stock revertido. Si la venta tiene factura DIAN aceptada, debe dar 409 con requires_credit_note=true en vez de anular directo."
+          }
+        },
+        {
+          "name": "DELETE /sales/:id/void otra vez (esperado 400, ya voided)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('No permite anular dos veces', function () {",
+                  "    pm.expect(pm.response.code).to.not.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/void",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}",
+                "void"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /sales/:id/void-with-credit-note (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400: facturacion electronica no habilitada', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"motive\": \"Devolucion del cliente\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/void-with-credit-note",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}",
+                "void-with-credit-note"
+              ]
+            },
+            "description": "motive requerido. 400 si facturacion electronica no habilitada."
+          }
+        },
+        {
+          "name": "POST /sales/:id/void-with-credit-note sin motive (esperado 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza sin motive', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"motive\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sales/{{saleId}}/void-with-credit-note",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sales",
+                "{{saleId}}",
+                "void-with-credit-note"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Dashboard",
+      "item": [
+        {
+          "name": "GET /dashboard (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura completa del dashboard', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.today).to.have.property('total_revenue');",
+                  "    pm.expect(data.yesterday).to.have.property('total_revenue');",
+                  "    pm.expect(data.portfolio).to.have.property('total');",
+                  "    pm.expect(data.recent_sales === null || Array.isArray(data.recent_sales)).to.be.true;",
+                  "    pm.expect(data.recent_sales.length).to.be.at.most(8);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /dashboard/today (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Metricas del dia son numericas y no negativas', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.sold_today).to.be.a('number').and.at.least(0);",
+                  "    pm.expect(data.gross_profit).to.be.a('number');",
+                  "    pm.expect(data.unconfigured_cost_count).to.be.a('number').and.at.least(0);",
+                  "});",
+                  "pm.test('top_by_margin: solo aparece con >= 2 productos con costo', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.top_by_margin === null || Array.isArray(data.top_by_margin)).to.be.true;",
+                  "    if (data.top_by_margin.length > 0) {",
+                  "        pm.expect(data.top_by_margin.length).to.be.at.least(2);",
+                  "    }",
+                  "});",
+                  "pm.test('low_stock ordenado por deficit descendente', function () {",
+                  "    const items = pm.response.json().data.low_stock;",
+                  "    for (let i = 1; i < items.length; i++) {",
+                  "        const prevDeficit = items[i - 1].min_stock - items[i - 1].stock;",
+                  "        const currDeficit = items[i].min_stock - items[i].stock;",
+                  "        pm.expect(prevDeficit).to.be.at.least(currDeficit);",
+                  "    }",
+                  "});",
+                  "pm.test('aging_receivables ordenado por days_overdue descendente', function () {",
+                  "    const items = pm.response.json().data.aging_receivables;",
+                  "    for (let i = 1; i < items.length; i++) {",
+                  "        pm.expect(items[i - 1].days_overdue).to.be.at.least(items[i].days_overdue);",
+                  "        pm.expect(items[i].balance).to.be.above(0);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "today"
+              ]
+            },
+            "description": "Verificar: gross_profit solo cuenta productos con cost>0; unconfigured_cost_count sube con productos cost=0; aging_receivables ordenado por days_overdue desc."
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Reports",
+      "item": [
+        {
+          "name": "GET /reports/portfolio (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Solo clientes con balance > 0, ordenados desc', function () {",
+                  "    const items = pm.response.json().data || [];",
+                  "    pm.expect(items === null || Array.isArray(items)).to.be.true;",
+                  "    for (let i = 0; i < items.length; i++) {",
+                  "        pm.expect(items[i].balance).to.be.above(0);",
+                  "        if (i > 0) pm.expect(items[i - 1].balance).to.be.at.least(items[i].balance);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "portfolio"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reports/sales (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Estructura del resumen de ventas', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.total_revenue).to.be.a('number');",
+                  "    pm.expect(data.total_cost).to.be.a('number');",
+                  "    pm.expect(data.gross_margin).to.eql(data.total_revenue - data.total_cost);",
+                  "    pm.expect(data.total_count).to.be.a('number');",
+                  "    pm.expect(data.by_payment_method === null || Array.isArray(data.by_payment_method)).to.be.true;",
+                  "    pm.expect(data.grouped === null || Array.isArray(data.grouped)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/sales?group_by=day",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "group_by",
+                  "value": "day"
+                }
+              ]
+            },
+            "description": "from/to en formato RFC3339 (ej. 2026-07-01T00:00:00Z). group_by: day|week|month. Probar rango vacio (sin ventas) -> no debe crashear."
+          }
+        },
+        {
+          "name": "GET /reports/sales from/to invalido (esperado 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza fecha invalida con 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/sales?from=fecha-invalida",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "sales"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "fecha-invalida"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reports/top-products (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Respeta el limit y ordena por revenue', function () {",
+                  "    const items = pm.response.json().data;",
+                  "    pm.expect(items === null || Array.isArray(items)).to.be.true;",
+                  "    pm.expect(items.length).to.be.at.most(10);",
+                  "    for (let i = 1; i < items.length; i++) {",
+                  "        pm.expect(items[i - 1].revenue).to.be.at.least(items[i].revenue);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/top-products?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "top-products"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /reports/registers (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un array', function () {",
+                  "    pm.expect(pm.response.json().data === null || Array.isArray(pm.response.json().data)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/registers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "registers"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Fiscal (Factus/DIAN)",
+      "item": [
+        {
+          "name": "GET /fiscal/config (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/fiscal/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fiscal",
+                "config"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /fiscal/config (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Config fiscal guardada', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.nit).to.eql('900123456');",
+                  "    pm.expect(data.ambiente).to.eql('test');",
+                  "    pm.expect(data.provider).to.eql('factus');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false,\n  \"nit\": \"900123456\",\n  \"razon_social\": \"Minimercado Demo SAS\",\n  \"direccion\": \"Calle 1 # 2-34\",\n  \"ciiu\": \"4711\",\n  \"resolucion_dian\": \"\",\n  \"prefijo\": \"POS\",\n  \"rango_desde\": 1,\n  \"rango_hasta\": 5000,\n  \"ambiente\": \"test\",\n  \"provider\": \"factus\",\n  \"provider_client_id\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/fiscal/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fiscal",
+                "config"
+              ]
+            },
+            "description": "Probar con enabled=true y credenciales invalidas: el POS no debe bloquearse por fallas de facturacion (segun qa-checklist.md seccion 7)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Users",
+      "item": [
+        {
+          "name": "GET /users (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Responde un array sin exponer password_hash', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data === null || Array.isArray(data)).to.be.true;",
+                  "    (data || []).forEach(function (u) {",
+                  "        pm.expect(u.password_hash).to.be.undefined;",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /users (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Usuario creado con rol correcto', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.username).to.eql('cajero1');",
+                  "    pm.expect(data.role).to.eql('cashier');",
+                  "    pm.expect(data.active).to.be.true;",
+                  "    pm.expect(data.password_hash).to.be.undefined;",
+                  "    pm.environment.set('userId', data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"cajero1\",\n  \"password\": \"clave123\",\n  \"role\": \"cashier\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /users/:id (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Datos actualizados', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.username).to.eql('cajero1');",
+                  "    pm.expect(data.active).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"cajero1\",\n  \"role\": \"cashier\",\n  \"active\": true,\n  \"password\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "password vacio = no cambiar clave."
+          }
+        },
+        {
+          "name": "PUT /users/me/password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Mensaje de confirmacion', function () {",
+                  "    pm.expect(pm.response.json().data.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"admin\",\n  \"new_password\": \"NuevaClave123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "password"
+              ]
+            },
+            "description": "CUIDADO: cambia la clave de la cuenta usada en {{username}}/{{password}}. Revertir despues o actualizar variables de entorno."
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Casos negativos (auth/permisos)",
+      "item": [
+        {
+          "name": "GET /categories SIN token (esperado 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza sin token con 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /categories con token invalido (esperado 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza token invalido con 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "token-invalido-o-vencido",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No deberia crearse\",\n  \"description\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /auth/login (cajero1, para probar 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login de cajero1 exitoso', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.environment.set('cashierToken', pm.response.json().data.token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"cajero1\",\n  \"password\": \"clave123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login con el usuario role=cashier creado en la carpeta 12 - Users, para probar de verdad el bloqueo de rol (no con token de admin)."
+          }
+        },
+        {
+          "name": "POST /users como cashier (esperado 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza rol cashier en endpoint admin con 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"nuevo\",\n  \"password\": \"123456\",\n  \"role\": \"cashier\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Usa el token real de cajero1 (capturado en el request anterior). Debe dar 403 (RequireAdmin).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{cashierToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Cleanup (borrar datos de prueba)",
+      "item": [
+        {
+          "name": "DELETE /products/:id (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Mensaje de confirmacion', function () {",
+                  "    pm.expect(pm.response.json().data.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "OJO: correr al final, despues de probar ventas/stock con este producto. Verificar que no rompe historial de ventas ya hechas."
+          }
+        },
+        {
+          "name": "DELETE /categories/:id (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 (borrada) o 409 (bloqueada por producto historico asociado)', function () {",
+                  "    pm.expect([200, 409]).to.include(pm.response.code);",
+                  "    if (pm.response.code === 200) {",
+                  "        pm.expect(pm.response.json().data.message).to.be.a('string').and.not.empty;",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Se corre DESPUES de borrar el producto asociado. Si el borrado de producto es soft-delete (active=false, no elimina la fila), la categoria puede seguir bloqueada con 409 por integridad referencial/historica -- comportamiento real observado, ver qa-checklist.md seccion 2."
+          }
+        },
+        {
+          "name": "DELETE /customers/:id (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 (borrado) o 409 (tiene deuda/ventas activas)', function () {",
+                  "    pm.expect([200, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "customers",
+                "{{customerId}}"
+              ]
+            },
+            "description": "Probar con deuda activa (fiado sin pagar): verificar que bloquea o advierte, no debe permitir borrar con saldo pendiente."
+          }
+        },
+        {
+          "name": "POST /registers/:id/close",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Caja cerrada correctamente', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.register.status).to.eql('closed');",
+                  "    pm.expect(data.register.actual_close).to.eql(95000);",
+                  "    pm.expect(data.cash_out).to.be.at.least(5000);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actual_close\": 95000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registers/{{registerId}}/close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers",
+                "{{registerId}}",
+                "close"
+              ]
+            },
+            "description": "Correr AL FINAL de la sesion de pruebas (despues de ventas). Cerrar dos veces debe dar 409 (ErrRegisterClosed)."
+          }
+        },
+        {
+          "name": "POST /registers/:id/close otra vez (esperado 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechaza cerrar caja ya cerrada', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actual_close\": 95000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registers/{{registerId}}/close",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "registers",
+                "{{registerId}}",
+                "close"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /users/:id (admin, desactivar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Mensaje de confirmacion', function () {",
+                  "    pm.expect(pm.response.json().data.message).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "Desactiva (soft delete). Verificar que el usuario desactivado ya no puede loguear."
+          }
+        }
+      ]
+    }
+  ]
+}
