@@ -81,6 +81,8 @@ interface TodayData {
   top_product_name: string;
   top_product_qty: number;
   gross_profit: number;
+  expenses_today: number;
+  net_profit: number;
   unconfigured_cost_count: number;
   top_by_margin: TopMarginItem[];
   low_stock: LowStockItem[];
@@ -520,7 +522,7 @@ export default function DashboardPage() {
           <div className="section-title" style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600 }}>
             📒 Cuaderno del día
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(6, 1fr)', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: '16px' }}>
             <CuadernoTile label="Vendido hoy" value={formatCOP(todayData?.sold_today ?? 0)} />
             <CuadernoTile label="Fiado nuevo hoy" value={formatCOP(todayData?.credit_new_today ?? 0)} warn={(todayData?.credit_new_today ?? 0) > 0} />
             <CuadernoTile label="Cobrado de fiado" value={formatCOP(todayData?.credit_collected_today ?? 0)} good={(todayData?.credit_collected_today ?? 0) > 0} />
@@ -540,6 +542,21 @@ export default function DashboardPage() {
                 <div style={{ fontSize: '11px', color: '#d97706', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span>⚠️</span>
                   <span>{todayData!.unconfigured_cost_count} prod. sin costo — ganancia incompleta</span>
+                </div>
+              )}
+            </div>
+            {/* Ganancia neta (US-049) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ganancia neta</div>
+              <div style={{
+                fontSize: '20px', fontWeight: 700, lineHeight: 1.2,
+                color: (todayData?.net_profit ?? 0) < 0 ? 'var(--danger)' : 'var(--success)',
+              }}>
+                {formatCOP(todayData?.net_profit ?? 0)}
+              </div>
+              {(todayData?.expenses_today ?? 0) > 0 && (
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  −{formatCOP(todayData!.expenses_today)} en gastos
                 </div>
               )}
             </div>

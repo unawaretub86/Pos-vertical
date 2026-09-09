@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
 	appmw "github.com/andreyo/pos/internal/middleware"
+	"github.com/andreyo/pos/internal/repository"
 	"github.com/andreyo/pos/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -139,5 +141,13 @@ func (h *Handler) addMovement(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "error agregando movimiento")
 		return
 	}
+
+	if body.Type == "cash_out" {
+		if claims := appmw.GetClaims(r); claims != nil {
+			detailsBytes, _ := json.Marshal(map[string]any{"amount": body.Amount, "description": body.Description})
+			_ = repository.InsertAuditLog(r.Context(), h.db, claims.UserID, "cash_out", "register_movement", mv.ID, string(detailsBytes))
+		}
+	}
+
 	respond(w, http.StatusCreated, mv)
 }

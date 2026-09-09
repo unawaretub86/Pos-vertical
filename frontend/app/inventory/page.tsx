@@ -195,7 +195,7 @@ function ProductModal({
     unit: product?.unit ?? 'unit',
     stock: product?.stock ?? 0,
     min_stock: product?.min_stock ?? 5,
-    tax_rate: product?.tax_rate ?? 0,
+    tax_rate: product?.tax_rate ? product.tax_rate * 100 : 0, // stored as fraction (0.19); field is a % input
     active: product?.active ?? true,
   });
 
@@ -219,7 +219,7 @@ function ProductModal({
         cost: parseInputCOP(String(form.cost)),
         stock: Number(form.stock),
         min_stock: Number(form.min_stock),
-        tax_rate: Number(form.tax_rate),
+        tax_rate: Number(form.tax_rate) / 100, // % input back to fraction for storage
       };
       if (product) {
         await api.put(`/products/${product.id}`, body);

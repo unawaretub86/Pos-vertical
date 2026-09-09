@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
+	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
 	"github.com/go-chi/chi/v5"
@@ -113,6 +115,8 @@ func (h *Handler) updateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	before, beforeErr := h.products.GetByID(r.Context(), id)
+
 	updated, err := h.products.Update(r.Context(), &p)
 	if errors.Is(err, repository.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "producto no encontrado")
@@ -122,7 +126,25 @@ func (h *Handler) updateProduct(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	if beforeErr == nil {
+		if claims := appmw.GetClaims(r); claims != nil {
+			logPriceFieldChange(r, h, claims.UserID, updated.ID, "sale_price", before.SalePrice, updated.SalePrice)
+			logPriceFieldChange(r, h, claims.UserID, updated.ID, "cost", before.Cost, updated.Cost)
+		}
+	}
+
 	respond(w, http.StatusOK, updated)
+}
+
+// logPriceFieldChange writes a product_price_change audit entry when a
+// tracked field actually changed value (no-op saves must not create noise).
+func logPriceFieldChange(r *http.Request, h *Handler, userID, productID int64, field string, from, to float64) {
+	if from == to {
+		return
+	}
+	detailsBytes, _ := json.Marshal(map[string]any{"field": field, "from": from, "to": to})
+	_ = repository.InsertAuditLog(r.Context(), h.db, userID, "product_price_change", "product", productID, string(detailsBytes))
 }
 
 func (h *Handler) getProductByBarcode(w http.ResponseWriter, r *http.Request) {

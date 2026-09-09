@@ -129,6 +129,18 @@ type Sale struct {
 	VoidedAt      *time.Time `json:"voided_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	Items         []SaleItem `json:"items,omitempty"`
+	Payments      []Payment  `json:"payments,omitempty"`
+}
+
+// Payment is one payment line of a sale. A sale with a single payment method
+// still gets exactly one row here; PaymentMethod on Sale is derived from
+// these ('mixed' when len(Payments) > 1, or the single method otherwise).
+type Payment struct {
+	ID        int64   `json:"id,omitempty"`
+	SaleID    int64   `json:"sale_id,omitempty"`
+	Method    string  `json:"method"`
+	Amount    float64 `json:"amount"`
+	Reference string  `json:"reference,omitempty"`
 }
 
 type SaleItem struct {
@@ -146,6 +158,19 @@ type SaleItem struct {
 type AuditLog struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
+	Action    string    `json:"action"`
+	Entity    string    `json:"entity"`
+	EntityID  int64     `json:"entity_id"`
+	Details   string    `json:"details"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// AuditLogEntry is an AuditLog enriched with the acting user's username, as
+// returned by GET /api/audit.
+type AuditLogEntry struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Username  string    `json:"username"`
 	Action    string    `json:"action"`
 	Entity    string    `json:"entity"`
 	EntityID  int64     `json:"entity_id"`
@@ -172,6 +197,17 @@ type RegisterMovement struct {
 	Amount      float64   `json:"amount"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+type Expense struct {
+	ID         int64     `json:"id"`
+	RegisterID *int64    `json:"register_id"`
+	UserID     int64     `json:"user_id"`
+	Username   string    `json:"username,omitempty"`
+	Category   string    `json:"category"`
+	Amount     float64   `json:"amount"`
+	Note       string    `json:"note"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type StockEntry struct {
@@ -218,6 +254,7 @@ type TicketData struct {
 	Tax           float64        `json:"tax"`
 	Total         float64        `json:"total"`
 	Items         []TicketItem   `json:"items"`
+	Payments      []Payment      `json:"payments,omitempty"`
 	Customer      *Customer      `json:"customer,omitempty"`
 	Business      TicketBusiness `json:"business"`
 }

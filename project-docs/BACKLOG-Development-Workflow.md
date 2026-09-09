@@ -40,4 +40,5 @@ See `PLAN.md` → Fase 0.0 for full token definitions, component specs, and typo
 | SPRINT-07 | Factus Sandbox + Diferenciadores | ⚠️ Deuda: US-034 pendiente |
 | SPRINT-08 | Rentabilidad Real y Cartera Envejecida | ✅ Completo |
 | SPRINT-09 | Historial de Cliente, Pedidos y Catálogo | ⬜ Pendiente |
-| SPRINT-10 | Cobro Mixto, Auditoría y Gastos | ⬜ Pendiente |
+| SPRINT-10 | Cobro Mixto, Auditoría y Gastos | ✅ Completo |
+| SPRINT-11 | QA de Cálculos, Proveedores/Compras y Cierre de Caja | ⬜ Pendiente |

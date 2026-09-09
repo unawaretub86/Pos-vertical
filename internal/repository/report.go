@@ -85,13 +85,15 @@ func (r *reportRepo) SalesSummary(ctx context.Context, p SalesSummaryParams) (*S
 	}
 	summary.GrossMargin = summary.TotalRevenue - summary.TotalCost
 
-	// By payment method
+	// By payment method — read from sale_payments so a mixed sale contributes
+	// each portion to its own method instead of lumping the whole total under 'mixed'.
 	rows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT payment_method, COALESCE(SUM(total), 0), COUNT(*)
-		FROM sales s
+		SELECT sp.method, COALESCE(SUM(sp.amount), 0), COUNT(*)
+		FROM sale_payments sp
+		JOIN sales s ON s.id = sp.sale_id
 		WHERE s.status = 'completed' %s
-		GROUP BY payment_method
-		ORDER BY SUM(total) DESC`, where), args...,
+		GROUP BY sp.method
+		ORDER BY SUM(sp.amount) DESC`, where), args...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("report by payment method: %w", err)

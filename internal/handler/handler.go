@@ -26,6 +26,8 @@ type Handler struct {
 	setup        *repository.SetupRepository
 	stockEntries repository.StockEntryRepository
 	reports      repository.ReportRepository
+	audit        repository.AuditRepository
+	expenses     *service.ExpenseService
 	factelect    *factelect.FacElectService
 	fiscalRepo   factelect.FiscalConfigRepository
 }
@@ -41,11 +43,14 @@ func New(db *database.DB) *Handler {
 	setupRepo := repository.NewSetupRepository(db.DB)
 	stockRepo := repository.NewStockEntryRepository(db.DB)
 	reportRepo := repository.NewReportRepository(db.DB)
+	auditRepo := repository.NewAuditRepository(db.DB)
+	expenseRepo := repository.NewExpenseRepository(db.DB)
 	eledocRepo := repository.NewElectronicDocRepository(db.DB)
 	fiscalRepo := factelect.NewFiscalConfigRepository(db.DB)
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
+	registerSvc := service.NewRegisterService(regRepo)
 
 	var factelSvc *factelect.FacElectService
 	cfg, _ := fiscalRepo.Get(context.Background())
@@ -61,12 +66,14 @@ func New(db *database.DB) *Handler {
 		categories:   service.NewCategoryService(catRepo),
 		products:     service.NewProductService(prodRepo),
 		sales:        salesSvc,
-		registers:    service.NewRegisterService(regRepo),
+		registers:    registerSvc,
 		customers:    service.NewCustomerService(custRepo),
 		users:        service.NewUserService(userRepo),
 		setup:        setupRepo,
 		stockEntries: stockRepo,
 		reports:      reportRepo,
+		audit:        auditRepo,
+		expenses:     service.NewExpenseService(expenseRepo, registerSvc),
 		factelect:    factelSvc,
 		fiscalRepo:   fiscalRepo,
 	}
@@ -154,6 +161,16 @@ func (h *Handler) Routes() http.Handler {
 			r.Get("/reports/sales", h.getSalesReport)
 			r.Get("/reports/top-products", h.getTopProducts)
 			r.Get("/reports/registers", h.getRegistersReport)
+		})
+
+		// Expenses (all authenticated users)
+		r.Post("/expenses", h.createExpense)
+		r.Get("/expenses", h.listExpenses)
+
+		// Audit log (admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Get("/audit", h.listAudit)
 		})
 
 		// Registers (all authenticated users)

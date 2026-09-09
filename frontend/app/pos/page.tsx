@@ -6,8 +6,10 @@ import Topbar from '@/components/Topbar';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import TicketPreview, { type TicketData } from '@/components/TicketPreview';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { getUser } from '@/lib/auth';
+import { calcSubtotal, calcTax, calcTotal, paymentsBalanced as linesBalanced, sumPayments } from '@/lib/saleCalc';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ interface Product {
   min_stock: number;
   unit: string;
   active: boolean;
+  tax_rate: number;
 }
 
 interface CartItem {
@@ -52,7 +55,47 @@ interface CartItem {
 
 type PaymentMethod = 'efectivo' | 'transferencia' | 'tarjeta' | 'credito';
 
+interface ParkedCart {
+  id: string;
+  name: string;
+  createdAt: number;
+  items: CartItem[];
+  customer: Customer | null;
+  globalDiscountInput: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const PARKED_CARTS_KEY = 'pos.parkedCarts';
+
+function loadParkedCarts(): ParkedCart[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(PARKED_CARTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveParkedCarts(carts: ParkedCart[]) {
+  try {
+    window.localStorage.setItem(PARKED_CARTS_KEY, JSON.stringify(carts));
+  } catch {
+    // storage unavailable — parked carts just won't persist across reloads
+  }
+}
+
+function formatElapsed(ts: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (mins < 1) return 'hace un momento';
+  if (mins === 1) return 'hace 1 min';
+  if (mins < 60) return `hace ${mins} min`;
+  const hours = Math.round(mins / 60);
+  return hours === 1 ? 'hace 1 h' : `hace ${hours} h`;
+}
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -73,6 +116,12 @@ const IconCart = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+  </svg>
+);
+
+const IconClock = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
   </svg>
 );
 
@@ -212,8 +261,18 @@ function CartItemRow({
     >
       {/* Name + remove */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.product.name}
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.product.name}
+          </span>
+          {!item.product.active && (
+            <span style={{
+              fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '4px',
+              background: 'var(--danger-dim)', color: 'var(--danger)', flexShrink: 0,
+            }}>
+              Ya no disponible
+            </span>
+          )}
         </span>
         <button
           onClick={onRemove}
@@ -593,6 +652,11 @@ export default function POSPage() {
   const [payMethod, setPayMethod] = useState<PaymentMethod>('efectivo');
   const [cashReceived, setCashReceived] = useState<string>('');
 
+  // Pago mixto (US-046): additional payment lines beyond the primary method.
+  // When empty, the modal behaves exactly like a single-method sale.
+  const [extraPayments, setExtraPayments] = useState<{ method: PaymentMethod; amountInput: string }[]>([]);
+  const [firstAmountInput, setFirstAmountInput] = useState<string>('');
+
   // Customer (required for credit)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerBalance, setCustomerBalance] = useState<number | null>(null);
@@ -602,6 +666,17 @@ export default function POSPage() {
 
   // Post-sale ticket modal
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
+
+  // Parked carts (venta en espera)
+  const [parkedCarts, setParkedCarts] = useState<ParkedCart[]>([]);
+  const [parkListOpen, setParkListOpen] = useState(false);
+  const [parkNameInput, setParkNameInput] = useState<string | null>(null); // non-null while naming modal is open
+  const [resumeCandidate, setResumeCandidate] = useState<ParkedCart | null>(null); // pending confirm when active cart isn't empty
+  const [discardTarget, setDiscardTarget] = useState<ParkedCart | null>(null);
+
+  useEffect(() => {
+    setParkedCarts(loadParkedCarts());
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -652,15 +727,22 @@ export default function POSPage() {
 
   // Cart operations
   function addToCart(product: Product) {
+    let blocked = false;
     setCart(prev => {
       const idx = prev.findIndex(i => i.product.id === product.id);
+      const nextQty = idx >= 0 ? prev[idx].quantity + 1 : 1;
+      if (product.type === 'product' && nextQty > product.stock) {
+        blocked = true;
+        return prev;
+      }
       if (idx >= 0) {
         const updated = [...prev];
-        updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + 1 };
+        updated[idx] = { ...updated[idx], quantity: nextQty };
         return updated;
       }
       return [...prev, { product, quantity: 1, unitPrice: product.sale_price, priceInput: String(product.sale_price), priceMode: 'retail' as const, discount: 0, discountType: 'fixed', discountInput: '' }];
     });
+    if (blocked) toast(`Solo hay ${product.stock} unidades disponibles de ${product.name}`, 'error');
     // On mobile, briefly flash cart tab badge — stay on products so user can keep adding
   }
 
@@ -681,15 +763,25 @@ export default function POSPage() {
   }
 
   function changeQty(idx: number, delta: number) {
+    let blocked = false;
     setCart(prev => {
       const updated = [...prev];
-      const newQty = updated[idx].quantity + delta;
+      const item = updated[idx];
+      const newQty = item.quantity + delta;
       if (newQty <= 0) {
         return updated.filter((_, i) => i !== idx);
       }
-      updated[idx] = { ...updated[idx], quantity: newQty };
+      if (delta > 0 && item.product.type === 'product' && newQty > item.product.stock) {
+        blocked = true;
+        return prev;
+      }
+      updated[idx] = { ...item, quantity: newQty };
       return updated;
     });
+    if (blocked) {
+      const item = cart[idx];
+      toast(`Solo hay ${item.product.stock} unidades disponibles de ${item.product.name}`, 'error');
+    }
   }
 
   function changePriceOverride(idx: number, price: number, priceInput: string) {
@@ -727,15 +819,102 @@ export default function POSPage() {
     setGlobalDiscountInput('');
     setCashReceived('');
     setSelectedCustomer(null);
+    setExtraPayments([]);
+    setFirstAmountInput('');
+  }
+
+  // Parked carts (venta en espera) ────────────────────────────────────────────
+
+  function openParkModal() {
+    setParkNameInput('');
+  }
+
+  function confirmPark() {
+    const name = (parkNameInput || '').trim() || `Venta ${parkedCarts.length + 1}`;
+    const parked: ParkedCart = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      createdAt: Date.now(),
+      items: cart,
+      customer: selectedCustomer,
+      globalDiscountInput,
+    };
+    const updated = [...parkedCarts, parked];
+    setParkedCarts(updated);
+    saveParkedCarts(updated);
+    clearCart();
+    setParkNameInput(null);
+    toast(`"${name}" dejado en espera`, 'success');
+  }
+
+  function requestResume(parked: ParkedCart) {
+    if (cart.length > 0) {
+      setResumeCandidate(parked);
+    } else {
+      doResume(parked);
+    }
+  }
+
+  function doResume(parked: ParkedCart) {
+    // Refresh product refs so deactivated/deleted products surface a warning instead of stale data.
+    const restoredItems = parked.items.map(item => {
+      const fresh = products.find(p => p.id === item.product.id);
+      if (fresh) return { ...item, product: fresh };
+      return { ...item, product: { ...item.product, active: false } };
+    });
+    setCart(restoredItems);
+    setSelectedCustomer(parked.customer);
+    setGlobalDiscountInput(parked.globalDiscountInput);
+    const updated = parkedCarts.filter(p => p.id !== parked.id);
+    setParkedCarts(updated);
+    saveParkedCarts(updated);
+    setResumeCandidate(null);
+    setParkListOpen(false);
+    if (isMobile) setMobileTab('cart');
+  }
+
+  function doDiscard(id: string) {
+    const updated = parkedCarts.filter(p => p.id !== id);
+    setParkedCarts(updated);
+    saveParkedCarts(updated);
+    setDiscardTarget(null);
   }
 
   const globalDiscount = allowGlobalDiscount ? parseInputCOP(globalDiscountInput) : 0;
 
-  // Totals
-  const subtotal = cart.reduce((sum, i) => sum + i.unitPrice * i.quantity - i.discount, 0);
-  const total = subtotal - globalDiscount;
+  // Totals — calcSubtotal/calcTax/calcTotal live in lib/saleCalc.ts (unit
+  // tested) and must match internal/service/sale.go's recalculation exactly,
+  // or the server rejects the sale as "total inconsistente".
+  const calcItems = cart.map(i => ({ unitPrice: i.unitPrice, quantity: i.quantity, discount: i.discount, taxRate: i.product.tax_rate ?? 0 }));
+  const subtotal = calcSubtotal(calcItems);
+  const tax = calcTax(calcItems);
+  const total = calcTotal(calcItems, globalDiscount);
   const cashReceivedNum = parseInputCOP(cashReceived);
   const change = payMethod === 'efectivo' ? Math.max(0, cashReceivedNum - total) : 0;
+
+  // Pago mixto: with no extra lines, the primary method covers the full total
+  // (identical to the pre-existing single-method behavior).
+  const isMixedMode = extraPayments.length > 0;
+  const firstLineAmount = isMixedMode ? parseInputCOP(firstAmountInput) : total;
+  const paymentLines: { method: PaymentMethod; amount: number }[] = [
+    { method: payMethod, amount: firstLineAmount },
+    ...extraPayments.map(e => ({ method: e.method, amount: parseInputCOP(e.amountInput) })),
+  ];
+  const paymentsCovered = sumPayments(paymentLines);
+  const remaining = total - paymentsCovered;
+  const paymentsBalanced = linesBalanced(paymentLines, total);
+  const anyLineIsCredit = paymentLines.some(l => l.method === 'credito');
+
+  function addPaymentLine() {
+    const used = new Set(paymentLines.map(l => l.method));
+    const next = (['efectivo', 'transferencia', 'tarjeta', 'credito'] as PaymentMethod[]).find(m => !used.has(m))
+      ?? 'transferencia';
+    setExtraPayments(prev => [...prev, { method: next, amountInput: '' }]);
+  }
+
+  function removePaymentLine(idx: number) {
+    setExtraPayments(prev => prev.filter((_, i) => i !== idx));
+  }
 
   // Cobrar
   async function handleCobrar() {
@@ -747,8 +926,12 @@ export default function POSPage() {
       toast('El total debe ser mayor a cero', 'error');
       return;
     }
-    if (payMethod === 'credito' && !selectedCustomer) {
+    if (anyLineIsCredit && !selectedCustomer) {
       toast('Selecciona un cliente para ventas a crédito', 'error');
+      return;
+    }
+    if (!paymentsBalanced) {
+      toast('La suma de los pagos debe ser igual al total', 'error');
       return;
     }
 
@@ -757,10 +940,13 @@ export default function POSPage() {
       const pmMap: Record<string, string> = { efectivo: 'cash', transferencia: 'transfer', tarjeta: 'card', credito: 'credit' };
       const body: Record<string, unknown> = {
         payment_method: pmMap[payMethod] ?? payMethod,
+        payments: paymentLines
+          .filter(l => l.amount > 0)
+          .map(l => ({ method: pmMap[l.method] ?? l.method, amount: l.amount })),
         ...(selectedCustomer && { customer_id: selectedCustomer.id }),
         subtotal,
         discount: globalDiscount,
-        tax: 0,
+        tax,
         total,
         status: 'completed',
         items: cart.map(i => ({
@@ -772,7 +958,7 @@ export default function POSPage() {
         })),
       };
 
-      if (payMethod === 'efectivo') {
+      if (!isMixedMode && payMethod === 'efectivo') {
         body.cash_tendered = cashReceivedNum || total;
         body.change_amount = change;
       }
@@ -794,7 +980,7 @@ export default function POSPage() {
     }
   }
 
-  const canCobrar = cart.length > 0 && !cobrarLoading && !(payMethod === 'credito' && !selectedCustomer);
+  const canCobrar = cart.length > 0 && !cobrarLoading && paymentsBalanced && !(anyLineIsCredit && !selectedCustomer);
 
   return (
     <AppLayout>
@@ -807,6 +993,7 @@ export default function POSPage() {
       {isMobile && (
         <div style={{
           display: 'flex',
+          alignItems: 'center',
           borderBottom: '1px solid var(--border)',
           background: 'var(--surface-1)',
         }}>
@@ -836,6 +1023,21 @@ export default function POSPage() {
           >
             Carrito {cart.length > 0 && `(${cart.length})`}
           </button>
+          {parkedCarts.length > 0 && (
+            <button
+              onClick={() => setParkListOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '4px',
+                fontSize: '11px', fontWeight: 600, color: 'var(--accent)',
+                background: 'var(--accent-dim)', border: '1px solid var(--accent)',
+                borderRadius: '999px', padding: '4px 9px', cursor: 'pointer',
+                margin: '0 8px', flexShrink: 0,
+              }}
+            >
+              <IconClock />
+              En espera ({parkedCarts.length})
+            </button>
+          )}
         </div>
       )}
 
@@ -931,17 +1133,44 @@ export default function POSPage() {
               <IconCart />
               Carrito
             </div>
-            {cart.length > 0 && (
-              <button
-                onClick={clearCart}
-                style={{
-                  fontSize: '12px', color: 'var(--text-muted)', background: 'transparent',
-                  border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: '4px',
-                }}
-              >
-                Vaciar
-              </button>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {!isMobile && parkedCarts.length > 0 && (
+                <button
+                  onClick={() => setParkListOpen(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    fontSize: '12px', fontWeight: 600, color: 'var(--accent)',
+                    background: 'var(--accent-dim)', border: '1px solid var(--accent)',
+                    borderRadius: '999px', padding: '4px 10px', cursor: 'pointer',
+                  }}
+                >
+                  <IconClock />
+                  En espera ({parkedCarts.length})
+                </button>
+              )}
+              {cart.length > 0 && (
+                <button
+                  onClick={openParkModal}
+                  style={{
+                    fontSize: '12px', color: 'var(--text-secondary)', background: 'transparent',
+                    border: '1px solid var(--border)', cursor: 'pointer', padding: '3px 8px', borderRadius: '4px',
+                  }}
+                >
+                  Dejar en espera
+                </button>
+              )}
+              {cart.length > 0 && (
+                <button
+                  onClick={clearCart}
+                  style={{
+                    fontSize: '12px', color: 'var(--text-muted)', background: 'transparent',
+                    border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: '4px',
+                  }}
+                >
+                  Vaciar
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Cart items */}
@@ -1002,6 +1231,14 @@ export default function POSPage() {
               </div>
             )}
 
+            {/* IVA */}
+            {tax > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                <span>IVA</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCOP(tax)}</span>
+              </div>
+            )}
+
             {/* Total */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
@@ -1018,13 +1255,107 @@ export default function POSPage() {
                   value={m}
                   label={m.charAt(0).toUpperCase() + m.slice(1)}
                   active={payMethod === m}
-                  onClick={() => { setPayMethod(m); if (m !== 'credito') setSelectedCustomer(null); }}
+                  onClick={() => {
+                    setPayMethod(m);
+                    const stillNeedsCredit = m === 'credito' || extraPayments.some(e => e.method === 'credito');
+                    if (!stillNeedsCredit) setSelectedCustomer(null);
+                  }}
                 />
               ))}
             </div>
 
+            {/* Pago mixto: additional payment lines + coverage indicator */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {isMixedMode && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <span>{payMethod.charAt(0).toUpperCase() + payMethod.slice(1)}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={firstAmountInput}
+                    placeholder="0"
+                    onChange={e => setFirstAmountInput(formatInputCOP(e.target.value))}
+                    style={{
+                      width: '110px', textAlign: 'right', padding: '3px 8px',
+                      border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--text-primary)',
+                      fontSize: '13px', fontVariantNumeric: 'tabular-nums',
+                    }}
+                  />
+                </div>
+              )}
+              {extraPayments.map((line, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <select
+                    value={line.method}
+                    onChange={e => {
+                      const method = e.target.value as PaymentMethod;
+                      setExtraPayments(prev => prev.map((l, i) => (i === idx ? { ...l, method } : l)));
+                    }}
+                    style={{
+                      flex: 1, minWidth: 0, padding: '5px 6px',
+                      border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--text-primary)', fontSize: '12px',
+                    }}
+                  >
+                    {(['efectivo', 'transferencia', 'tarjeta', 'credito'] as PaymentMethod[]).map(m => (
+                      <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={line.amountInput}
+                    placeholder="0"
+                    onChange={e => {
+                      const amountInput = formatInputCOP(e.target.value);
+                      setExtraPayments(prev => prev.map((l, i) => (i === idx ? { ...l, amountInput } : l)));
+                    }}
+                    style={{
+                      width: '100px', textAlign: 'right', padding: '5px 8px',
+                      border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--text-primary)',
+                      fontSize: '12px', fontVariantNumeric: 'tabular-nums',
+                    }}
+                  />
+                  <button
+                    onClick={() => removePaymentLine(idx)}
+                    aria-label="Quitar método de pago"
+                    style={{
+                      padding: '5px 9px', border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--danger)', fontSize: '13px', cursor: 'pointer',
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {paymentLines.length < 3 && (
+                <button
+                  onClick={addPaymentLine}
+                  style={{
+                    alignSelf: 'flex-start', padding: '5px 8px',
+                    border: '1px dashed var(--border)', borderRadius: '4px',
+                    background: 'transparent', color: 'var(--accent)', fontSize: '12px', cursor: 'pointer',
+                  }}
+                >
+                  + Agregar otro método de pago
+                </button>
+              )}
+              {isMixedMode && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {remaining > 0.5 ? 'Falta cubrir' : remaining < -0.5 ? 'Excede por' : 'Cubierto'}
+                  </span>
+                  <span style={{ color: paymentsBalanced ? 'var(--success)' : 'var(--danger)', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCOP(Math.abs(remaining))}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Customer picker — only for credit */}
-            {payMethod === 'credito' && (
+            {anyLineIsCredit && (
               <div>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
                   Cliente *
@@ -1073,8 +1404,8 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* Efectivo: recibido + cambio */}
-            {payMethod === 'efectivo' && (
+            {/* Efectivo: recibido + cambio (solo pago único, no en modo mixto) */}
+            {!isMixedMode && payMethod === 'efectivo' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   <span>Recibido</span>
@@ -1161,6 +1492,133 @@ export default function POSPage() {
           </div>
         </div>
       )}
+
+      {/* Park name modal */}
+      {parkNameInput !== null && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998,
+          }}
+          onClick={() => setParkNameInput(null)}
+        >
+          <div
+            style={{
+              background: 'var(--surface-1)', border: '1px solid var(--border-emphasis)',
+              borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '360px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Dejar carrito en espera
+            </h3>
+            <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              Ponle un nombre corto para identificarlo (ej. &quot;Pedro&quot;).
+            </p>
+            <input
+              autoFocus
+              value={parkNameInput}
+              onChange={e => setParkNameInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmPark(); }}
+              placeholder={`Venta ${parkedCarts.length + 1}`}
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: '13px', marginBottom: '18px' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-sm" onClick={() => setParkNameInput(null)}>Cancelar</button>
+              <button className="btn btn-sm btn-accent" onClick={confirmPark}>Dejar en espera</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Parked carts list (drawer/modal) */}
+      {parkListOpen && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center',
+            zIndex: 9997,
+          }}
+          onClick={() => setParkListOpen(false)}
+        >
+          <div
+            style={{
+              background: 'var(--surface-1)', border: '1px solid var(--border-emphasis)',
+              borderRadius: isMobile ? '12px 12px 0 0' : '12px',
+              padding: '20px', width: isMobile ? '100%' : '420px',
+              maxHeight: '80vh', overflowY: 'auto',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Ventas en espera
+              </h3>
+              <button
+                onClick={() => setParkListOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '18px', cursor: 'pointer', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            {parkedCarts.length === 0 ? (
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>No hay carritos en espera.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {parkedCarts.map(parked => {
+                  const parkedTotal = parked.items.reduce((s, i) => s + i.unitPrice * i.quantity - i.discount, 0);
+                  return (
+                    <div
+                      key={parked.id}
+                      style={{
+                        border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 12px',
+                        display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--surface-2)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{parked.name}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatElapsed(parked.createdAt)}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        <span>{parked.items.length} artículo{parked.items.length !== 1 ? 's' : ''}</span>
+                        <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--accent)' }}>{formatCOP(parkedTotal)}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button className="btn btn-sm btn-danger" onClick={() => setDiscardTarget(parked)}>Descartar</button>
+                        <button className="btn btn-sm btn-accent" onClick={() => requestResume(parked)}>Retomar</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirm: resume while active cart has items */}
+      <ConfirmDialog
+        open={resumeCandidate !== null}
+        title="Reemplazar carrito activo"
+        message={`El carrito actual tiene ${cart.length} artículo${cart.length !== 1 ? 's' : ''}. Al retomar "${resumeCandidate?.name}" se reemplazará. ¿Continuar? (el carrito actual no se guarda)`}
+        confirmLabel="Retomar"
+        danger
+        onConfirm={() => resumeCandidate && doResume(resumeCandidate)}
+        onCancel={() => setResumeCandidate(null)}
+      />
+
+      {/* Confirm: discard parked cart */}
+      <ConfirmDialog
+        open={discardTarget !== null}
+        title="Descartar venta en espera"
+        message={`Se eliminará "${discardTarget?.name}" y no se podrá recuperar.`}
+        confirmLabel="Descartar"
+        danger
+        onConfirm={() => discardTarget && doDiscard(discardTarget.id)}
+        onCancel={() => setDiscardTarget(null)}
+      />
     </AppLayout>
   );
 }

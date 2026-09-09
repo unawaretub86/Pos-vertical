@@ -38,6 +38,8 @@ type todayResponse struct {
 	TopProductName        string            `json:"top_product_name"`
 	TopProductQty         float64           `json:"top_product_qty"`
 	GrossProfit           float64           `json:"gross_profit"`
+	ExpensesToday         float64           `json:"expenses_today"`
+	NetProfit             float64           `json:"net_profit"`
 	UnconfiguredCostCount int               `json:"unconfigured_cost_count"`
 	TopByMargin           []topMarginItem   `json:"top_by_margin"`
 	LowStock              []lowStockItem    `json:"low_stock"`
@@ -65,9 +67,10 @@ func (h *Handler) getDashboardToday(w http.ResponseWriter, r *http.Request) {
 
 	// Fiado nuevo hoy
 	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(total), 0)
-		FROM sales
-		WHERE status = 'completed' AND payment_method = 'credit' AND created_at >= ? AND created_at < ?`,
+		SELECT COALESCE(SUM(sp.amount), 0)
+		FROM sale_payments sp
+		JOIN sales s ON s.id = sp.sale_id
+		WHERE s.status = 'completed' AND sp.method = 'credit' AND s.created_at >= ? AND s.created_at < ?`,
 		todayStart, todayEnd,
 	).Scan(&resp.CreditNewToday) //nolint:errcheck
 
@@ -82,9 +85,10 @@ func (h *Handler) getDashboardToday(w http.ResponseWriter, r *http.Request) {
 	// Efectivo en caja estimado = cash sales today − cash_out movements today
 	var cashSales, cashOut float64
 	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(total), 0)
-		FROM sales
-		WHERE status = 'completed' AND payment_method = 'cash' AND created_at >= ? AND created_at < ?`,
+		SELECT COALESCE(SUM(sp.amount), 0)
+		FROM sale_payments sp
+		JOIN sales s ON s.id = sp.sale_id
+		WHERE s.status = 'completed' AND sp.method = 'cash' AND s.created_at >= ? AND s.created_at < ?`,
 		todayStart, todayEnd,
 	).Scan(&cashSales) //nolint:errcheck
 
@@ -128,6 +132,10 @@ func (h *Handler) getDashboardToday(w http.ResponseWriter, r *http.Request) {
 		WHERE s.status = 'completed' AND s.created_at >= ? AND s.created_at < ?`,
 		todayStart, todayEnd,
 	).Scan(&resp.GrossProfit, &resp.UnconfiguredCostCount) //nolint:errcheck
+
+	// Gastos de hoy → ganancia neta (US-049)
+	resp.ExpensesToday, _ = h.expenses.SumRange(ctx, todayStart, todayEnd)
+	resp.NetProfit = resp.GrossProfit - resp.ExpensesToday
 
 	// Top 5 productos por margen (solo cost > 0)
 	marginRows, err := db.QueryContext(ctx, `
@@ -188,10 +196,11 @@ func (h *Handler) getDashboardToday(w http.ResponseWriter, r *http.Request) {
 		SELECT
 			c.id,
 			c.name,
-			COALESCE(SUM(s.total), 0) - COALESCE(SUM(cp.paid), 0) AS balance,
+			COALESCE(SUM(sp.amount), 0) - COALESCE(SUM(cp.paid), 0) AS balance,
 			CAST(julianday('now') - julianday(MIN(s.created_at)) AS INTEGER) AS days_overdue
 		FROM customers c
-		JOIN sales s ON s.customer_id = c.id AND s.payment_method = 'credit' AND s.status = 'completed'
+		JOIN sales s ON s.customer_id = c.id AND s.status = 'completed'
+		JOIN sale_payments sp ON sp.sale_id = s.id AND sp.method = 'credit'
 		LEFT JOIN (
 			SELECT customer_id, SUM(amount) AS paid FROM customer_payments GROUP BY customer_id
 		) cp ON cp.customer_id = c.id

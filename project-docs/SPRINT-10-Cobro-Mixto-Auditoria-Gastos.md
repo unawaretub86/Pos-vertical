@@ -17,10 +17,10 @@
 
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
-| US-046 | Pago mixto en el cobro | [ ] Pendiente | — |
-| US-047 | Pantalla de auditoría | [ ] Pendiente | — |
-| US-048 | Venta en espera | [ ] Pendiente | — |
-| US-049 | Gastos del negocio | [ ] Pendiente | — |
+| US-046 | Pago mixto en el cobro | [x] Completo | 2026-09-08 |
+| US-047 | Pantalla de auditoría | [x] Completo | 2026-09-08 |
+| US-048 | Venta en espera | [x] Completo | 2026-09-08 |
+| US-049 | Gastos del negocio | [x] Completo | 2026-09-08 |
 
 ---
 
@@ -54,29 +54,29 @@
 **Acceptance Criteria:**
 
 **Parquear:**
-- [ ] Botón "Dejar en espera" visible en el POS mientras el carrito tiene al menos 1 ítem
-- [ ] Al presionarlo, pide un nombre corto (ej. "Pedro" o "Cliente 1") y guarda: nombre, hora, ítems, cliente seleccionado (si había), descuento aplicado
-- [ ] El carrito activo se vacía después de parquear, listo para la siguiente venta
-- [ ] Si no se ingresa nombre, usa "Venta N" autoincremental
+- [x] Botón "Dejar en espera" visible en el POS mientras el carrito tiene al menos 1 ítem
+- [x] Al presionarlo, pide un nombre corto (ej. "Pedro" o "Cliente 1") y guarda: nombre, hora, ítems, cliente seleccionado (si había), descuento aplicado
+- [x] El carrito activo se vacía después de parquear, listo para la siguiente venta
+- [x] Si no se ingresa nombre, usa "Venta N" autoincremental
 
 **Retomar:**
-- [ ] Un indicador "En espera (N)" siempre visible en el POS cuando hay ≥1 carrito parqueado
-- [ ] Al abrir la lista, se ve nombre, hora ("hace 8 min") y total de cada carrito en espera
-- [ ] Al seleccionar uno, se carga completo en el carrito activo (ítems, cliente, descuento) y se quita de la lista de espera
-- [ ] Si el carrito activo actual tiene ítems al momento de retomar uno en espera, se pide confirmación (no se pierde silenciosamente)
-- [ ] Botón "Descartar" por carrito en espera, con confirmación
+- [x] Un indicador "En espera (N)" siempre visible en el POS cuando hay ≥1 carrito parqueado
+- [x] Al abrir la lista, se ve nombre, hora ("hace 8 min") y total de cada carrito en espera
+- [x] Al seleccionar uno, se carga completo en el carrito activo (ítems, cliente, descuento) y se quita de la lista de espera
+- [x] Si el carrito activo actual tiene ítems al momento de retomar uno en espera, se pide confirmación (no se pierde silenciosamente)
+- [x] Botón "Descartar" por carrito en espera, con confirmación
 
 **Persistencia y bordes:**
-- [ ] Los carritos en espera sobreviven a un refresh de página (persisten en `localStorage`)
-- [ ] Si algún producto del carrito parqueado fue desactivado o eliminado mientras estaba en espera, se muestra con aviso "Ya no disponible" al retomarlo, sin romper el resto del carrito
-- [ ] Responsive: la lista de espera es usable en 320px (modal o drawer, no tabla ancha)
+- [x] Los carritos en espera sobreviven a un refresh de página (persisten en `localStorage`)
+- [x] Si algún producto del carrito parqueado fue desactivado o eliminado mientras estaba en espera, se muestra con aviso "Ya no disponible" al retomarlo, sin romper el resto del carrito
+- [x] Responsive: la lista de espera es usable en 320px (modal o drawer, no tabla ancha)
 
 **DoD:**
-- [ ] Sin cambios de backend, sin migración
-- [ ] Estado de "en espera" vive en `localStorage` bajo una key dedicada (ej. `pos.parkedCarts`), serializado como array de objetos
-- [ ] Test manual: parquear 2 carritos con nombres distintos, retomar el segundo, confirmar que el primero sigue intacto en la lista
-- [ ] Test manual: parquear un carrito, recargar la página, confirmar que sigue apareciendo en "En espera"
-- [ ] Build limpio (`npm run build`)
+- [x] Sin cambios de backend, sin migración
+- [x] Estado de "en espera" vive en `localStorage` bajo una key dedicada (ej. `pos.parkedCarts`), serializado como array de objetos
+- [x] Test manual: parquear 2 carritos con nombres distintos, retomar el segundo, confirmar que el primero sigue intacto en la lista
+- [x] Test manual: parquear un carrito, recargar la página, confirmar que sigue apareciendo en "En espera"
+- [x] Build limpio (`npm run build`)
 
 ---
 
@@ -101,31 +101,31 @@
 **Acceptance Criteria:**
 
 **Escritura de eventos (backend):**
-- [ ] Anular una venta (`DELETE /sales/{id}/void`) crea una fila `audit_log` con `action='void'`, `entity='sale'`, `entity_id=<sale_id>`, `details` con el motivo si se capturó uno
-- [ ] Aplicar un descuento manual en una venta crea `action='discount'` con `details` incluyendo el % o monto
-- [ ] Registrar una salida de caja (`cash_out`) crea `action='cash_out'`, `entity='register_movement'`
-- [ ] Cambiar `sale_price` o `cost` de un producto vía `PUT /products/{id}` crea `action='product_price_change'` con `details={"field":"sale_price","from":10000,"to":12000}`
-- [ ] Si el campo actualizado no cambió de valor, no se crea entrada (evita ruido de "guardar sin cambios")
-- [ ] Los eventos existentes de `price_override` (venta con precio distinto al de catálogo) siguen funcionando sin cambios
+- [x] Anular una venta (`DELETE /sales/{id}/void`) crea una fila `audit_log` con `action='void'`, `entity='sale'`, `entity_id=<sale_id>`, `details` con el motivo si se capturó uno
+- [x] Aplicar un descuento manual en una venta crea `action='discount'` con `details` incluyendo el % o monto
+- [x] Registrar una salida de caja (`cash_out`) crea `action='cash_out'`, `entity='register_movement'`
+- [x] Cambiar `sale_price` o `cost` de un producto vía `PUT /products/{id}` crea `action='product_price_change'` con `details={"field":"sale_price","from":10000,"to":12000}`
+- [x] Si el campo actualizado no cambió de valor, no se crea entrada (evita ruido de "guardar sin cambios")
+- [x] Los eventos existentes de `price_override` (venta con precio distinto al de catálogo) siguen funcionando sin cambios
 
 **Vista de auditoría (frontend, solo admin):**
-- [ ] Página listada solo en el menú si `role === 'admin'`
-- [ ] Tabla con columnas: fecha/hora, usuario, acción, entidad afectada, detalle
-- [ ] Filtro por usuario (dropdown de usuarios activos e inactivos)
-- [ ] Filtro por rango de fechas
-- [ ] Filtro por tipo de acción (dropdown: void, discount, cash_out, product_price_change, price_override)
-- [ ] Sin resultados con los filtros aplicados → mensaje "Sin eventos en este rango"
-- [ ] Un cajero (`role='cashier'`) que intente acceder a la URL directamente recibe 403/redirect, no ve datos
-- [ ] Responsive: tabla con scroll horizontal en 320px
+- [x] Página listada solo en el menú si `role === 'admin'`
+- [x] Tabla con columnas: fecha/hora, usuario, acción, entidad afectada, detalle
+- [x] Filtro por usuario (dropdown de usuarios activos e inactivos)
+- [x] Filtro por rango de fechas
+- [x] Filtro por tipo de acción (dropdown: void, discount, cash_out, product_price_change, price_override)
+- [x] Sin resultados con los filtros aplicados → mensaje "Sin eventos en este rango"
+- [x] Un cajero (`role='cashier'`) que intente acceder a la URL directamente recibe 403/redirect, no ve datos
+- [x] Responsive: tabla con scroll horizontal en 320px
 
 **DoD:**
-- [ ] `GET /api/audit` (grupo admin, igual patrón que `/api/users`) → `[]{id, user_id, username, action, entity, entity_id, details, created_at}` (join con `users` para el nombre)
-- [ ] Query params opcionales: `user_id`, `action`, `from`, `to` — todos combinables con AND
-- [ ] Nuevo `AuditRepo` o extensión de repo existente con método `List(ctx, filter)`
-- [ ] Test: anular una venta → aparece exactamente 1 fila con `action='void'` y el `entity_id` correcto
-- [ ] Test: `PUT /products/{id}` cambiando solo el nombre (no precio/costo) → no crea fila de auditoría
-- [ ] Test: `GET /api/audit?action=cash_out` → retorna solo filas de ese tipo
-- [ ] Build limpio (`go build`, `npm run build`)
+- [x] `GET /api/audit` (grupo admin, igual patrón que `/api/users`) → `[]{id, user_id, username, action, entity, entity_id, details, created_at}` (join con `users` para el nombre)
+- [x] Query params opcionales: `user_id`, `action`, `from`, `to` — todos combinables con AND
+- [x] Nuevo `AuditRepo` o extensión de repo existente con método `List(ctx, filter)`
+- [x] Test: anular una venta → aparece exactamente 1 fila con `action='void'` y el `entity_id` correcto
+- [x] Test: `PUT /products/{id}` cambiando solo el nombre (no precio/costo) → no crea fila de auditoría
+- [x] Test: `GET /api/audit?action=cash_out` → retorna solo filas de ese tipo
+- [x] Build limpio (`go build`, `npm run build`)
 
 ---
 
@@ -178,28 +178,28 @@ si len(payments) > 1  → sales.payment_method = 'mixed'
 **Acceptance Criteria:**
 
 **Modal de cobro:**
-- [ ] Por defecto el modal se comporta igual que hoy (un solo método, un solo monto = total)
-- [ ] Botón "Agregar otro método de pago" agrega una segunda línea método+monto
-- [ ] El sistema muestra en todo momento "Falta cubrir: $X" mientras la suma de líneas sea menor al total
-- [ ] No se puede confirmar el cobro si `suma_pagos != total`
-- [ ] Se puede combinar hasta 3 métodos en una misma venta (cash + transfer + credit, por ejemplo)
-- [ ] Si uno de los métodos es `credit` y no hay cliente seleccionado, se bloquea con el mismo mensaje que usa hoy la venta 100% a crédito
-- [ ] El ticket (`getTicket`) muestra el desglose por método cuando la venta es mixta: "Efectivo: $30.000 · Nequi: $20.000 · Fiado: $10.000"
+- [x] Por defecto el modal se comporta igual que hoy (un solo método, un solo monto = total)
+- [x] Botón "Agregar otro método de pago" agrega una segunda línea método+monto
+- [x] El sistema muestra en todo momento "Falta cubrir: $X" mientras la suma de líneas sea menor al total
+- [x] No se puede confirmar el cobro si `suma_pagos != total`
+- [x] Se puede combinar hasta 3 métodos en una misma venta (cash + transfer + credit, por ejemplo)
+- [x] Si uno de los métodos es `credit` y no hay cliente seleccionado, se bloquea con el mismo mensaje que usa hoy la venta 100% a crédito
+- [x] El ticket (`getTicket`) muestra el desglose por método cuando la venta es mixta: "Efectivo: $30.000 · Nequi: $20.000 · Fiado: $10.000"
 
 **Reportes y cierre de caja:**
-- [ ] El reporte de ventas por método de pago (`GET /reports/sales`) suma correctamente cuando hay ventas mixtas (no duplica ni ignora montos)
-- [ ] El cierre de caja calcula `expected_close` sumando solo la porción en efectivo de cada venta, incluidas las mixtas
-- [ ] Responsive: el modal de cobro con múltiples líneas es usable en 320px
+- [x] El reporte de ventas por método de pago (`GET /reports/sales`) suma correctamente cuando hay ventas mixtas (no duplica ni ignora montos)
+- [x] El cierre de caja calcula `expected_close` sumando solo la porción en efectivo de cada venta, incluidas las mixtas
+- [x] Responsive: el modal de cobro con múltiples líneas es usable en 320px
 
 **DoD:**
-- [ ] Migración 12: tabla `sale_payments` + recreación de `sales` (CHECK ampliado a `mixed`) — ver SQL exacto en Contexto técnico
-- [ ] `POST /sales` (autenticado) — body gana `payments: [{method, amount, reference}]` en vez de `payment_method` suelto; respuesta sigue incluyendo `payment_method` (derivado: `'mixed'` o el único método)
-- [ ] `GET /reports/sales` y el cálculo de `expected_close` en cierre de caja actualizados para leer de `sale_payments`
-- [ ] Test: venta de $60.000 con pagos `[{cash,30000},{transfer,20000},{credit,10000}]` → `sales.payment_method='mixed'`, 3 filas en `sale_payments`, cliente queda con `+10000` de saldo
-- [ ] Test: venta con un solo pago `[{cash,15000}]` sobre total $15.000 → se comporta igual que antes (`payment_method='cash'`), sin romper flujo existente
-- [ ] Test: pagos que suman $59.999 sobre total $60.000 (fuera de tolerancia) → rechazada con 400
-- [ ] Test: cierre de caja con 1 venta mixta ($30k cash de $60k total) + 1 venta 100% cash ($20k) → `expected_close` cash = $50.000, no $80.000
-- [ ] Build limpio (`go build`, `npm run build`)
+- [x] Migración 12: tabla `sale_payments` + recreación de `sales` (CHECK ampliado a `mixed`) — ver SQL exacto en Contexto técnico
+- [x] `POST /sales` (autenticado) — body gana `payments: [{method, amount, reference}]` en vez de `payment_method` suelto; respuesta sigue incluyendo `payment_method` (derivado: `'mixed'` o el único método)
+- [x] `GET /reports/sales` y el cálculo de `expected_close` en cierre de caja actualizados para leer de `sale_payments`
+- [x] Test: venta de $60.000 con pagos `[{cash,30000},{transfer,20000},{credit,10000}]` → `sales.payment_method='mixed'`, 3 filas en `sale_payments`, cliente queda con `+10000` de saldo
+- [x] Test: venta con un solo pago `[{cash,15000}]` sobre total $15.000 → se comporta igual que antes (`payment_method='cash'`), sin romper flujo existente
+- [x] Test: pagos que suman $59.999 sobre total $60.000 (fuera de tolerancia) → rechazada con 400
+- [x] Test: cierre de caja con 1 venta mixta ($30k cash de $60k total) + 1 venta 100% cash ($20k) → `expected_close` cash = $50.000, no $80.000
+- [x] Build limpio (`go build`, `npm run build`)
 
 ---
 
@@ -247,33 +247,33 @@ ganancia_neta_hoy  = ganancia_bruta_hoy - gastos_hoy   -- puede ser negativa, se
 **Acceptance Criteria:**
 
 **Registrar gasto:**
-- [ ] Formulario con: categoría (dropdown fijo: Servicios, Arriendo, Nómina, Proveedor, Otro), monto, nota opcional
-- [ ] Monto debe ser mayor a 0, valida en cliente y servidor
-- [ ] Si hay una caja abierta del usuario actual, el gasto se asocia a esa caja automáticamente (sin pedirlo)
-- [ ] Si no hay caja abierta, el gasto se guarda igual (`register_id = null`), sin bloquear el registro
-- [ ] Confirmación visual al guardar ("Gasto registrado: $80.000 — Servicios")
+- [x] Formulario con: categoría (dropdown fijo: Servicios, Arriendo, Nómina, Proveedor, Otro), monto, nota opcional
+- [x] Monto debe ser mayor a 0, valida en cliente y servidor
+- [x] Si hay una caja abierta del usuario actual, el gasto se asocia a esa caja automáticamente (sin pedirlo)
+- [x] Si no hay caja abierta, el gasto se guarda igual (`register_id = null`), sin bloquear el registro
+- [x] Confirmación visual al guardar ("Gasto registrado: $80.000 — Servicios")
 
 **Listado y reporte:**
-- [ ] Lista de gastos del día/rango con categoría, monto, nota, usuario, hora
-- [ ] Filtro por categoría y por rango de fechas
-- [ ] Total de gastos del período visible arriba de la lista
-- [ ] Dashboard muestra "Ganancia neta" junto a "Ganancia bruta" existente, con el signo correcto si los gastos superan la ganancia bruta (número en rojo, no oculta el negativo)
-- [ ] Vacío: sin gastos en el rango → "Sin gastos registrados en este período"
-- [ ] Responsive: formulario y lista usables en 320px
+- [x] Lista de gastos del día/rango con categoría, monto, nota, usuario, hora
+- [x] Filtro por categoría y por rango de fechas
+- [x] Total de gastos del período visible arriba de la lista
+- [x] Dashboard muestra "Ganancia neta" junto a "Ganancia bruta" existente, con el signo correcto si los gastos superan la ganancia bruta (número en rojo, no oculta el negativo)
+- [x] Vacío: sin gastos en el rango → "Sin gastos registrados en este período"
+- [x] Responsive: formulario y lista usables en 320px
 
 **Caja:**
-- [ ] Un gasto registrado con caja abierta aparece también en el detalle de movimientos de esa caja (`GET /registers/{id}/movements`) como `cash_out`
-- [ ] El cierre de caja (`expected_close`) descuenta los gastos igual que cualquier otro `cash_out`, sin doble conteo
+- [x] Un gasto registrado con caja abierta aparece también en el detalle de movimientos de esa caja (`GET /registers/{id}/movements`) como `cash_out`
+- [x] El cierre de caja (`expected_close`) descuenta los gastos igual que cualquier otro `cash_out`, sin doble conteo
 
 **DoD:**
-- [ ] Migración 12 (compartida con US-046): tabla `expenses` — ver SQL exacto en Contexto técnico
-- [ ] `POST /api/expenses` (autenticado) → `{category, amount, note}` → crea gasto y, si hay caja abierta, movimiento `cash_out` asociado
-- [ ] `GET /api/expenses?from=&to=&category=` (autenticado) → lista + total
-- [ ] `GET /api/dashboard/today` extiende la respuesta con `net_profit` (además del `gross_profit` existente)
-- [ ] Test: gasto de $80.000 (Servicios) con caja abierta → aparece en `register_movements` como `cash_out` y en `expected_close` del cierre
-- [ ] Test: ganancia bruta $200.000 hoy, gastos $80.000 + $40.000 hoy → `net_profit = 80.000`
-- [ ] Test: gasto con monto 0 o negativo → rechazado con 400
-- [ ] Build limpio (`go build`, `npm run build`)
+- [x] Migración 12 (compartida con US-046): tabla `expenses` — ver SQL exacto en Contexto técnico
+- [x] `POST /api/expenses` (autenticado) → `{category, amount, note}` → crea gasto y, si hay caja abierta, movimiento `cash_out` asociado
+- [x] `GET /api/expenses?from=&to=&category=` (autenticado) → lista + total
+- [x] `GET /api/dashboard/today` extiende la respuesta con `net_profit` (además del `gross_profit` existente)
+- [x] Test: gasto de $80.000 (Servicios) con caja abierta → aparece en `register_movements` como `cash_out` y en `expected_close` del cierre
+- [x] Test: ganancia bruta $200.000 hoy, gastos $80.000 + $40.000 hoy → `net_profit = 80.000`
+- [x] Test: gasto con monto 0 o negativo → rechazado con 400
+- [x] Build limpio (`go build`, `npm run build`)
 
 ---
 
