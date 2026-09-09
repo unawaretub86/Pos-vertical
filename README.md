@@ -10,7 +10,7 @@ Sistema de Punto de Venta offline para pequeños negocios en Colombia. Corre com
 |---|---|---|
 | Go | 1.21+ | Backend + compilación del binario |
 | Node.js | 18+ | Compilar el frontend |
-| npm | 9+ | Dependencias del frontend |
+| pnpm | 9+ | Dependencias del frontend (único package manager soportado, ver `frontend/package.json#packageManager`) |
 | make | cualquiera | Correr los scripts de build |
 
 > **Windows:** `make` viene con Git for Windows (Git Bash) o se puede instalar con `winget install GnuWin32.Make`.
@@ -25,7 +25,7 @@ git clone <repo-url>
 cd Pos-vertical
 
 # 2. Instalar dependencias del frontend
-cd frontend && npm install && cd ..
+cd frontend && pnpm install && cd ..
 
 # 3. Descargar dependencias de Go
 go mod download
@@ -89,7 +89,7 @@ Pos-vertical/
 El problema central es que Go no puede usar `//go:embed` con rutas `../` (no puede salir de su directorio). Por eso el flujo de build es:
 
 ```
-npm run build
+pnpm run build
     └─→ frontend/out/          (Next.js static export)
             │
 go run scripts/copy-frontend.go

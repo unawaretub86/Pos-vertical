@@ -10,7 +10,7 @@ icon:
 	cd cmd/pos && go generate
 
 frontend:
-	cd frontend && npm run build
+	cd frontend && pnpm run build
 	go run scripts/copy-frontend.go
 
 backend:
@@ -20,7 +20,7 @@ build: frontend backend
 
 # Cross-compile for Windows from any OS (no CGO required - uses modernc.org/sqlite)
 build-windows:
-	cd frontend && npm run build
+	cd frontend && pnpm run build
 	go run scripts/copy-frontend.go
 	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o pos.exe ./cmd/pos
 
@@ -28,4 +28,4 @@ dev-backend:
 	go run ./cmd/pos
 
 dev-frontend:
-	cd frontend && npm run dev
+	cd frontend && pnpm run dev
