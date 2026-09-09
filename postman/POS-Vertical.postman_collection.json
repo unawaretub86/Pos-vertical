@@ -16,6 +16,46 @@
   },
   "event": [
     {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-auth compartido: si no hay authToken (o el usuario/password cambiaron),",
+          "// loguea una sola vez y lo comparte para toda la coleccion, sin importar el orden de corrida.",
+          "const url = pm.request.url.toString();",
+          "const isLoginRequest = url.indexOf('/auth/login') !== -1;",
+          "const hasOwnAuth = pm.request.auth && pm.request.auth.type && pm.request.auth.type !== 'bearer';",
+          "",
+          "if (!isLoginRequest && !hasOwnAuth && !pm.environment.get('authToken')) {",
+          "    const baseUrl = pm.environment.get('baseUrl');",
+          "    const username = pm.environment.get('username');",
+          "    const password = pm.environment.get('password');",
+          "",
+          "    pm.sendRequest({",
+          "        url: baseUrl + '/auth/login',",
+          "        method: 'POST',",
+          "        header: { 'Content-Type': 'application/json' },",
+          "        body: {",
+          "            mode: 'raw',",
+          "            raw: JSON.stringify({ username: username, password: password })",
+          "        }",
+          "    }, function (err, res) {",
+          "        if (err) {",
+          "            console.error('Auto-login fallo (error de red):', err);",
+          "            return;",
+          "        }",
+          "        if (res.code !== 200) {",
+          "            console.error('Auto-login fallo, status:', res.code, res.text());",
+          "            return;",
+          "        }",
+          "        const token = res.json().data.token;",
+          "        pm.environment.set('authToken', token);",
+          "    });",
+          "}"
+        ]
+      }
+    },
+    {
       "listen": "test",
       "script": {
         "type": "text/javascript",
@@ -2481,7 +2521,12 @@
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "pm.test('Mensaje de confirmacion', function () {",
                   "    pm.expect(pm.response.json().data.message).to.be.a('string').and.not.empty;",
-                  "});"
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    // Mantiene {{password}} en sync con la clave real para que el login",
+                  "    // (y el auto-auth compartido) sigan funcionando en la proxima corrida.",
+                  "    pm.environment.set('password', 'NuevaClave123');",
+                  "}"
                 ]
               }
             }
@@ -2496,7 +2541,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"current_password\": \"admin\",\n  \"new_password\": \"NuevaClave123\"\n}",
+              "raw": "{\n  \"current_password\": \"{{password}}\",\n  \"new_password\": \"NuevaClave123\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

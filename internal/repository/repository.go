@@ -15,6 +15,8 @@ type UserRepository interface {
 	Create(ctx context.Context, u *model.User) (*model.User, error)
 	Update(ctx context.Context, u *model.User) (*model.User, error)
 	UpdatePassword(ctx context.Context, id int64, passwordHash string) error
+	// OnboardAdmin sets full_name, username and password_hash on an existing user in place.
+	OnboardAdmin(ctx context.Context, id int64, fullName, username, passwordHash string) (*model.User, error)
 	// Deactivate sets active=false; never hard-deletes.
 	Deactivate(ctx context.Context, id int64) error
 	// CountAdmins returns the number of active admin users.

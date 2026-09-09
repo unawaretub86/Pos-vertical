@@ -32,6 +32,7 @@ var dbMigrations = []migration{
 	{version: 8, up: migration8},
 	{version: 9, up: migration9},
 	{version: 10, up: migration10},
+	{version: 11, up: migration11},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -356,6 +357,13 @@ ALTER TABLE fiscal_config ADD COLUMN municipality_id INTEGER NOT NULL DEFAULT 14
 const migration10 = `
 ALTER TABLE customers ADD COLUMN notes TEXT NOT NULL DEFAULT '';
 ALTER TABLE customers ADD COLUMN credit_limit INTEGER;
+`
+
+// migration11 adds first-run onboarding support: a completion flag on
+// business_config and a full_name column on users (set by the wizard).
+const migration11 = `
+ALTER TABLE business_config ADD COLUMN setup_completed BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
 `
 
 // migration6 adds price override tracking to sale_items and creates the audit_log table.

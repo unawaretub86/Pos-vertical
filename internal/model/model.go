@@ -53,6 +53,7 @@ type ElectronicDocument struct {
 
 type User struct {
 	ID           int64     `json:"id"`
+	FullName     string    `json:"full_name"`
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`

@@ -80,6 +80,8 @@ func (h *Handler) Routes() http.Handler {
 
 	// Public
 	r.Post("/auth/login", h.login)
+	r.Get("/setup/status", h.getSetupStatus)
+	r.Post("/onboarding", h.submitOnboarding)
 
 	// Protected
 	r.Group(func(r chi.Router) {

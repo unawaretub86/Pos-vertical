@@ -54,7 +54,32 @@
       "Bash(python3)",
       "Bash(rm -f data.db data.db-*)",
       "Bash(rm -rf data.db.backup-*)",
-      "Bash(PowerShell.exe -Command \"Get-Process pos-test -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 500\")"
+      "Bash(PowerShell.exe -Command \"Get-Process pos-test -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 500\")",
+      "Bash(npx --no-install newman run postman/POS-Vertical.postman_collection.json -e postman/POS-Vertical.postman_environment.json --reporters cli)",
+      "Read(//tmp/**)",
+      "PowerShell(Test-NetConnection *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(bash \"C:\\\\Users\\\\ANDREYO\\\\.claude\\\\skills\\\\brainstorming\\\\scripts\\\\stop-server.sh\" \"C:\\\\Users\\\\ANDREYO\\\\Desktop\\\\PROJECTS\\\\Pos-vertical\\\\.superpowers\\\\brainstorm\\\\2084-1785439243\")",
+      "Bash(node *)",
+      "Bash(chromium-cli --help)",
+      "Bash(taskkill //F //IM pos.exe)",
+      "Bash(cd C:/Users/ANDREYO/AppData/Local/Temp/claude/C--Users-ANDREYO-Desktop-PROJECTS-Pos-vertical/fee1a495-2580-4b1e-9c28-04e074c8564d/scratchpad)",
+      "Bash(tail *)",
+      "Bash(go vet *)",
+      "Bash(make frontend *)",
+      "Bash(make backend *)",
+      "Bash(mkdir -p /c/Users/ANDREYO/AppData/Local/Temp/claude/C--Users-ANDREYO-Desktop-PROJECTS-Pos-vertical/fa2e6993-1059-42ea-b87d-7be8254dfc58/scratchpad/onboarding-smoke)",
+      "Bash(cp /c/Users/ANDREYO/Desktop/PROJECTS/Pos-vertical/pos.exe /c/Users/ANDREYO/AppData/Local/Temp/claude/C--Users-ANDREYO-Desktop-PROJECTS-Pos-vertical/fa2e6993-1059-42ea-b87d-7be8254dfc58/scratchpad/onboarding-smoke/pos.exe)",
+      "Read(//c/Users/ANDREYO/AppData/Local/Temp/claude/C--Users-ANDREYO-Desktop-PROJECTS-Pos-vertical/fa2e6993-1059-42ea-b87d-7be8254dfc58/scratchpad/**)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(gofmt -l .)",
+      "Bash(git check-ignore *)",
+      "Bash(git ls-tree *)",
+      "Bash(git status *)",
+      "Bash(git rev-list *)",
+      "Bash(git rm *)",
+      "Bash(grep -E \"frontend$|favicon\")"
     ]
   }
 }
