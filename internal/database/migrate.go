@@ -29,6 +29,10 @@ var dbMigrations = []migration{
 	{version: 5, up: migration5},
 	{version: 6, up: migration6},
 	{version: 7, up: migration7},
+	{version: 8, up: migration8},
+	{version: 9, up: migration9},
+	{version: 10, up: migration10},
+	{version: 11, up: migration11},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -59,9 +63,12 @@ func (db *DB) migrate() error {
 	}
 
 	// Checkpoint the WAL before backup so the copy includes all committed data.
-	_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
-	if err := backupDB(db.path); err != nil {
-		return fmt.Errorf("backup before migration: %w", err)
+	// Skip backup for in-memory databases (used in tests).
+	if db.path != ":memory:" {
+		_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+		if err := backupDB(db.path); err != nil {
+			return fmt.Errorf("backup before migration: %w", err)
+		}
 	}
 
 	for _, m := range pending {
@@ -282,6 +289,81 @@ ALTER TABLE business_config ADD COLUMN allow_global_discount INTEGER NOT NULL DE
 const migration7 = `
 ALTER TABLE products ADD COLUMN barcode TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode) WHERE barcode IS NOT NULL;
+`
+
+const migration8 = `
+ALTER TABLE business_config ADD COLUMN ciiu TEXT;
+
+ALTER TABLE customers ADD COLUMN email TEXT;
+ALTER TABLE customers ADD COLUMN document_type TEXT DEFAULT 'CC';
+ALTER TABLE customers ADD COLUMN document_number TEXT;
+ALTER TABLE customers ADD COLUMN tax_regime TEXT DEFAULT 'simplified';
+
+CREATE TABLE IF NOT EXISTS fiscal_config (
+    id                  INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled             INTEGER NOT NULL DEFAULT 0,
+    nit                 TEXT NOT NULL DEFAULT '',
+    razon_social        TEXT NOT NULL DEFAULT '',
+    direccion           TEXT NOT NULL DEFAULT '',
+    ciiu                TEXT NOT NULL DEFAULT '',
+    resolucion_dian     TEXT NOT NULL DEFAULT '',
+    prefijo             TEXT DEFAULT '',
+    rango_desde         INTEGER NOT NULL DEFAULT 0,
+    rango_hasta         INTEGER NOT NULL DEFAULT 0,
+    fecha_resolucion    DATE,
+    fecha_vencimiento   DATE,
+    clave_tecnica       TEXT NOT NULL DEFAULT '',
+    ambiente            TEXT NOT NULL DEFAULT 'test',
+    software_id         TEXT NOT NULL DEFAULT '',
+    software_pin        TEXT NOT NULL DEFAULT '',
+    provider            TEXT NOT NULL DEFAULT 'factus',
+    provider_client_id  TEXT NOT NULL DEFAULT '',
+    provider_secret     TEXT NOT NULL DEFAULT '',
+    webhook_url         TEXT,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+INSERT OR IGNORE INTO fiscal_config (id) VALUES (1);
+
+CREATE TABLE IF NOT EXISTS electronic_documents (
+    id               TEXT PRIMARY KEY,
+    sale_id          INTEGER NOT NULL REFERENCES sales(id),
+    type             TEXT NOT NULL DEFAULT 'doc_equivalente',
+    status           TEXT NOT NULL DEFAULT 'draft',
+    provider         TEXT NOT NULL DEFAULT 'factus',
+    provider_id      TEXT,
+    cude             TEXT,
+    number           TEXT,
+    xml_url          TEXT,
+    pdf_url          TEXT,
+    dian_response    TEXT,
+    rejection_reason TEXT,
+    retry_count      INTEGER NOT NULL DEFAULT 0,
+    issued_at        DATETIME,
+    accepted_at      DATETIME,
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_eledocs_sale_id ON electronic_documents(sale_id);
+CREATE INDEX IF NOT EXISTS idx_eledocs_status ON electronic_documents(status);
+CREATE INDEX IF NOT EXISTS idx_eledocs_provider_id ON electronic_documents(provider_id);
+`
+
+const migration9 = `
+ALTER TABLE fiscal_config ADD COLUMN numbering_range_id INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE fiscal_config ADD COLUMN municipality_id INTEGER NOT NULL DEFAULT 149;
+`
+
+const migration10 = `
+ALTER TABLE customers ADD COLUMN notes TEXT NOT NULL DEFAULT '';
+ALTER TABLE customers ADD COLUMN credit_limit INTEGER;
+`
+
+// migration11 adds first-run onboarding support: a completion flag on
+// business_config and a full_name column on users (set by the wizard).
+const migration11 = `
+ALTER TABLE business_config ADD COLUMN setup_completed BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT '';
 `
 
 // migration6 adds price override tracking to sale_items and creates the audit_log table.

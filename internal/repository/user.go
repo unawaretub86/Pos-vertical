@@ -39,8 +39,8 @@ func (r *userRepo) List(ctx context.Context) ([]*model.User, error) {
 func (r *userRepo) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	u := &model.User{}
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, username, role, active, created_at FROM users WHERE id = ?`, id).
-		Scan(&u.ID, &u.Username, &u.Role, &u.Active, &u.CreatedAt)
+		`SELECT id, full_name, username, password_hash, role, active, created_at FROM users WHERE id = ?`, id).
+		Scan(&u.ID, &u.FullName, &u.Username, &u.PasswordHash, &u.Role, &u.Active, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -82,6 +82,18 @@ func (r *userRepo) Update(ctx context.Context, u *model.User) (*model.User, erro
 func (r *userRepo) UpdatePassword(ctx context.Context, id int64, passwordHash string) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, id)
 	return err
+}
+
+// OnboardAdmin sets the identity fields of an existing user in place (used by
+// the first-run wizard to turn the seeded admin into the real one).
+func (r *userRepo) OnboardAdmin(ctx context.Context, id int64, fullName, username, passwordHash string) (*model.User, error) {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET full_name = ?, username = ?, password_hash = ? WHERE id = ?`,
+		fullName, username, passwordHash, id)
+	if err != nil {
+		return nil, fmt.Errorf("onboard admin: %w", err)
+	}
+	return r.GetByID(ctx, id)
 }
 
 func (r *userRepo) Deactivate(ctx context.Context, id int64) error {

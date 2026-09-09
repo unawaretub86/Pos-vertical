@@ -65,6 +65,10 @@ func (h *Handler) createProduct(w http.ResponseWriter, r *http.Request) {
 	if p.Unit == "" {
 		p.Unit = "unit"
 	}
+	if p.WholesalePrice != nil && *p.WholesalePrice > 0 && *p.WholesalePrice < p.Cost {
+		respondError(w, http.StatusBadRequest, "el precio mayorista no puede ser menor al costo")
+		return
+	}
 
 	created, err := h.products.Create(r.Context(), &p)
 	if err != nil {
@@ -104,6 +108,10 @@ func (h *Handler) updateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.ID = id
+	if p.WholesalePrice != nil && *p.WholesalePrice > 0 && *p.WholesalePrice < p.Cost {
+		respondError(w, http.StatusBadRequest, "el precio mayorista no puede ser menor al costo")
+		return
+	}
 
 	updated, err := h.products.Update(r.Context(), &p)
 	if errors.Is(err, repository.ErrNotFound) {

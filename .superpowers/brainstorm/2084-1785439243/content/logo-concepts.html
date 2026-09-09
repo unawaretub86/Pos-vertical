@@ -1,0 +1,115 @@
+<h2>¿Cuál ícono para "POS Chévere"?</h2>
+<p class="subtitle">Mismos colores de la app real: fondo #0D0D0D, acento #F5A623. Elegí el que pegue más.</p>
+
+<style>
+  .logo-demo {
+    background: #0D0D0D;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  .icon-box {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: rgba(245,166,35,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wordmark {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #F0EDE8;
+    letter-spacing: -0.3px;
+  }
+  .wordmark span { color: #F5A623; }
+  .wordmark-sub {
+    font-size: 11px;
+    color: #9B9691;
+    letter-spacing: 0.04em;
+  }
+</style>
+
+<div class="cards">
+  <div class="card" data-choice="tag" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="logo-demo">
+        <div class="icon-box">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+            <path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.41l8.83 8.83a2 2 0 0 0 2.83 0l7.17-7.17a2 2 0 0 0 0-2.83l-8.83-8.82Z" stroke="#F5A623" stroke-width="1.8" stroke-linejoin="round"/>
+            <circle cx="7.5" cy="7.5" r="1.5" fill="#F5A623"/>
+            <path d="m9 15 3 3 5-5" stroke="#F5A623" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="wordmark">POS <span>Chévere</span></div>
+        <div class="wordmark-sub">PUNTO DE VENTA · COLOMBIA</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Etiqueta + check</h3>
+      <p>Vende con confianza. Universal, fácil de leer chico.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="receipt" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="logo-demo">
+        <div class="icon-box">
+          <svg width="28" height="30" viewBox="0 0 22 26" fill="none">
+            <path d="M2 1h18v23l-2.5-1.6L15 24l-2.5-1.6L10 24l-2.5-1.6L5 24l-2.5-1.6L0 24V1h2Z" fill="none" stroke="#F5A623" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M5 7h12M5 11h12M5 15h7" stroke="#F5A623" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="wordmark">POS <span>Chévere</span></div>
+        <div class="wordmark-sub">PUNTO DE VENTA · COLOMBIA</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Recibo / ticket</h3>
+      <p>Directo al producto: venta, factura. Más literal.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="bag" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="logo-demo">
+        <div class="icon-box">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+            <path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Z" stroke="#F5A623" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M9 8V6a3 3 0 0 1 6 0v2" stroke="#F5A623" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="wordmark">POS <span>Chévere</span></div>
+        <div class="wordmark-sub">PUNTO DE VENTA · COLOMBIA</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Bolsa de compra</h3>
+      <p>Comercio universal, cálido y reconocible.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="monogram" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="logo-demo">
+        <div class="icon-box" style="background:#F5A623;">
+          <span style="font-family:'Inter',system-ui,sans-serif; font-size:26px; font-weight:800; color:#0D0D0D;">C</span>
+        </div>
+        <div class="wordmark">POS <span>Chévere</span></div>
+        <div class="wordmark-sub">PUNTO DE VENTA · COLOMBIA</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>D. Monograma "C"</h3>
+      <p>Minimalista, estilo Nequi/Bold. Fondo sólido acento.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:20px">Clic para elegir. También decime en la terminal si querés variaciones (otro color, otra forma).</p>

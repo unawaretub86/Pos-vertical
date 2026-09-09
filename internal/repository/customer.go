@@ -24,7 +24,7 @@ func NewCustomerRepository(db *sql.DB) CustomerRepository {
 func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
 	query := `
 		SELECT
-			c.id, c.name, c.phone, c.address, c.created_at,
+			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
 			COALESCE(SUM(CASE WHEN s.payment_method = 'credit' AND s.status = 'completed' THEN s.total ELSE 0 END), 0)
 			- COALESCE(SUM(DISTINCT COALESCE(cp_sum.amount, 0)), 0) AS balance,
 			MIN(CASE WHEN s.payment_method = 'credit' AND s.status = 'completed' THEN s.created_at ELSE NULL END) AS oldest_debt_at
@@ -53,7 +53,7 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
 		var cwb model.CustomerWithBalance
 		var oldestDebt sql.NullString
 		if err := rows.Scan(
-			&cwb.ID, &cwb.Name, &cwb.Phone, &cwb.Address, &cwb.CreatedAt,
+			&cwb.ID, &cwb.Name, &cwb.Phone, &cwb.Address, &cwb.Notes, &cwb.CreditLimit, &cwb.CreatedAt,
 			&cwb.Balance, &oldestDebt,
 		); err != nil {
 			return nil, fmt.Errorf("customer scan: %w", err)
@@ -76,8 +76,8 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
 func (r *customerRepo) GetByID(ctx context.Context, id int64) (*model.Customer, error) {
 	c := &model.Customer{}
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, name, COALESCE(phone,''), COALESCE(address,''), created_at FROM customers WHERE id = ?`, id).
-		Scan(&c.ID, &c.Name, &c.Phone, &c.Address, &c.CreatedAt)
+		`SELECT id, name, COALESCE(phone,''), COALESCE(address,''), COALESCE(notes,''), credit_limit, created_at FROM customers WHERE id = ?`, id).
+		Scan(&c.ID, &c.Name, &c.Phone, &c.Address, &c.Notes, &c.CreditLimit, &c.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -89,8 +89,8 @@ func (r *customerRepo) GetByID(ctx context.Context, id int64) (*model.Customer, 
 
 func (r *customerRepo) Create(ctx context.Context, c *model.Customer) (*model.Customer, error) {
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO customers (name, phone, address) VALUES (?, ?, ?)`,
-		c.Name, c.Phone, c.Address)
+		`INSERT INTO customers (name, phone, address, notes, credit_limit) VALUES (?, ?, ?, ?, ?)`,
+		c.Name, c.Phone, c.Address, c.Notes, c.CreditLimit)
 	if err != nil {
 		return nil, fmt.Errorf("customer create: %w", err)
 	}
@@ -103,8 +103,8 @@ func (r *customerRepo) Create(ctx context.Context, c *model.Customer) (*model.Cu
 
 func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Customer, error) {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE customers SET name = ?, phone = ?, address = ? WHERE id = ?`,
-		c.Name, c.Phone, c.Address, c.ID)
+		`UPDATE customers SET name = ?, phone = ?, address = ?, notes = ?, credit_limit = ? WHERE id = ?`,
+		c.Name, c.Phone, c.Address, c.Notes, c.CreditLimit, c.ID)
 	if err != nil {
 		return nil, fmt.Errorf("customer update: %w", err)
 	}

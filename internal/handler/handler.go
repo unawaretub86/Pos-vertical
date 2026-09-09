@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/andreyo/pos/internal/database"
+	"github.com/andreyo/pos/internal/factelect"
 	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/repository"
 	"github.com/andreyo/pos/internal/service"
@@ -24,6 +26,8 @@ type Handler struct {
 	setup        *repository.SetupRepository
 	stockEntries repository.StockEntryRepository
 	reports      repository.ReportRepository
+	factelect    *factelect.FacElectService
+	fiscalRepo   factelect.FiscalConfigRepository
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -37,17 +41,34 @@ func New(db *database.DB) *Handler {
 	setupRepo := repository.NewSetupRepository(db.DB)
 	stockRepo := repository.NewStockEntryRepository(db.DB)
 	reportRepo := repository.NewReportRepository(db.DB)
+	eledocRepo := repository.NewElectronicDocRepository(db.DB)
+	fiscalRepo := factelect.NewFiscalConfigRepository(db.DB)
+
+	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
+	salesSvc.WithElectronicDocs(eledocRepo)
+
+	var factelSvc *factelect.FacElectService
+	cfg, _ := fiscalRepo.Get(context.Background())
+	if cfg != nil && cfg.Enabled {
+		client := factelect.NewClient(cfg.ProviderClientID, cfg.ProviderSecret, cfg.Ambiente)
+		adapter := factelect.NewPosSaleAdapter(saleRepo, prodRepo, setupRepo, fiscalRepo)
+		factelSvc = factelect.NewFacElectService(adapter, client, eledocRepo, fiscalRepo)
+		factelSvc.StartPoller(context.Background())
+	}
+
 	return &Handler{
 		db:           db,
 		categories:   service.NewCategoryService(catRepo),
 		products:     service.NewProductService(prodRepo),
-		sales:        service.NewSaleService(saleRepo, prodRepo, regRepo),
+		sales:        salesSvc,
 		registers:    service.NewRegisterService(regRepo),
 		customers:    service.NewCustomerService(custRepo),
 		users:        service.NewUserService(userRepo),
 		setup:        setupRepo,
 		stockEntries: stockRepo,
 		reports:      reportRepo,
+		factelect:    factelSvc,
+		fiscalRepo:   fiscalRepo,
 	}
 }
 
@@ -59,6 +80,8 @@ func (h *Handler) Routes() http.Handler {
 
 	// Public
 	r.Post("/auth/login", h.login)
+	r.Get("/setup/status", h.getSetupStatus)
+	r.Post("/onboarding", h.submitOnboarding)
 
 	// Protected
 	r.Group(func(r chi.Router) {
@@ -105,12 +128,23 @@ func (h *Handler) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Delete("/sales/{id}/void", h.voidSale)
+			r.Post("/sales/{id}/void-with-credit-note", h.voidSaleWithCreditNote)
+			r.Get("/sales/{id}/factura", h.getSaleFactura)
+			r.Get("/sales/{id}/factura/pdf", h.getSaleFacturaPDF)
+		})
+
+		// Fiscal config (admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Get("/fiscal/config", h.getFiscalConfig)
+			r.Put("/fiscal/config", h.updateFiscalConfig)
 		})
 
 		// Dashboard (admin only)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Get("/dashboard", h.getDashboard)
+			r.Get("/dashboard/today", h.getDashboardToday)
 		})
 
 		// Reports (admin only)

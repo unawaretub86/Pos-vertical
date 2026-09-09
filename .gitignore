@@ -8,6 +8,7 @@
 data.db
 data.db-wal
 data.db-shm
+data.db.backup-*
 
 # Frontend
 frontend/node_modules/

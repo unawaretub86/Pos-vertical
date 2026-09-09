@@ -26,13 +26,24 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (*model.User, error
 	return s.repo.GetByID(ctx, id)
 }
 
+// hashPassword validates and bcrypt-hashes a password. Shared by every path
+// that sets a user's password (create, update, onboarding) so the rule lives
+// in one place.
+func hashPassword(password string) (string, error) {
+	if len(password) < 4 {
+		return "", errors.New("la contraseña debe tener al menos 4 caracteres")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", errors.New("error procesando contraseña")
+	}
+	return string(hash), nil
+}
+
 func (s *UserService) Create(ctx context.Context, username, password, role string) (*model.User, error) {
 	username = strings.TrimSpace(username)
 	if username == "" {
 		return nil, errors.New("el nombre de usuario es requerido")
-	}
-	if len(password) < 4 {
-		return nil, errors.New("la contraseña debe tener al menos 4 caracteres")
 	}
 	if role != "admin" && role != "cashier" {
 		return nil, errors.New("rol inválido: debe ser admin o cashier")
@@ -43,9 +54,9 @@ func (s *UserService) Create(ctx context.Context, username, password, role strin
 		return nil, errors.New("el nombre de usuario ya existe")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := hashPassword(password)
 	if err != nil {
-		return nil, errors.New("error procesando contraseña")
+		return nil, err
 	}
 
 	return s.repo.Create(ctx, &model.User{
@@ -98,14 +109,11 @@ func (s *UserService) Update(ctx context.Context, id int64, username, role strin
 
 	// Update password only if provided
 	if pw := strings.TrimSpace(password); pw != "" {
-		if len(pw) < 4 {
-			return nil, errors.New("la contraseña debe tener al menos 4 caracteres")
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+		hash, err := hashPassword(pw)
 		if err != nil {
-			return nil, errors.New("error procesando contraseña")
+			return nil, err
 		}
-		if err := s.repo.UpdatePassword(ctx, id, string(hash)); err != nil {
+		if err := s.repo.UpdatePassword(ctx, id, hash); err != nil {
 			return nil, err
 		}
 	}
@@ -128,12 +136,43 @@ func (s *UserService) ChangePassword(ctx context.Context, id int64, currentPassw
 		return errors.New("contraseña actual incorrecta")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hash, err := hashPassword(newPassword)
 	if err != nil {
-		return errors.New("error procesando contraseña")
+		return err
 	}
 
-	return s.repo.UpdatePassword(ctx, id, string(hash))
+	return s.repo.UpdatePassword(ctx, id, hash)
+}
+
+// Onboard sets the identity of an existing user in place (id 1, the seeded
+// admin) as part of the first-run wizard. Reuses the same username-uniqueness
+// check and password hashing rule as Create/Update.
+func (s *UserService) Onboard(ctx context.Context, id int64, fullName, username, password string) (*model.User, error) {
+	fullName = strings.TrimSpace(fullName)
+	username = strings.TrimSpace(username)
+	if fullName == "" {
+		return nil, errors.New("el nombre completo es requerido")
+	}
+	if username == "" {
+		return nil, errors.New("el nombre de usuario es requerido")
+	}
+
+	hash, err := hashPassword(password)
+	if err != nil {
+		return nil, err
+	}
+
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, errors.New("usuario no encontrado")
+	}
+	if existing.Username != username {
+		if _, err := s.repo.GetByUsername(ctx, username); err == nil {
+			return nil, errors.New("el nombre de usuario ya existe")
+		}
+	}
+
+	return s.repo.OnboardAdmin(ctx, id, fullName, username, hash)
 }
 
 func (s *UserService) Deactivate(ctx context.Context, id int64) error {

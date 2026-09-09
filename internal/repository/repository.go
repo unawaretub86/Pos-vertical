@@ -15,6 +15,8 @@ type UserRepository interface {
 	Create(ctx context.Context, u *model.User) (*model.User, error)
 	Update(ctx context.Context, u *model.User) (*model.User, error)
 	UpdatePassword(ctx context.Context, id int64, passwordHash string) error
+	// OnboardAdmin sets full_name, username and password_hash on an existing user in place.
+	OnboardAdmin(ctx context.Context, id int64, fullName, username, passwordHash string) (*model.User, error)
 	// Deactivate sets active=false; never hard-deletes.
 	Deactivate(ctx context.Context, id int64) error
 	// CountAdmins returns the number of active admin users.
@@ -53,6 +55,15 @@ type ProductFilter struct {
 // StockEntryRepository handles stock entry persistence.
 type StockEntryRepository interface {
 	Create(ctx context.Context, entry *model.StockEntry) (*model.StockEntry, error)
+}
+
+// ElectronicDocRepository handles persistence of electronic documents.
+type ElectronicDocRepository interface {
+	Create(ctx context.Context, doc *model.ElectronicDocument) error
+	GetBySaleID(ctx context.Context, saleID int64) (*model.ElectronicDocument, error)
+	GetByProviderID(ctx context.Context, providerID string) (*model.ElectronicDocument, error)
+	Update(ctx context.Context, doc *model.ElectronicDocument) error
+	ListByStatus(ctx context.Context, status string, limit int) ([]*model.ElectronicDocument, error)
 }
 
 // CustomerRepository defines CRUD operations for customers.

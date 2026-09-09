@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/andreyo/pos/internal/model"
@@ -25,28 +26,32 @@ func (s *CustomerService) GetByID(ctx context.Context, id int64) (*model.Custome
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *CustomerService) Create(ctx context.Context, name, phone, address string) (*model.Customer, error) {
+func (s *CustomerService) Create(ctx context.Context, name, phone, address, notes string, creditLimit *int64) (*model.Customer, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("el nombre es requerido")
 	}
 	return s.repo.Create(ctx, &model.Customer{
-		Name:    name,
-		Phone:   strings.TrimSpace(phone),
-		Address: strings.TrimSpace(address),
+		Name:        name,
+		Phone:       strings.TrimSpace(phone),
+		Address:     strings.TrimSpace(address),
+		Notes:       strings.TrimSpace(notes),
+		CreditLimit: creditLimit,
 	})
 }
 
-func (s *CustomerService) Update(ctx context.Context, id int64, name, phone, address string) (*model.Customer, error) {
+func (s *CustomerService) Update(ctx context.Context, id int64, name, phone, address, notes string, creditLimit *int64) (*model.Customer, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("el nombre es requerido")
 	}
 	return s.repo.Update(ctx, &model.Customer{
-		ID:      id,
-		Name:    name,
-		Phone:   strings.TrimSpace(phone),
-		Address: strings.TrimSpace(address),
+		ID:          id,
+		Name:        name,
+		Phone:       strings.TrimSpace(phone),
+		Address:     strings.TrimSpace(address),
+		Notes:       strings.TrimSpace(notes),
+		CreditLimit: creditLimit,
 	})
 }
 
@@ -89,7 +94,7 @@ func (s *CustomerService) CreatePayment(ctx context.Context, customerID int64, a
 		return nil, err
 	}
 	if amount > balance {
-		return nil, errors.New("el monto del abono no puede ser mayor al saldo pendiente")
+		return nil, fmt.Errorf("el pago ($%.0f) supera la deuda actual ($%.0f)", amount, balance)
 	}
 
 	return s.repo.CreatePayment(ctx, &model.CustomerPayment{

@@ -175,6 +175,61 @@ func TestCreatePayment_RepoError(t *testing.T) {
 	}
 }
 
+// ── Create/Update with notes and credit_limit ────────────────────────────────
+
+func TestCreate_WithNotesAndCreditLimit(t *testing.T) {
+	repo := &mockCustomerRepo{}
+	svc := newCustomerSvc(repo)
+
+	limit := int64(150000)
+	c, err := svc.Create(context.Background(), "María", "3001111111", "Calle 1", "paga los viernes", &limit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.Notes != "paga los viernes" {
+		t.Errorf("expected notes 'paga los viernes', got %q", c.Notes)
+	}
+	if c.CreditLimit == nil || *c.CreditLimit != 150000 {
+		t.Errorf("expected credit_limit 150000, got %v", c.CreditLimit)
+	}
+}
+
+func TestCreate_WithoutCreditLimit(t *testing.T) {
+	repo := &mockCustomerRepo{}
+	svc := newCustomerSvc(repo)
+
+	c, err := svc.Create(context.Background(), "Pedro", "", "", "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c.CreditLimit != nil {
+		t.Errorf("expected nil credit_limit, got %v", c.CreditLimit)
+	}
+}
+
+// ── Balance + credit_limit warning scenario ──────────────────────────────────
+// The warning is computed in the frontend, but we verify Balance returns correct value.
+
+func TestBalance_CreditLimitWarningScenario(t *testing.T) {
+	// Cliente: tope $100.000, deuda actual $80.000, venta de $30.000
+	// deuda + venta = $110.000 > $100.000 → frontend should warn
+	repo := &mockCustomerRepo{
+		customer: existingCustomer(),
+		balance:  80000,
+	}
+	svc := newCustomerSvc(repo)
+
+	balance, err := svc.Balance(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	creditLimit := int64(100000)
+	saleTotal := float64(30000)
+	if balance+saleTotal <= float64(creditLimit) {
+		t.Error("expected balance+sale to exceed credit limit")
+	}
+}
+
 // ── ListPayments tests ───────────────────────────────────────────────────────
 
 func TestListPayments_ReturnsAll(t *testing.T) {

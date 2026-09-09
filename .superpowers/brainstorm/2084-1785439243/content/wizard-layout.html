@@ -1,0 +1,100 @@
+<h2>¿Cómo se siente el wizard de primer arranque?</h2>
+<p class="subtitle">2 grupos de campos: cuenta admin (nombre, usuario, password) + negocio (nombre, nit, moneda). Logo/dirección quedan opcionales, editables después en Ajustes.</p>
+
+<style>
+  .wiz-demo {
+    background: #0D0D0D;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 24px 20px;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .wiz-steps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .wiz-dot {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #F5A623;
+    color: #0D0D0D;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wiz-dot.pending { background: #252525; color: #5C5954; }
+  .wiz-line { flex: 1; height: 2px; background: #252525; }
+  .wiz-label { font-size: 12px; color: #9B9691; margin-bottom: 12px; }
+  .wiz-field {
+    background: #1E1E1E;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 6px;
+    height: 32px;
+    margin-bottom: 8px;
+  }
+  .wiz-field.small { width: 60%; }
+  .wiz-title { font-size: 15px; font-weight: 700; color: #F0EDE8; margin-bottom: 10px; }
+  .wiz-btn {
+    background: #F5A623; color: #0D0D0D; font-weight: 700;
+    font-size: 12px; padding: 8px 16px; border-radius: 6px;
+    display: inline-block; margin-top: 10px;
+  }
+  .section-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 16px 0; }
+</style>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">A. Wizard 2 pasos (con stepper)</div>
+    <div class="mockup-body">
+      <div class="wiz-demo">
+        <div class="wiz-steps">
+          <div class="wiz-dot">1</div>
+          <div class="wiz-line"></div>
+          <div class="wiz-dot pending">2</div>
+        </div>
+        <div class="wiz-label">Paso 1 de 2 · Tu cuenta</div>
+        <div class="wiz-title">Creá tu usuario admin</div>
+        <div class="wiz-field"></div>
+        <div class="wiz-field"></div>
+        <div class="wiz-field"></div>
+        <div class="wiz-btn">Siguiente →</div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">B. Todo en una página (scroll)</div>
+    <div class="mockup-body">
+      <div class="wiz-demo">
+        <div class="wiz-title">Bienvenido a POS Chévere</div>
+        <div class="wiz-label">Tu cuenta</div>
+        <div class="wiz-field"></div>
+        <div class="wiz-field"></div>
+        <div class="wiz-field"></div>
+        <div class="section-divider"></div>
+        <div class="wiz-label">Tu negocio</div>
+        <div class="wiz-field"></div>
+        <div class="wiz-field small"></div>
+        <div class="wiz-btn">Empezar a vender →</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:20px">
+  <div class="option" data-choice="stepper" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Stepper 2 pasos</h3>
+      <p>Se siente guiado, menos abrumador, un tema a la vez. Puede volver atrás.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="onepage" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Página única</h3>
+      <p>Más rápido si sabés qué llenar, todo visible, sin clics extra de "siguiente".</p>
+    </div>
+  </div>
+</div>

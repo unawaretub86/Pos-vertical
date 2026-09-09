@@ -10,6 +10,7 @@ type BusinessConfig struct {
 	Logo                 string  `json:"logo"`
 	Address              string  `json:"address"`
 	NIT                  string  `json:"nit"`
+	CIIU                 string  `json:"ciiu"`
 	Currency             string  `json:"currency"`
 	TicketHeader         string  `json:"ticket_header"`
 	TicketFooter         string  `json:"ticket_footer"`
@@ -29,12 +30,12 @@ func NewSetupRepository(db *sql.DB) *SetupRepository {
 func (r *SetupRepository) Get() (*BusinessConfig, error) {
 	row := r.db.QueryRow(`
 		SELECT id, name, COALESCE(logo,''), COALESCE(address,''), COALESCE(nit,''),
-		       currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
+		       COALESCE(ciiu,''), currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
 		       COALESCE(default_opening_amount, 0), COALESCE(allow_global_discount, 0)
 		FROM business_config WHERE id = 1`)
 	cfg := &BusinessConfig{}
 	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT,
-		&cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount)
+		&cfg.CIIU, &cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount)
 	if err == sql.ErrNoRows {
 		cfg.Currency = "COP"
 		cfg.Configured = false
@@ -45,6 +46,32 @@ func (r *SetupRepository) Get() (*BusinessConfig, error) {
 	}
 	cfg.Configured = cfg.Name != ""
 	return cfg, nil
+}
+
+// IsSetupCompleted reports whether the first-run onboarding wizard has been
+// completed. Returns false if business_config has no row yet (fresh DB).
+func (r *SetupRepository) IsSetupCompleted() (bool, error) {
+	var completed bool
+	err := r.db.QueryRow(`SELECT COALESCE(setup_completed, 0) FROM business_config WHERE id = 1`).Scan(&completed)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return completed, err
+}
+
+// CompleteOnboarding sets the minimal business fields captured by the wizard
+// and marks setup_completed = true. It only touches name/nit/currency/
+// setup_completed, leaving any other existing config (logo, address, ticket
+// header/footer) untouched.
+func (r *SetupRepository) CompleteOnboarding(name, nit string) error {
+	_, err := r.db.Exec(`
+		INSERT INTO business_config (id, name, nit, currency, setup_completed, updated_at)
+		VALUES (1, ?, ?, 'COP', 1, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			name=excluded.name, nit=excluded.nit, currency=excluded.currency,
+			setup_completed=1, updated_at=CURRENT_TIMESTAMP
+	`, name, nit)
+	return err
 }
 
 func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {

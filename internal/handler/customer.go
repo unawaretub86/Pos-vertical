@@ -16,6 +16,18 @@ func (h *Handler) listCustomers(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "error listando clientes")
 		return
 	}
+
+	// Filter to only customers with balance > 0 when has_balance=true
+	if r.URL.Query().Get("has_balance") == "true" {
+		filtered := customers[:0]
+		for _, c := range customers {
+			if c.Balance > 0 {
+				filtered = append(filtered, c)
+			}
+		}
+		customers = filtered
+	}
+
 	total, err := h.customers.TotalPortfolioBalance(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "error calculando cartera")
@@ -29,15 +41,17 @@ func (h *Handler) listCustomers(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) createCustomer(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name    string `json:"name"`
-		Phone   string `json:"phone"`
-		Address string `json:"address"`
+		Name        string `json:"name"`
+		Phone       string `json:"phone"`
+		Address     string `json:"address"`
+		Notes       string `json:"notes"`
+		CreditLimit *int64 `json:"credit_limit"`
 	}
 	if err := decode(r, &body); err != nil {
 		respondError(w, http.StatusBadRequest, "request inválido")
 		return
 	}
-	c, err := h.customers.Create(r.Context(), body.Name, body.Phone, body.Address)
+	c, err := h.customers.Create(r.Context(), body.Name, body.Phone, body.Address, body.Notes, body.CreditLimit)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -70,15 +84,17 @@ func (h *Handler) updateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name    string `json:"name"`
-		Phone   string `json:"phone"`
-		Address string `json:"address"`
+		Name        string `json:"name"`
+		Phone       string `json:"phone"`
+		Address     string `json:"address"`
+		Notes       string `json:"notes"`
+		CreditLimit *int64 `json:"credit_limit"`
 	}
 	if err := decode(r, &body); err != nil {
 		respondError(w, http.StatusBadRequest, "request inválido")
 		return
 	}
-	c, err := h.customers.Update(r.Context(), id, body.Name, body.Phone, body.Address)
+	c, err := h.customers.Update(r.Context(), id, body.Name, body.Phone, body.Address, body.Notes, body.CreditLimit)
 	if errors.Is(err, repository.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "cliente no encontrado")
 		return
