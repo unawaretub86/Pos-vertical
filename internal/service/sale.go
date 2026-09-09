@@ -40,6 +40,11 @@ func (s *SaleService) Create(ctx context.Context, sale *model.Sale) (*model.Sale
 	if err := validateSale(sale); err != nil {
 		return nil, err
 	}
+	if len(sale.Payments) > 1 {
+		sale.PaymentMethod = "mixed"
+	} else {
+		sale.PaymentMethod = sale.Payments[0].Method
+	}
 
 	// Verify open register
 	reg, err := s.registerRepo.GetOpen(ctx)
@@ -111,11 +116,36 @@ func (s *SaleService) Void(ctx context.Context, saleID int64, userID int64) (*mo
 }
 
 func validateSale(sale *model.Sale) error {
-	if !validPaymentMethods[sale.PaymentMethod] {
-		return errors.New("método de pago inválido: debe ser cash, transfer, card o credit")
+	// Legacy callers send a bare payment_method with no payments[]; treat it
+	// as a single-line payment for the sale's total.
+	if len(sale.Payments) == 0 && sale.PaymentMethod != "" {
+		sale.Payments = []model.Payment{{Method: sale.PaymentMethod, Amount: sale.Total}}
 	}
-	if sale.PaymentMethod == "credit" && sale.CustomerID == nil {
+	if len(sale.Payments) == 0 {
+		return errors.New("la venta debe tener al menos un método de pago")
+	}
+	if len(sale.Payments) > 3 {
+		return errors.New("no se pueden combinar más de 3 métodos de pago")
+	}
+	var paymentsSum float64
+	requiresCustomer := false
+	for _, p := range sale.Payments {
+		if !validPaymentMethods[p.Method] {
+			return errors.New("método de pago inválido: debe ser cash, transfer, card o credit")
+		}
+		if p.Amount <= 0 {
+			return errors.New("el monto de cada método de pago debe ser mayor a cero")
+		}
+		if p.Method == "credit" {
+			requiresCustomer = true
+		}
+		paymentsSum += p.Amount
+	}
+	if requiresCustomer && sale.CustomerID == nil {
 		return errors.New("el método de pago 'credito' requiere un cliente")
+	}
+	if math.Abs(paymentsSum-sale.Total) > 0.5 {
+		return fmt.Errorf("la suma de los pagos ($%.0f) no coincide con el total de la venta ($%.0f)", paymentsSum, sale.Total)
 	}
 	if len(sale.Items) == 0 {
 		return errors.New("la venta debe tener al menos un artículo")

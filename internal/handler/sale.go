@@ -222,6 +222,7 @@ func (h *Handler) getTicket(w http.ResponseWriter, r *http.Request) {
 		Tax:           sale.Tax,
 		Total:         sale.Total,
 		Items:         ticketItems,
+		Payments:      sale.Payments,
 		Customer:      customer,
 		Business:      business,
 	}

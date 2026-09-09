@@ -58,6 +58,15 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		return nil, fmt.Errorf("sale last id: %w", err)
 	}
 
+	for _, p := range sale.Payments {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO sale_payments (sale_id, method, amount, reference) VALUES (?, ?, ?, ?)`,
+			saleID, p.Method, p.Amount, p.Reference,
+		); err != nil {
+			return nil, fmt.Errorf("sale_payments insert: %w", err)
+		}
+	}
+
 	// Insert items and update stock
 	for i := range sale.Items {
 		item := &sale.Items[i]
@@ -121,6 +130,14 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		)
 		if err != nil {
 			return nil, fmt.Errorf("register movement insert: %w", err)
+		}
+	}
+
+	// Write audit log entry for a manual sale-level discount
+	if sale.Discount > 0 {
+		details := fmt.Sprintf(`{"amount":%.2f}`, sale.Discount)
+		if err := InsertAuditLog(ctx, tx, sale.UserID, "discount", "sale", saleID, details); err != nil {
+			return nil, err
 		}
 	}
 
@@ -201,7 +218,26 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 		}
 		s.Items = append(s.Items, item)
 	}
-	return s, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	payRows, err := r.db.QueryContext(ctx, `
+		SELECT id, sale_id, method, amount, COALESCE(reference, '')
+		FROM sale_payments WHERE sale_id = ? ORDER BY id`, id)
+	if err != nil {
+		return nil, fmt.Errorf("sale payments list: %w", err)
+	}
+	defer payRows.Close()
+
+	for payRows.Next() {
+		var p model.Payment
+		if err := payRows.Scan(&p.ID, &p.SaleID, &p.Method, &p.Amount, &p.Reference); err != nil {
+			return nil, fmt.Errorf("sale payment scan: %w", err)
+		}
+		s.Payments = append(s.Payments, p)
+	}
+	return s, payRows.Err()
 }
 
 // Void marks a sale as voided, restores stock for product items, and records
@@ -282,6 +318,11 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 			registerID.Int64, total, fmt.Sprintf("Anulación venta #%d", saleID)); err != nil {
 			return nil, fmt.Errorf("void register movement: %w", err)
 		}
+	}
+
+	details := fmt.Sprintf(`{"total":%.2f}`, total)
+	if err := InsertAuditLog(ctx, tx, userID, "void", "sale", saleID, details); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {

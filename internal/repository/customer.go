@@ -25,11 +25,16 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
 	query := `
 		SELECT
 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
-			COALESCE(SUM(CASE WHEN s.payment_method = 'credit' AND s.status = 'completed' THEN s.total ELSE 0 END), 0)
-			- COALESCE(SUM(DISTINCT COALESCE(cp_sum.amount, 0)), 0) AS balance,
-			MIN(CASE WHEN s.payment_method = 'credit' AND s.status = 'completed' THEN s.created_at ELSE NULL END) AS oldest_debt_at
+			COALESCE(sp_sum.amount, 0) - COALESCE(cp_sum.amount, 0) AS balance,
+			sp_sum.oldest_at AS oldest_debt_at
 		FROM customers c
-		LEFT JOIN sales s ON s.customer_id = c.id
+		LEFT JOIN (
+			SELECT s2.customer_id, SUM(sp.amount) AS amount, MIN(s2.created_at) AS oldest_at
+			FROM sale_payments sp
+			JOIN sales s2 ON s2.id = sp.sale_id
+			WHERE sp.method = 'credit' AND s2.status = 'completed'
+			GROUP BY s2.customer_id
+		) sp_sum ON sp_sum.customer_id = c.id
 		LEFT JOIN (
 			SELECT customer_id, SUM(amount) AS amount FROM customer_payments GROUP BY customer_id
 		) cp_sum ON cp_sum.customer_id = c.id`
@@ -133,7 +138,11 @@ func (r *customerRepo) Balance(ctx context.Context, id int64) (float64, error) {
 	var balance float64
 	err := r.db.QueryRowContext(ctx, `
 		SELECT
-			COALESCE((SELECT SUM(total) FROM sales WHERE customer_id = ? AND payment_method = 'credit' AND status = 'completed'), 0)
+			COALESCE((
+				SELECT SUM(sp.amount) FROM sale_payments sp
+				JOIN sales s ON s.id = sp.sale_id
+				WHERE s.customer_id = ? AND sp.method = 'credit' AND s.status = 'completed'
+			), 0)
 			- COALESCE((SELECT SUM(amount) FROM customer_payments WHERE customer_id = ?), 0)
 	`, id, id).Scan(&balance)
 	if err != nil {
@@ -147,7 +156,11 @@ func (r *customerRepo) TotalPortfolioBalance(ctx context.Context) (float64, erro
 	var total float64
 	err := r.db.QueryRowContext(ctx, `
 		SELECT
-			COALESCE((SELECT SUM(total) FROM sales WHERE payment_method = 'credit' AND status = 'completed'), 0)
+			COALESCE((
+				SELECT SUM(sp.amount) FROM sale_payments sp
+				JOIN sales s ON s.id = sp.sale_id
+				WHERE sp.method = 'credit' AND s.status = 'completed'
+			), 0)
 			- COALESCE((SELECT SUM(amount) FROM customer_payments), 0)
 	`).Scan(&total)
 	if err != nil {
@@ -205,7 +218,8 @@ func (r *customerRepo) ListCreditSales(ctx context.Context, customerID int64) ([
 		`SELECT id, user_id, customer_id, COALESCE(register_id, 0), subtotal, discount, tax, total,
 		        payment_method, status, created_at
 		 FROM sales
-		 WHERE customer_id = ? AND payment_method = 'credit' AND status = 'completed'
+		 WHERE customer_id = ? AND status = 'completed'
+		   AND id IN (SELECT sale_id FROM sale_payments WHERE method = 'credit')
 		 ORDER BY created_at DESC`, customerID)
 	if err != nil {
 		return nil, fmt.Errorf("list credit sales: %w", err)

@@ -55,6 +55,17 @@ interface PortfolioEntry {
   balance: number;
 }
 
+interface Expense {
+  id: number;
+  register_id: number | null;
+  user_id: number;
+  username: string;
+  category: string;
+  amount: number;
+  note: string;
+  created_at: string;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const formatDate = (iso: string) =>
@@ -66,6 +77,18 @@ const METHOD_LABELS: Record<string, string> = {
   transfer: 'Transferencia',
   credit: 'Crédito',
 };
+
+const EXPENSE_CATEGORIES = [
+  { value: 'servicios', label: 'Servicios' },
+  { value: 'arriendo', label: 'Arriendo' },
+  { value: 'nomina', label: 'Nómina' },
+  { value: 'proveedor', label: 'Proveedor' },
+  { value: 'otro', label: 'Otro' },
+];
+
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  EXPENSE_CATEGORIES.map(c => [c.value, c.label])
+);
 
 type RangeKey = 'today' | 'week' | 'month' | 'custom';
 
@@ -223,6 +246,12 @@ function exportSalesCSV(sales: SalesSummary | null) {
   URL.revokeObjectURL(url);
 }
 
+const IconExpense = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/>
+  </svg>
+);
+
 const IconDownload = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -241,6 +270,11 @@ export default function ReportsPage() {
   const [registers, setRegisters] = useState<Register[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioEntry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expensesTotal, setExpensesTotal] = useState(0);
+  const [expensesLoading, setExpensesLoading] = useState(true);
+  const [expenseCategory, setExpenseCategory] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -264,7 +298,27 @@ export default function ReportsPage() {
     setLoading(false);
   }, [range, customFrom, customTo]);
 
+  const loadExpenses = useCallback(async () => {
+    setExpensesLoading(true);
+    const { from, to } = getRangeDates(range, customFrom, customTo);
+    const params = new URLSearchParams();
+    params.set('from', from.toISOString());
+    params.set('to', to.toISOString());
+    if (expenseCategory) params.set('category', expenseCategory);
+    try {
+      const data = await api.get<{ expenses: Expense[]; total: number }>(`/expenses?${params.toString()}`);
+      setExpenses(data?.expenses ?? []);
+      setExpensesTotal(data?.total ?? 0);
+    } catch {
+      setExpenses([]);
+      setExpensesTotal(0);
+    } finally {
+      setExpensesLoading(false);
+    }
+  }, [range, customFrom, customTo, expenseCategory]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadExpenses(); }, [loadExpenses]);
 
   const totalDebt = portfolio.reduce((s, e) => s + e.balance, 0);
 
@@ -452,6 +506,18 @@ export default function ReportsPage() {
           )}
         </ReportCard>
 
+        {/* ── Card: Gastos del negocio (US-049) ────────────────────────────── */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <ExpensesCard
+            expenses={expenses}
+            total={expensesTotal}
+            loading={expensesLoading}
+            category={expenseCategory}
+            onCategoryChange={setExpenseCategory}
+            onCreated={loadExpenses}
+          />
+        </div>
+
         {/* ── Card 4: Historial de Cajas ───────────────────────────────────── */}
         <ReportCard title="Historial de cajas" icon={<IconCash />}>
           {loading ? (
@@ -506,6 +572,183 @@ export default function ReportsPage() {
     </AppLayout>
   );
 }
+
+// ─── Expenses Card (US-049) ────────────────────────────────────────────────────
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('es-CO', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function ExpensesCard({
+  expenses,
+  total,
+  loading,
+  category,
+  onCategoryChange,
+  onCreated,
+}: {
+  expenses: Expense[];
+  total: number;
+  loading: boolean;
+  category: string;
+  onCategoryChange: (v: string) => void;
+  onCreated: () => void;
+}) {
+  const [formCategory, setFormCategory] = useState('servicios');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+
+  async function handleSubmit() {
+    const parsed = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
+    if (!parsed || parsed <= 0) {
+      setError('Ingresa un monto válido');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setConfirmation('');
+    try {
+      await api.post('/expenses', { category: formCategory, amount: parsed, note });
+      setConfirmation(`Gasto registrado: ${formatCOP(parsed)} — ${CATEGORY_LABELS[formCategory]}`);
+      setAmount('');
+      setNote('');
+      onCreated();
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setError(e.message ?? 'Error al registrar el gasto');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    padding: '7px 10px',
+    borderRadius: '8px',
+    border: '1px solid var(--border)',
+    background: 'var(--surface-1)',
+    color: 'var(--text-primary)',
+    fontSize: '13px',
+  };
+
+  return (
+    <ReportCard title="Gastos del negocio" icon={<IconExpense />}>
+      {/* Formulario */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Categoría</label>
+          <select value={formCategory} onChange={e => setFormCategory(e.target.value)} style={{ ...inputStyle, minWidth: '130px' }}>
+            {EXPENSE_CATEGORIES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Monto *</label>
+          <input
+            type="number"
+            className="input"
+            placeholder="0"
+            value={amount}
+            onChange={e => { setAmount(e.target.value); setError(''); }}
+            style={{ ...inputStyle, width: '120px' }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '140px' }}>
+          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Nota (opcional)</label>
+          <input
+            type="text"
+            className="input"
+            placeholder="Ej: recibo de luz"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <button onClick={handleSubmit} disabled={saving} className="btn btn-accent btn-sm">
+          {saving ? 'Guardando...' : 'Registrar gasto'}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ fontSize: '12px', color: 'var(--danger)', padding: '8px', background: 'var(--danger-dim)', borderRadius: '6px' }}>
+          {error}
+        </div>
+      )}
+      {confirmation && !error && (
+        <div style={{ fontSize: '12px', color: 'var(--success)', padding: '8px', background: 'var(--success-dim)', borderRadius: '6px' }}>
+          {confirmation}
+        </div>
+      )}
+
+      {/* Filtro + total */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+        <select value={category} onChange={e => onCategoryChange(e.target.value)} style={inputStyle}>
+          <option value="">Todas las categorías</option>
+          {EXPENSE_CATEGORIES.map(c => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+          Total del período: <span className="tnum" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{formatCOP(total)}</span>
+        </div>
+      </div>
+
+      {/* Listado */}
+      {loading ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Cargando...</div>
+      ) : expenses.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Sin gastos registrados en este período</div>
+      ) : (
+        <div className="table-wrap" style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={thStyleExpense}>Fecha</th>
+                <th style={thStyleExpense}>Categoría</th>
+                <th style={thStyleExpense}>Usuario</th>
+                <th style={thStyleExpense}>Nota</th>
+                <th style={{ ...thStyleExpense, textAlign: 'right' }}>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((e, i) => (
+                <tr key={e.id} style={{ borderBottom: i < expenses.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <td style={{ ...tdStyleExpense, whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{formatDateTime(e.created_at)}</td>
+                  <td style={tdStyleExpense}><span className="badge">{CATEGORY_LABELS[e.category] ?? e.category}</span></td>
+                  <td style={{ ...tdStyleExpense, fontWeight: 600 }}>{e.username}</td>
+                  <td style={{ ...tdStyleExpense, color: 'var(--text-secondary)' }}>{e.note || '—'}</td>
+                  <td className="tnum" style={{ ...tdStyleExpense, textAlign: 'right', fontWeight: 600 }}>{formatCOP(e.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </ReportCard>
+  );
+}
+
+const thStyleExpense: React.CSSProperties = {
+  padding: '8px 12px',
+  textAlign: 'left',
+  fontSize: '11px',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.4px',
+  color: 'var(--text-muted)',
+  borderBottom: '1px solid var(--border)',
+  whiteSpace: 'nowrap',
+};
+
+const tdStyleExpense: React.CSSProperties = {
+  padding: '10px 12px',
+  fontSize: '13px',
+};
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
 

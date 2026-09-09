@@ -21,6 +21,11 @@ export interface TicketItem {
   unit: string;
 }
 
+export interface TicketPayment {
+  method: string;
+  amount: number;
+}
+
 export interface TicketData {
   sale_id: number;
   created_at: string;
@@ -34,6 +39,7 @@ export interface TicketData {
   tax: number;
   total: number;
   items: TicketItem[];
+  payments?: TicketPayment[];
   customer?: { id: number; name: string; phone: string };
   business: TicketBusiness;
 }
@@ -143,6 +149,18 @@ export default function TicketPreview({ ticket, onPrint, onClose }: Props) {
           <span>Método: {METHOD_LABELS[ticket.payment_method] ?? ticket.payment_method}</span>
           <span>{timeStr}</span>
         </div>
+
+        {/* Mixed payment breakdown */}
+        {ticket.payment_method === 'mixed' && ticket.payments && ticket.payments.length > 1 && (
+          <div style={{ fontSize: '11px', color: '#333', marginBottom: '6px' }}>
+            {ticket.payments.map((p, i) => (
+              <span key={i}>
+                {METHOD_LABELS[p.method] ?? p.method}: {formatCOP(p.amount)}
+                {i < ticket.payments!.length - 1 && ' · '}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* CRÉDITO banner */}
         {isCredit && (

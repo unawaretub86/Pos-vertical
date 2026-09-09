@@ -136,7 +136,10 @@ func (r *registerRepo) ListMovements(ctx context.Context, registerID int64) ([]*
 func (r *registerRepo) SumCashSales(ctx context.Context, registerID int64) (float64, error) {
 	var sum float64
 	err := r.db.QueryRowContext(ctx,
-		`SELECT COALESCE(SUM(total), 0) FROM sales WHERE register_id = ? AND payment_method = 'cash' AND status = 'completed'`,
+		`SELECT COALESCE(SUM(sp.amount), 0)
+		 FROM sale_payments sp
+		 JOIN sales s ON s.id = sp.sale_id
+		 WHERE s.register_id = ? AND sp.method = 'cash' AND s.status = 'completed'`,
 		registerID).Scan(&sum)
 	return sum, err
 }

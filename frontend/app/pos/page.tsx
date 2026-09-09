@@ -9,6 +9,7 @@ import TicketPreview, { type TicketData } from '@/components/TicketPreview';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { getUser } from '@/lib/auth';
+import { calcSubtotal, calcTax, calcTotal, paymentsBalanced as linesBalanced, sumPayments } from '@/lib/saleCalc';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ interface Product {
   min_stock: number;
   unit: string;
   active: boolean;
+  tax_rate: number;
 }
 
 interface CartItem {
@@ -650,6 +652,11 @@ export default function POSPage() {
   const [payMethod, setPayMethod] = useState<PaymentMethod>('efectivo');
   const [cashReceived, setCashReceived] = useState<string>('');
 
+  // Pago mixto (US-046): additional payment lines beyond the primary method.
+  // When empty, the modal behaves exactly like a single-method sale.
+  const [extraPayments, setExtraPayments] = useState<{ method: PaymentMethod; amountInput: string }[]>([]);
+  const [firstAmountInput, setFirstAmountInput] = useState<string>('');
+
   // Customer (required for credit)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerBalance, setCustomerBalance] = useState<number | null>(null);
@@ -720,15 +727,22 @@ export default function POSPage() {
 
   // Cart operations
   function addToCart(product: Product) {
+    let blocked = false;
     setCart(prev => {
       const idx = prev.findIndex(i => i.product.id === product.id);
+      const nextQty = idx >= 0 ? prev[idx].quantity + 1 : 1;
+      if (product.type === 'product' && nextQty > product.stock) {
+        blocked = true;
+        return prev;
+      }
       if (idx >= 0) {
         const updated = [...prev];
-        updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + 1 };
+        updated[idx] = { ...updated[idx], quantity: nextQty };
         return updated;
       }
       return [...prev, { product, quantity: 1, unitPrice: product.sale_price, priceInput: String(product.sale_price), priceMode: 'retail' as const, discount: 0, discountType: 'fixed', discountInput: '' }];
     });
+    if (blocked) toast(`Solo hay ${product.stock} unidades disponibles de ${product.name}`, 'error');
     // On mobile, briefly flash cart tab badge — stay on products so user can keep adding
   }
 
@@ -749,15 +763,25 @@ export default function POSPage() {
   }
 
   function changeQty(idx: number, delta: number) {
+    let blocked = false;
     setCart(prev => {
       const updated = [...prev];
-      const newQty = updated[idx].quantity + delta;
+      const item = updated[idx];
+      const newQty = item.quantity + delta;
       if (newQty <= 0) {
         return updated.filter((_, i) => i !== idx);
       }
-      updated[idx] = { ...updated[idx], quantity: newQty };
+      if (delta > 0 && item.product.type === 'product' && newQty > item.product.stock) {
+        blocked = true;
+        return prev;
+      }
+      updated[idx] = { ...item, quantity: newQty };
       return updated;
     });
+    if (blocked) {
+      const item = cart[idx];
+      toast(`Solo hay ${item.product.stock} unidades disponibles de ${item.product.name}`, 'error');
+    }
   }
 
   function changePriceOverride(idx: number, price: number, priceInput: string) {
@@ -795,6 +819,8 @@ export default function POSPage() {
     setGlobalDiscountInput('');
     setCashReceived('');
     setSelectedCustomer(null);
+    setExtraPayments([]);
+    setFirstAmountInput('');
   }
 
   // Parked carts (venta en espera) ────────────────────────────────────────────
@@ -856,11 +882,39 @@ export default function POSPage() {
 
   const globalDiscount = allowGlobalDiscount ? parseInputCOP(globalDiscountInput) : 0;
 
-  // Totals
-  const subtotal = cart.reduce((sum, i) => sum + i.unitPrice * i.quantity - i.discount, 0);
-  const total = subtotal - globalDiscount;
+  // Totals — calcSubtotal/calcTax/calcTotal live in lib/saleCalc.ts (unit
+  // tested) and must match internal/service/sale.go's recalculation exactly,
+  // or the server rejects the sale as "total inconsistente".
+  const calcItems = cart.map(i => ({ unitPrice: i.unitPrice, quantity: i.quantity, discount: i.discount, taxRate: i.product.tax_rate ?? 0 }));
+  const subtotal = calcSubtotal(calcItems);
+  const tax = calcTax(calcItems);
+  const total = calcTotal(calcItems, globalDiscount);
   const cashReceivedNum = parseInputCOP(cashReceived);
   const change = payMethod === 'efectivo' ? Math.max(0, cashReceivedNum - total) : 0;
+
+  // Pago mixto: with no extra lines, the primary method covers the full total
+  // (identical to the pre-existing single-method behavior).
+  const isMixedMode = extraPayments.length > 0;
+  const firstLineAmount = isMixedMode ? parseInputCOP(firstAmountInput) : total;
+  const paymentLines: { method: PaymentMethod; amount: number }[] = [
+    { method: payMethod, amount: firstLineAmount },
+    ...extraPayments.map(e => ({ method: e.method, amount: parseInputCOP(e.amountInput) })),
+  ];
+  const paymentsCovered = sumPayments(paymentLines);
+  const remaining = total - paymentsCovered;
+  const paymentsBalanced = linesBalanced(paymentLines, total);
+  const anyLineIsCredit = paymentLines.some(l => l.method === 'credito');
+
+  function addPaymentLine() {
+    const used = new Set(paymentLines.map(l => l.method));
+    const next = (['efectivo', 'transferencia', 'tarjeta', 'credito'] as PaymentMethod[]).find(m => !used.has(m))
+      ?? 'transferencia';
+    setExtraPayments(prev => [...prev, { method: next, amountInput: '' }]);
+  }
+
+  function removePaymentLine(idx: number) {
+    setExtraPayments(prev => prev.filter((_, i) => i !== idx));
+  }
 
   // Cobrar
   async function handleCobrar() {
@@ -872,8 +926,12 @@ export default function POSPage() {
       toast('El total debe ser mayor a cero', 'error');
       return;
     }
-    if (payMethod === 'credito' && !selectedCustomer) {
+    if (anyLineIsCredit && !selectedCustomer) {
       toast('Selecciona un cliente para ventas a crédito', 'error');
+      return;
+    }
+    if (!paymentsBalanced) {
+      toast('La suma de los pagos debe ser igual al total', 'error');
       return;
     }
 
@@ -882,10 +940,13 @@ export default function POSPage() {
       const pmMap: Record<string, string> = { efectivo: 'cash', transferencia: 'transfer', tarjeta: 'card', credito: 'credit' };
       const body: Record<string, unknown> = {
         payment_method: pmMap[payMethod] ?? payMethod,
+        payments: paymentLines
+          .filter(l => l.amount > 0)
+          .map(l => ({ method: pmMap[l.method] ?? l.method, amount: l.amount })),
         ...(selectedCustomer && { customer_id: selectedCustomer.id }),
         subtotal,
         discount: globalDiscount,
-        tax: 0,
+        tax,
         total,
         status: 'completed',
         items: cart.map(i => ({
@@ -897,7 +958,7 @@ export default function POSPage() {
         })),
       };
 
-      if (payMethod === 'efectivo') {
+      if (!isMixedMode && payMethod === 'efectivo') {
         body.cash_tendered = cashReceivedNum || total;
         body.change_amount = change;
       }
@@ -919,7 +980,7 @@ export default function POSPage() {
     }
   }
 
-  const canCobrar = cart.length > 0 && !cobrarLoading && !(payMethod === 'credito' && !selectedCustomer);
+  const canCobrar = cart.length > 0 && !cobrarLoading && paymentsBalanced && !(anyLineIsCredit && !selectedCustomer);
 
   return (
     <AppLayout>
@@ -1170,6 +1231,14 @@ export default function POSPage() {
               </div>
             )}
 
+            {/* IVA */}
+            {tax > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                <span>IVA</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatCOP(tax)}</span>
+              </div>
+            )}
+
             {/* Total */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
@@ -1186,13 +1255,107 @@ export default function POSPage() {
                   value={m}
                   label={m.charAt(0).toUpperCase() + m.slice(1)}
                   active={payMethod === m}
-                  onClick={() => { setPayMethod(m); if (m !== 'credito') setSelectedCustomer(null); }}
+                  onClick={() => {
+                    setPayMethod(m);
+                    const stillNeedsCredit = m === 'credito' || extraPayments.some(e => e.method === 'credito');
+                    if (!stillNeedsCredit) setSelectedCustomer(null);
+                  }}
                 />
               ))}
             </div>
 
+            {/* Pago mixto: additional payment lines + coverage indicator */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {isMixedMode && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <span>{payMethod.charAt(0).toUpperCase() + payMethod.slice(1)}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={firstAmountInput}
+                    placeholder="0"
+                    onChange={e => setFirstAmountInput(formatInputCOP(e.target.value))}
+                    style={{
+                      width: '110px', textAlign: 'right', padding: '3px 8px',
+                      border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--text-primary)',
+                      fontSize: '13px', fontVariantNumeric: 'tabular-nums',
+                    }}
+                  />
+                </div>
+              )}
+              {extraPayments.map((line, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <select
+                    value={line.method}
+                    onChange={e => {
+                      const method = e.target.value as PaymentMethod;
+                      setExtraPayments(prev => prev.map((l, i) => (i === idx ? { ...l, method } : l)));
+                    }}
+                    style={{
+                      flex: 1, minWidth: 0, padding: '5px 6px',
+                      border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--text-primary)', fontSize: '12px',
+                    }}
+                  >
+                    {(['efectivo', 'transferencia', 'tarjeta', 'credito'] as PaymentMethod[]).map(m => (
+                      <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={line.amountInput}
+                    placeholder="0"
+                    onChange={e => {
+                      const amountInput = formatInputCOP(e.target.value);
+                      setExtraPayments(prev => prev.map((l, i) => (i === idx ? { ...l, amountInput } : l)));
+                    }}
+                    style={{
+                      width: '100px', textAlign: 'right', padding: '5px 8px',
+                      border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--text-primary)',
+                      fontSize: '12px', fontVariantNumeric: 'tabular-nums',
+                    }}
+                  />
+                  <button
+                    onClick={() => removePaymentLine(idx)}
+                    aria-label="Quitar método de pago"
+                    style={{
+                      padding: '5px 9px', border: '1px solid var(--border)', borderRadius: '4px',
+                      background: 'var(--surface-1)', color: 'var(--danger)', fontSize: '13px', cursor: 'pointer',
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {paymentLines.length < 3 && (
+                <button
+                  onClick={addPaymentLine}
+                  style={{
+                    alignSelf: 'flex-start', padding: '5px 8px',
+                    border: '1px dashed var(--border)', borderRadius: '4px',
+                    background: 'transparent', color: 'var(--accent)', fontSize: '12px', cursor: 'pointer',
+                  }}
+                >
+                  + Agregar otro método de pago
+                </button>
+              )}
+              {isMixedMode && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    {remaining > 0.5 ? 'Falta cubrir' : remaining < -0.5 ? 'Excede por' : 'Cubierto'}
+                  </span>
+                  <span style={{ color: paymentsBalanced ? 'var(--success)' : 'var(--danger)', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatCOP(Math.abs(remaining))}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Customer picker — only for credit */}
-            {payMethod === 'credito' && (
+            {anyLineIsCredit && (
               <div>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
                   Cliente *
@@ -1241,8 +1404,8 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* Efectivo: recibido + cambio */}
-            {payMethod === 'efectivo' && (
+            {/* Efectivo: recibido + cambio (solo pago único, no en modo mixto) */}
+            {!isMixedMode && payMethod === 'efectivo' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   <span>Recibido</span>

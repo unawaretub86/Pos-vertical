@@ -33,6 +33,7 @@ var dbMigrations = []migration{
 	{version: 9, up: migration9},
 	{version: 10, up: migration10},
 	{version: 11, up: migration11},
+	{version: 12, up: migration12},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -379,4 +380,63 @@ CREATE TABLE IF NOT EXISTS audit_log (
 	details    TEXT,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+`
+
+// migration12 adds mixed-payment support (sale_payments, sales.payment_method
+// CHECK widened to include 'mixed') and business expenses tracking. SQLite
+// cannot ALTER an existing CHECK constraint, so sales is recreated following
+// the same pattern already used in this project for CHECK changes.
+const migration12 = `
+CREATE TABLE sales_new (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id INTEGER NOT NULL REFERENCES users(id),
+	customer_id INTEGER REFERENCES customers(id),
+	register_id INTEGER REFERENCES registers(id),
+	subtotal REAL NOT NULL,
+	discount REAL NOT NULL DEFAULT 0,
+	tax REAL NOT NULL DEFAULT 0,
+	total REAL NOT NULL,
+	payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'transfer', 'card', 'credit', 'mixed')),
+	cash_tendered REAL,
+	change_amount REAL,
+	reference TEXT,
+	status TEXT NOT NULL DEFAULT 'completed',
+	voided_by INTEGER REFERENCES users(id),
+	voided_at DATETIME,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO sales_new (id, user_id, customer_id, register_id, subtotal, discount, tax, total, payment_method, cash_tendered, change_amount, reference, status, voided_by, voided_at, created_at)
+SELECT id, user_id, customer_id, register_id, subtotal, discount, tax, total, payment_method, cash_tendered, change_amount, reference, status, voided_by, voided_at, created_at FROM sales;
+
+DROP TABLE sales;
+ALTER TABLE sales_new RENAME TO sales;
+
+CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
+CREATE INDEX IF NOT EXISTS idx_sales_register ON sales(register_id);
+
+CREATE TABLE IF NOT EXISTS sale_payments (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	sale_id    INTEGER NOT NULL REFERENCES sales(id),
+	method     TEXT NOT NULL CHECK (method IN ('cash', 'transfer', 'card', 'credit')),
+	amount     REAL NOT NULL CHECK (amount > 0),
+	reference  TEXT,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sale_payments_sale ON sale_payments(sale_id);
+
+-- Backfill sale_payments for pre-existing sales so history is not lost.
+INSERT INTO sale_payments (sale_id, method, amount, created_at)
+SELECT id, payment_method, total, created_at FROM sales WHERE total > 0;
+
+CREATE TABLE IF NOT EXISTS expenses (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	register_id INTEGER REFERENCES registers(id),
+	user_id     INTEGER NOT NULL REFERENCES users(id),
+	category    TEXT NOT NULL CHECK (category IN ('servicios','arriendo','nomina','proveedor','otro')),
+	amount      REAL NOT NULL CHECK (amount > 0),
+	note        TEXT,
+	created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_register ON expenses(register_id);
 `
