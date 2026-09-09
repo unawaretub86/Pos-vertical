@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcSubtotal, calcTax, calcTotal, sumPayments, paymentsBalanced, type CalcItem } from './saleCalc';
+import { calcSubtotal, calcTax, calcTotal, sumPayments, paymentsBalanced, calcChange, exceedsCreditLimit, type CalcItem } from './saleCalc';
 
 describe('calcSubtotal', () => {
   it('sums unitPrice * quantity minus item discount', () => {
@@ -73,5 +73,39 @@ describe('paymentsBalanced / sumPayments', () => {
   it('tolerates sub-peso floating point rounding', () => {
     // 0.1 + 0.2 !== 0.3 in IEEE754 — this must still balance.
     expect(paymentsBalanced([{ amount: 0.1 }, { amount: 0.2 }], 0.3)).toBe(true);
+  });
+});
+
+describe('calcChange', () => {
+  it('is cashReceived - total when cash covers the total', () => {
+    expect(calcChange(60000, 50000)).toBe(10000);
+  });
+
+  it('is zero when cash received exactly matches total', () => {
+    expect(calcChange(50000, 50000)).toBe(0);
+  });
+
+  it('never goes negative when cash received is short', () => {
+    expect(calcChange(40000, 50000)).toBe(0);
+  });
+});
+
+describe('exceedsCreditLimit', () => {
+  it('is false when the customer has no credit limit configured', () => {
+    expect(exceedsCreditLimit(90000, 20000, undefined)).toBe(false);
+    expect(exceedsCreditLimit(90000, 20000, 0)).toBe(false);
+    expect(exceedsCreditLimit(90000, 20000, null)).toBe(false);
+  });
+
+  it('is false when balance + cart total stays within the limit', () => {
+    expect(exceedsCreditLimit(50000, 40000, 100000)).toBe(false);
+  });
+
+  it('is true when balance + cart total exceeds the limit', () => {
+    expect(exceedsCreditLimit(80000, 30000, 100000)).toBe(true);
+  });
+
+  it('is false at exactly the limit (boundary is not an excess)', () => {
+    expect(exceedsCreditLimit(70000, 30000, 100000)).toBe(false);
   });
 });

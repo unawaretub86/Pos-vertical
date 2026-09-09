@@ -9,7 +9,7 @@ import TicketPreview, { type TicketData } from '@/components/TicketPreview';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { getUser } from '@/lib/auth';
-import { calcSubtotal, calcTax, calcTotal, paymentsBalanced as linesBalanced, sumPayments } from '@/lib/saleCalc';
+import { calcSubtotal, calcTax, calcTotal, paymentsBalanced as linesBalanced, sumPayments, calcChange, exceedsCreditLimit } from '@/lib/saleCalc';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -890,7 +890,7 @@ export default function POSPage() {
   const tax = calcTax(calcItems);
   const total = calcTotal(calcItems, globalDiscount);
   const cashReceivedNum = parseInputCOP(cashReceived);
-  const change = payMethod === 'efectivo' ? Math.max(0, cashReceivedNum - total) : 0;
+  const change = payMethod === 'efectivo' ? calcChange(cashReceivedNum, total) : 0;
 
   // Pago mixto: with no extra lines, the primary method covers the full total
   // (identical to the pre-existing single-method behavior).
@@ -1383,7 +1383,7 @@ export default function POSPage() {
                 {(() => {
                   if (!selectedCustomer?.credit_limit || customerBalance === null) return null;
                   const cartTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity - i.discount, 0);
-                  if (customerBalance + cartTotal > selectedCustomer.credit_limit) {
+                  if (exceedsCreditLimit(customerBalance, cartTotal, selectedCustomer.credit_limit)) {
                     return (
                       <div style={{
                         marginTop: '6px',

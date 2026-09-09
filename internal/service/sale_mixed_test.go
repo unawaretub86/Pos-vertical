@@ -224,6 +224,42 @@ func TestSaleService_Create_MixedPayment_TaxOmittedFromPayments_Rejected(t *test
 	}
 }
 
+// DoD test (US-050): venta con tax_rate=0.19 + descuento global de $5.000 sobre
+// subtotal $50.000. Number verified by hand against internal/service/sale.go's
+// formula (subtotal - sale.Discount + tax), not by re-running the production
+// formula against itself:
+//   subtotal = 5 * 10000 = 50000
+//   tax      = subtotal * 0.19 = 9500  (global discount does NOT reduce the tax base)
+//   total    = 50000 - 5000 + 9500 = 54500
+func TestSaleService_Create_TaxPlusGlobalDiscount(t *testing.T) {
+	env := newMixedTestEnv(t)
+	product := env.newTaxedProduct(t, 10000, 0.19)
+
+	sale := &model.Sale{
+		UserID:   1,
+		Discount: 5000,
+		Total:    54500,
+		Items:    []model.SaleItem{{ProductID: product.ID, Quantity: 5, UnitPrice: 10000}},
+		Payments: []model.Payment{
+			{Method: "cash", Amount: 54500},
+		},
+	}
+
+	result, err := env.svc.Create(context.Background(), sale)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Subtotal != 50000 {
+		t.Errorf("expected subtotal 50000, got %.0f", result.Subtotal)
+	}
+	if result.Tax != 9500 {
+		t.Errorf("expected tax 9500, got %.0f", result.Tax)
+	}
+	if result.Total != 54500 {
+		t.Errorf("expected total 54500, got %.0f", result.Total)
+	}
+}
+
 // Doc test: cierre de caja con 1 venta mixta ($30k cash de $60k total) + 1 venta 100%
 // cash ($20k) → expected_close cash = $50.000, no $80.000.
 func TestRegisterRepo_SumCashSales_SplitsMixedPayments(t *testing.T) {

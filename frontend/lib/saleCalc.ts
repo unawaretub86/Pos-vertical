@@ -48,3 +48,18 @@ export function sumPayments(lines: PaymentLine[]): number {
 export function paymentsBalanced(lines: PaymentLine[], total: number): boolean {
   return Math.abs(sumPayments(lines) - total) < 0.5;
 }
+
+/** Change owed on a cash payment. Mirrors frontend/app/pos/page.tsx's `change`. */
+export function calcChange(cashReceived: number, total: number): number {
+  return Math.max(0, cashReceived - total);
+}
+
+/**
+ * Whether a credit sale would push the customer over their credit limit.
+ * Mirrors the inline check in frontend/app/pos/page.tsx: customers with no
+ * `creditLimit` set (0/undefined) are never blocked.
+ */
+export function exceedsCreditLimit(customerBalance: number, cartTotal: number, creditLimit: number | undefined | null): boolean {
+  if (!creditLimit) return false;
+  return customerBalance + cartTotal > creditLimit;
+}

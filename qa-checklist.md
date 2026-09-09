@@ -37,32 +37,34 @@
 
 ## 3. Ventas (POS)
 
-- [ ] Venta completa en efectivo — total correcto, descuenta stock.
-- [ ] Venta completa fiada (`credit`) — se asocia a un cliente, no descuenta caja.
+- [ ] 🤖 Venta completa en efectivo — total correcto (`TestSaleService_Create_AllPaymentMethods`, `TestSaleService_Create_RecalculatesTotalCorrectly`). Descuenta stock: sigue 100% manual, no hay test de repositorio que lo verifique.
+- [ ] 🤖 Venta completa fiada (`credit`) — se asocia a un cliente (`TestSaleService_Create_CreditWithCustomer_Succeeds`). "No descuenta caja" sigue manual.
 - [ ] Venta con múltiples productos y cantidades decimales (ej. 0.5 kg si aplica a báscula/granel).
-- [ ] Venta sin cliente seleccionado en pago fiado — debe bloquear (no se puede fiar "al aire").
-- [ ] Anular venta (`voidSale`) — stock se revierte, aparece como `voided`, no se puede volver a anular.
+- [ ] 🤖 Venta sin cliente seleccionado en pago fiado — debe bloquear (`TestValidateSale_CreditRequiresCustomer`, `TestSaleService_Create_CreditWithoutCustomer_ReturnsError`).
+- [ ] 🤖 (parcial) Anular venta (`voidSale`) — `TestVoidSale_WritesAuditLog` cubre que el endpoint corre y escribe auditoría; NO verifica que el stock se revierta ni que una segunda anulación sea rechazada — sigue manual para esos dos puntos.
 - [ ] Anular venta con nota de crédito (`voidSaleWithCreditNote`) si aplica a facturación electrónica.
 - [ ] Ver detalle de una venta (`getSale`).
 - [ ] Imprimir/ver ticket (`getTicket`) — formato correcto, datos del negocio (nombre, NIT) aparecen bien.
 - [ ] Listado de ventas (`listSales`) con filtros de fecha.
 - [ ] **Caso crítico ya identificado en pre-venta:** apagar el PC a mitad de una venta, reabrir — no se pierde nada, no queda venta a medias en estado inconsistente.
-- [ ] Venta con producto que no tiene stock suficiente — verificar si bloquea o permite stock negativo (definir comportamiento esperado).
+- [ ] 🤖 Venta con producto que no tiene stock suficiente — bloquea (`TestSaleService_Create_ExceedsStock_ReturnsError`).
+- [ ] 🤖 Venta con IVA + descuento global simultáneos — número exacto verificado a mano (`TestSaleService_Create_TaxPlusGlobalDiscount`, SPRINT-11 US-050).
 
 ---
 
 ## 4. Clientes y fiado (cartera)
 
-- [ ] Crear cliente (nombre, teléfono, límite de crédito si existe).
+- [ ] 🤖 Crear cliente (nombre, teléfono, límite de crédito si existe) (`TestCreate_WithNotesAndCreditLimit`, `TestCreate_WithoutCreditLimit`).
 - [ ] Editar cliente.
 - [ ] Eliminar cliente — verificar qué pasa si tiene ventas fiadas activas (no debería poder borrarse con deuda pendiente, o debe advertir).
-- [ ] Ver saldo de un cliente (`getCustomerBalance`) — coincide con suma de ventas fiadas menos pagos.
-- [ ] Registrar abono/pago de cliente (`createCustomerPayment`) — reduce el saldo correctamente.
-- [ ] Listado de pagos de un cliente (`listCustomerPayments`) — historial completo y ordenado.
+- [ ] 🤖 Ver saldo de un cliente (`getCustomerBalance`) — coincide con suma de ventas fiadas menos pagos (`TestBalance_CreditLimitWarningScenario`); caso venta mixta con IVA + porción a crédito (`TestSaleService_Create_MixedPayment_WithTax`, SPRINT-11 US-050).
+- [ ] 🤖 Registrar abono/pago de cliente (`createCustomerPayment`) — reduce el saldo correctamente (`TestCreatePayment_OK`, `TestCreatePayment_ExactBalance`).
+- [ ] 🤖 Listado de pagos de un cliente (`listCustomerPayments`) — (`TestListPayments_ReturnsAll`, `TestListPayments_Empty`).
 - [ ] Detalle de cliente (`getCustomerDetail`) — muestra ventas + pagos combinados, saldo correcto.
-- [ ] Pago mayor al saldo de deuda — verificar comportamiento (¿bloquea, permite saldo a favor, o error?).
+- [ ] 🤖 Pago mayor al saldo de deuda — bloquea (`TestCreatePayment_ExceedsBalance`).
 - [ ] Cartera envejecida en dashboard (`aging_receivables`) — días de mora calculados correctamente contra la venta fiada más antigua sin pagar.
 - [ ] Portafolio de cartera (`getPortfolio` en reports) — total y conteo de clientes con deuda coincide con lo real.
+- [ ] 🤖 Tope de crédito del carrito (frontend) — cliente + carrito supera límite bloquea visualmente (`exceedsCreditLimit`, `frontend/lib/saleCalc.test.ts`, SPRINT-11 US-050).
 
 ---
 
@@ -82,15 +84,15 @@
 
 ## 6. Reportes y dashboard
 
-- [ ] Dashboard resumen del día (`/dashboard/today`): vendido hoy, fiado nuevo, fiado cobrado, efectivo estimado — todos cuadran con datos reales de prueba.
+- [ ] 🤖 (parcial) Dashboard resumen del día (`/dashboard/today`): ganancia bruta y ventas de hoy cubiertas (`TestGetDashboardToday_GrossProfit`); fiado nuevo/cobrado y efectivo estimado siguen manuales.
 - [ ] Producto más vendido del día — correcto por cantidad, no por monto.
-- [ ] Ganancia bruta del día (`gross_profit`) — cálculo `(precio − costo) × cantidad` correcto, solo productos con costo configurado.
-- [ ] Top 5 productos por margen (`top_by_margin`) — solo aparece si hay ≥2 productos con costo, ordenado de mayor a menor margen.
+- [ ] 🤖 Ganancia bruta del día (`gross_profit`) — cálculo `(precio − costo) × cantidad` correcto, solo productos con costo configurado (`TestGetDashboardToday_GrossProfit`, incluye caso de producto con `cost=0` excluido y contado en `unconfigured_cost_count`).
+- [ ] 🤖 Top 5 productos por margen (`top_by_margin`) — orden mayor a menor margen (`TestGetDashboardToday_GrossProfit`).
 - [ ] Top 5 productos con stock bajo (`low_stock`) — ordenado por déficit (min_stock − stock).
 - [ ] Dashboard general (`/dashboard`): hoy vs. ayer, caja abierta, cartera, últimas 8 ventas.
-- [ ] Reporte de ventas por rango de fechas (`getSalesReport`) con agrupación (día/semana/mes si aplica).
+- [ ] 🤖 (parcial) Reporte de ventas por rango de fechas (`getSalesReport`) — el desglose de pagos mixtos por método está cubierto (`TestReportRepo_SalesSummary_SplitsMixedPayments`); agrupación día/semana/mes sigue manual.
 - [ ] Top productos por rango de fechas (`getTopProducts`), no solo del día.
-- [ ] Todos los reportes probados con rango de fechas vacío (sin ventas) — no debe crashear, debe mostrar ceros/vacíos.
+- [ ] 🤖 (parcial) Reportes con rango de fechas vacío (sin ventas) — cubierto para `/dashboard/today` (`TestGetDashboardToday_NoSales`); el resto de reportes (`getSalesReport`, `getTopProducts`, `getPortfolio`) siguen manuales.
 
 ---
 
