@@ -41,6 +41,7 @@ interface RegisterSummary {
   cash_out: number;
   expected: number;
   movements: Movement[];
+  by_payment_method: { method: string; total: number; count: number }[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -631,19 +632,14 @@ export default function RegisterPage() {
     setShowClose(false);
 
     try {
-      const [business, salesReport] = await Promise.all([
-        api.get<TicketBusiness>('/setup'),
-        api.get<{ by_payment_method: { method: string; total: number }[] }>(
-          `/reports/sales?from=${encodeURIComponent(closed.register.opened_at)}&to=${encodeURIComponent(closed.register.closed_at ?? new Date().toISOString())}`
-        ),
-      ]);
+      const business = await api.get<TicketBusiness>('/setup');
       setCloseTicket({
         business,
         cashier: getUser()?.username ?? '—',
         opened_at: closed.register.opened_at,
         closed_at: closed.register.closed_at ?? new Date().toISOString(),
         opening_amount: closed.register.opening_amount,
-        by_payment_method: salesReport.by_payment_method ?? [],
+        by_payment_method: closed.by_payment_method ?? [],
         cash_in: closed.cash_in,
         cash_out: closed.cash_out,
         expected: closed.expected,

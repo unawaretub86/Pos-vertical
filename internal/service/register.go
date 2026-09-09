@@ -17,12 +17,13 @@ var (
 
 // RegisterSummary aggregates the register state for display.
 type RegisterSummary struct {
-	Register  *model.Register           `json:"register"`
-	CashSales float64                   `json:"cash_sales"`
-	CashIn    float64                   `json:"cash_in"`
-	CashOut   float64                   `json:"cash_out"`
-	Expected  float64                   `json:"expected"`
-	Movements []*model.RegisterMovement `json:"movements"`
+	Register        *model.Register              `json:"register"`
+	CashSales       float64                      `json:"cash_sales"`
+	CashIn          float64                      `json:"cash_in"`
+	CashOut         float64                      `json:"cash_out"`
+	Expected        float64                      `json:"expected"`
+	Movements       []*model.RegisterMovement    `json:"movements"`
+	ByPaymentMethod []repository.PaymentMethodTotal `json:"by_payment_method"`
 }
 
 // RegisterService handles business logic for cash registers.
@@ -105,14 +106,19 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 	if err != nil {
 		return nil, err
 	}
+	byMethod, err := s.repo.SumByPaymentMethod(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	expected := reg.OpeningAmount + cashSales + cashIn - cashOut
 	return &RegisterSummary{
-		Register:  reg,
-		CashSales: cashSales,
-		CashIn:    cashIn,
-		CashOut:   cashOut,
-		Expected:  expected,
-		Movements: movements,
+		Register:        reg,
+		CashSales:       cashSales,
+		CashIn:          cashIn,
+		CashOut:         cashOut,
+		Expected:        expected,
+		Movements:       movements,
+		ByPaymentMethod: byMethod,
 	}, nil
 }
 
@@ -137,13 +143,15 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 		return nil, err
 	}
 	movements, _ := s.repo.ListMovements(ctx, id)
+	byMethod, _ := s.repo.SumByPaymentMethod(ctx, id)
 	return &RegisterSummary{
-		Register:  closed,
-		CashSales: cashSales,
-		CashIn:    cashIn,
-		CashOut:   cashOut,
-		Expected:  expected,
-		Movements: movements,
+		Register:        closed,
+		CashSales:       cashSales,
+		CashIn:          cashIn,
+		CashOut:         cashOut,
+		Expected:        expected,
+		Movements:       movements,
+		ByPaymentMethod: byMethod,
 	}, nil
 }
 

@@ -54,6 +54,10 @@ func (s *stubRegisterRepo) SumCashIn(_ context.Context, _ int64) (float64, error
 	return s.cashIn, nil
 }
 
+func (s *stubRegisterRepo) SumByPaymentMethod(_ context.Context, _ int64) ([]repository.PaymentMethodTotal, error) {
+	return nil, nil
+}
+
 
 func TestRegisterService_Open_AlreadyOpen_ReturnsError(t *testing.T) {
 	// A register is already open — opening a second one must fail.

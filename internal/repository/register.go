@@ -23,6 +23,11 @@ type RegisterRepository interface {
 	SumCashOut(ctx context.Context, registerID int64) (float64, error)
 	// SumCashIn returns the sum of cash_in movements for a register.
 	SumCashIn(ctx context.Context, registerID int64) (float64, error)
+	// SumByPaymentMethod returns completed sales totals for a register, grouped
+	// by payment method — used by the register close ticket (US-051), which
+	// any authenticated cashier can see even though GET /reports/sales is
+	// admin-only.
+	SumByPaymentMethod(ctx context.Context, registerID int64) ([]PaymentMethodTotal, error)
 }
 
 type registerRepo struct {
@@ -142,6 +147,30 @@ func (r *registerRepo) SumCashSales(ctx context.Context, registerID int64) (floa
 		 WHERE s.register_id = ? AND sp.method = 'cash' AND s.status = 'completed'`,
 		registerID).Scan(&sum)
 	return sum, err
+}
+
+func (r *registerRepo) SumByPaymentMethod(ctx context.Context, registerID int64) ([]PaymentMethodTotal, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT sp.method, COALESCE(SUM(sp.amount), 0), COUNT(*)
+		FROM sale_payments sp
+		JOIN sales s ON s.id = sp.sale_id
+		WHERE s.register_id = ? AND s.status = 'completed'
+		GROUP BY sp.method
+		ORDER BY sp.method`, registerID)
+	if err != nil {
+		return nil, fmt.Errorf("register sum by payment method: %w", err)
+	}
+	defer rows.Close()
+
+	var totals []PaymentMethodTotal
+	for rows.Next() {
+		var t PaymentMethodTotal
+		if err := rows.Scan(&t.Method, &t.Total, &t.Count); err != nil {
+			return nil, fmt.Errorf("register payment method scan: %w", err)
+		}
+		totals = append(totals, t)
+	}
+	return totals, rows.Err()
 }
 
 func (r *registerRepo) SumCashOut(ctx context.Context, registerID int64) (float64, error) {

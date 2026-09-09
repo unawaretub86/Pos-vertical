@@ -22,7 +22,7 @@
 |----|--------|--------|-------|
 | US-050 | QA: cobertura de cálculos financieros + CI | [x] Completo | 2026-09-08 |
 | US-051 | Arqueo con conteo de denominaciones + ticket de cierre (F5+F6) | [x] Completo | 2026-09-08 |
-| US-052 | Proveedores y compras (G1) | [ ] Pendiente | — |
+| US-052 | Proveedores y compras (G1) | [x] Completo | 2026-09-08 |
 
 ---
 
@@ -213,27 +213,29 @@ purchase.total          = Σ purchase_item.subtotal
 **Acceptance Criteria:**
 
 **Proveedores:**
-- [ ] CRUD de proveedores (nombre, teléfono, notas) desde `frontend/app/suppliers`.
-- [ ] No se puede eliminar un proveedor con compras registradas (mismo criterio que categorías con productos asociados).
+- [x] CRUD de proveedores (nombre, teléfono, notas) desde `frontend/app/suppliers`.
+- [x] No se puede eliminar un proveedor con compras registradas (mismo criterio que categorías con productos asociados).
 
 **Compras:**
-- [ ] Formulario de compra: seleccionar proveedor, agregar productos con cantidad y costo unitario, ver total en tiempo real.
-- [ ] Al guardar: `products.stock` sube exactamente la cantidad comprada por producto.
-- [ ] Al guardar: `products.cost` queda igual al `unit_cost` de esa compra (último costo).
-- [ ] La compra aparece en `stock_entries` con referencia a la compra en la nota.
-- [ ] Listado de compras con filtro por proveedor y rango de fechas.
-- [ ] Sin resultados con los filtros aplicados → mensaje vacío, no tabla en blanco ni error.
-- [ ] Responsive: formulario usable en 320px.
+- [x] Formulario de compra: seleccionar proveedor, agregar productos con cantidad y costo unitario, ver total en tiempo real.
+- [x] Al guardar: `products.stock` sube exactamente la cantidad comprada por producto.
+- [x] Al guardar: `products.cost` queda igual al `unit_cost` de esa compra (último costo).
+- [x] La compra aparece en `stock_entries` con referencia a la compra en la nota.
+- [x] Listado de compras con filtro por proveedor y rango de fechas.
+- [x] Sin resultados con los filtros aplicados → mensaje vacío, no tabla en blanco ni error.
+- [x] Responsive: formulario usable en 320px (columna, controles apilables).
 
 **DoD:**
-- [ ] Migración 13: `suppliers`, `purchases`, `purchase_items` — SQL exacto en Contexto técnico.
-- [ ] `POST /api/purchases` → `{supplier_id, reference, items: [{product_id, quantity, unit_cost}]}` → crea compra, actualiza stock y costo.
-- [ ] `GET /api/purchases?supplier_id=&from=&to=`.
-- [ ] `POST /api/suppliers`, `GET /api/suppliers`, `PUT /api/suppliers/{id}`, `DELETE /api/suppliers/{id}`.
-- [ ] Test: compra de 10 unidades a costo $8.000 de un producto que tenía stock 5 y costo $7.500 → stock final 15, costo final $8.000 (no promedio).
-- [ ] Test: compra con `quantity=0` o `unit_cost` negativo → rechazada con 400.
-- [ ] Test: eliminar proveedor con compras existentes → rechazado.
-- [ ] Build limpio (`go build`, `npm run build`).
+- [x] Migración 13: `suppliers`, `purchases`, `purchase_items` — SQL exacto en Contexto técnico (`internal/database/migrate.go`, `migration13`).
+- [x] `POST /api/purchases` → `{supplier_id, reference, items: [{product_id, quantity, unit_cost}]}` → crea compra, actualiza stock y costo.
+- [x] `GET /api/purchases?supplier_id=&from=&to=`.
+- [x] `POST /api/suppliers`, `GET /api/suppliers`, `PUT /api/suppliers/{id}`, `DELETE /api/suppliers/{id}`.
+- [x] Test: compra de 10 unidades a costo $8.000 de un producto que tenía stock 5 y costo $7.500 → stock final 15, costo final $8.000 (no promedio) (`TestPurchaseRepo_Create_UpdatesStockAndCost`).
+- [x] Test: compra con `quantity=0` o `unit_cost` negativo → rechazada (`TestPurchaseService_Create_RejectsZeroQuantity`, `TestPurchaseService_Create_RejectsNegativeUnitCost`; handler maps both to HTTP 400).
+- [x] Test: eliminar proveedor con compras existentes → rechazado (`TestSupplierRepo_Delete_BlockedWithPurchases`; handler maps to HTTP 409, same as categories).
+- [x] Build limpio (`go build ./...`, `npm run build`).
+
+**Nota de implementación:** el ticket de cierre de caja de US-051 originalmente iba a llamar a `GET /reports/sales` para el desglose por método de pago, pero ese endpoint es admin-only y Laura (cajera) no tiene rol admin — habría fallado en producción para el usuario real de esa historia. Se corrigió agregando `by_payment_method` a `RegisterSummary` (mismo endpoint `GET/POST /registers/...` que ya usa cualquier usuario autenticado), sin crear endpoint nuevo.
 
 ---
 

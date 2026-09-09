@@ -28,6 +28,8 @@ type Handler struct {
 	reports      repository.ReportRepository
 	audit        repository.AuditRepository
 	expenses     *service.ExpenseService
+	suppliers    *service.SupplierService
+	purchases    *service.PurchaseService
 	factelect    *factelect.FacElectService
 	fiscalRepo   factelect.FiscalConfigRepository
 }
@@ -47,6 +49,8 @@ func New(db *database.DB) *Handler {
 	expenseRepo := repository.NewExpenseRepository(db.DB)
 	eledocRepo := repository.NewElectronicDocRepository(db.DB)
 	fiscalRepo := factelect.NewFiscalConfigRepository(db.DB)
+	supplierRepo := repository.NewSupplierRepository(db.DB)
+	purchaseRepo := repository.NewPurchaseRepository(db.DB)
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
@@ -74,6 +78,8 @@ func New(db *database.DB) *Handler {
 		reports:      reportRepo,
 		audit:        auditRepo,
 		expenses:     service.NewExpenseService(expenseRepo, registerSvc),
+		suppliers:    service.NewSupplierService(supplierRepo),
+		purchases:    service.NewPurchaseService(purchaseRepo, supplierRepo),
 		factelect:    factelSvc,
 		fiscalRepo:   fiscalRepo,
 	}
@@ -166,6 +172,22 @@ func (h *Handler) Routes() http.Handler {
 		// Expenses (all authenticated users)
 		r.Post("/expenses", h.createExpense)
 		r.Get("/expenses", h.listExpenses)
+
+		// Suppliers (all authenticated users can read; admin to write)
+		r.Get("/suppliers", h.listSuppliers)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Post("/suppliers", h.createSupplier)
+			r.Put("/suppliers/{id}", h.updateSupplier)
+			r.Delete("/suppliers/{id}", h.deleteSupplier)
+		})
+
+		// Purchases (all authenticated users can read; admin to write)
+		r.Get("/purchases", h.listPurchases)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Post("/purchases", h.createPurchase)
+		})
 
 		// Audit log (admin only)
 		r.Group(func(r chi.Router) {
