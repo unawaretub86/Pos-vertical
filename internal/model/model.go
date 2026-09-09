@@ -218,6 +218,35 @@ type StockEntry struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Supplier struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Phone     string    `json:"phone"`
+	Notes     string    `json:"notes"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type PurchaseItem struct {
+	ID          int64   `json:"id"`
+	PurchaseID  int64   `json:"purchase_id"`
+	ProductID   int64   `json:"product_id"`
+	ProductName string  `json:"product_name,omitempty"`
+	Quantity    float64 `json:"quantity"`
+	UnitCost    float64 `json:"unit_cost"`
+	Subtotal    float64 `json:"subtotal"`
+}
+
+type Purchase struct {
+	ID           int64          `json:"id"`
+	SupplierID   int64          `json:"supplier_id"`
+	SupplierName string         `json:"supplier_name,omitempty"`
+	UserID       int64          `json:"user_id"`
+	Reference    string         `json:"reference"`
+	Total        float64        `json:"total"`
+	CreatedAt    time.Time      `json:"created_at"`
+	Items        []PurchaseItem `json:"items,omitempty"`
+}
+
 type Claims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`

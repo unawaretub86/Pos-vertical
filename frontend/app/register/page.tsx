@@ -6,6 +6,10 @@ import Topbar from '@/components/Topbar';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
+import { COP_DENOMINATIONS, sumDenominations, type DenominationCounts } from '@/lib/denominations';
+import { getUser } from '@/lib/auth';
+import CloseTicketPreview, { type CloseTicketData } from '@/components/CloseTicketPreview';
+import type { TicketBusiness } from '@/components/TicketPreview';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +37,7 @@ interface Movement {
 interface RegisterSummary {
   register: Register;
   cash_sales: number;
+  cash_in: number;
   cash_out: number;
   expected: number;
   movements: Movement[];
@@ -264,6 +269,35 @@ function MovementModal({
 
 // ─── Modal de Cierre ──────────────────────────────────────────────────────────
 
+function DenominationGrid({ counts, onChange }: { counts: DenominationCounts; onChange: (counts: DenominationCounts) => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+      {COP_DENOMINATIONS.map(value => (
+        <div key={value} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ flex: 1, fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>
+            {formatCOP(value)}
+          </span>
+          <input
+            className="input"
+            style={{ width: 72, boxSizing: 'border-box', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}
+            type="text"
+            inputMode="numeric"
+            value={counts[value] ? String(counts[value]) : ''}
+            onChange={e => {
+              const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
+              onChange({ ...counts, [value]: Number.isNaN(n) ? 0 : n });
+            }}
+            placeholder="0"
+          />
+          <span style={{ width: 96, textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+            {formatCOP(value * (counts[value] || 0))}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CloseModal({
   summary,
   onClose,
@@ -273,11 +307,18 @@ function CloseModal({
   onClose: () => void;
   onConfirm: (actualClose: number) => Promise<void>;
 }) {
+  const [denomCounts, setDenomCounts] = useState<DenominationCounts>({});
   const [counted, setCounted] = useState('');
+  const [showDenoms, setShowDenoms] = useState(true);
   const [loading, setLoading] = useState(false);
   const countedNum = parseInputCOP(counted);
   const difference = counted ? countedNum - summary.expected : 0;
   const hasFaltante = counted !== '' && difference < 0;
+
+  const handleDenomChange = (next: DenominationCounts) => {
+    setDenomCounts(next);
+    setCounted(formatInputCOP(String(sumDenominations(next))));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,15 +335,17 @@ function CloseModal({
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+      padding: 12,
     }}>
       <div style={{
         background: 'var(--surface-1)', border: '1px solid var(--border)',
-        borderRadius: 12, padding: 28, width: 420,
+        borderRadius: 12, padding: 28, width: 'min(420px, 100%)',
+        maxHeight: '92vh', overflowY: 'auto',
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
       }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600 }}>Cerrar Caja</h3>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)' }}>
-          Ingresa el monto real contado en caja para calcular el cuadre.
+          Cuenta las denominaciones para calcular el monto real automáticamente.
         </p>
 
         {/* Resumen esperado */}
@@ -328,6 +371,21 @@ function CloseModal({
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setShowDenoms(s => !s)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+            background: 'none', border: 'none', padding: 0, marginBottom: 8,
+            fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase',
+            letterSpacing: '0.5px', cursor: 'pointer',
+          }}
+        >
+          <span>Conteo de denominaciones</span>
+          <span>{showDenoms ? '−' : '+'}</span>
+        </button>
+        {showDenoms && <DenominationGrid counts={denomCounts} onChange={handleDenomChange} />}
+
         <form onSubmit={handleSubmit}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
             Monto real contado
@@ -340,7 +398,6 @@ function CloseModal({
             value={counted}
             onChange={e => setCounted(formatInputCOP(e.target.value))}
             placeholder="$0"
-            autoFocus
           />
 
           {counted !== '' && (
@@ -537,6 +594,7 @@ export default function RegisterPage() {
   const [showMovement, setShowMovement] = useState(false);
   const [showClose, setShowClose] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [closeTicket, setCloseTicket] = useState<CloseTicketData | null>(null);
   const { toast } = useToast();
 
   const fetchOpen = useCallback(async () => {
@@ -568,9 +626,34 @@ export default function RegisterPage() {
 
   const handleClose = async (actualClose: number) => {
     if (!summary) return;
-    await api.post(`/registers/${summary.register.id}/close`, { actual_close: actualClose });
+    const closed = await api.post<RegisterSummary>(`/registers/${summary.register.id}/close`, { actual_close: actualClose });
     toast('Caja cerrada correctamente', 'success');
     setShowClose(false);
+
+    try {
+      const [business, salesReport] = await Promise.all([
+        api.get<TicketBusiness>('/setup'),
+        api.get<{ by_payment_method: { method: string; total: number }[] }>(
+          `/reports/sales?from=${encodeURIComponent(closed.register.opened_at)}&to=${encodeURIComponent(closed.register.closed_at ?? new Date().toISOString())}`
+        ),
+      ]);
+      setCloseTicket({
+        business,
+        cashier: getUser()?.username ?? '—',
+        opened_at: closed.register.opened_at,
+        closed_at: closed.register.closed_at ?? new Date().toISOString(),
+        opening_amount: closed.register.opening_amount,
+        by_payment_method: salesReport.by_payment_method ?? [],
+        cash_in: closed.cash_in,
+        cash_out: closed.cash_out,
+        expected: closed.expected,
+        actual_close: closed.register.actual_close ?? actualClose,
+        difference: closed.register.difference ?? 0,
+      });
+    } catch {
+      // Non-fatal: closing already succeeded, ticket is a convenience.
+    }
+
     setLoading(true);
     await fetchOpen();
   };
@@ -776,6 +859,24 @@ export default function RegisterPage() {
       )}
       {showClose && summary && (
         <CloseModal summary={summary} onClose={() => setShowClose(false)} onConfirm={handleClose} />
+      )}
+      {closeTicket && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          padding: 12,
+        }}>
+          <div style={{
+            background: 'var(--surface-1)', border: '1px solid var(--border)',
+            borderRadius: 12, padding: 24, maxHeight: '92vh', overflowY: 'auto',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', alignSelf: 'flex-start' }}>
+              ✓ Caja cerrada
+            </div>
+            <CloseTicketPreview ticket={closeTicket} onClose={() => setCloseTicket(null)} />
+          </div>
+        </div>
       )}
     </AppLayout>
   );

@@ -34,6 +34,7 @@ var dbMigrations = []migration{
 	{version: 10, up: migration10},
 	{version: 11, up: migration11},
 	{version: 12, up: migration12},
+	{version: 13, up: migration13},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -439,4 +440,38 @@ CREATE TABLE IF NOT EXISTS expenses (
 	created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_register ON expenses(register_id);
+`
+
+// migration13 adds suppliers and purchases (US-052). products.cost is
+// updated to the purchase's unit_cost (last-cost, not weighted average) by
+// the repository layer, not by this schema.
+const migration13 = `
+CREATE TABLE IF NOT EXISTS suppliers (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	name       TEXT NOT NULL,
+	phone      TEXT,
+	notes      TEXT,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS purchases (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
+	user_id     INTEGER NOT NULL REFERENCES users(id),
+	reference   TEXT,
+	total       REAL NOT NULL,
+	created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS purchase_items (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	purchase_id INTEGER NOT NULL REFERENCES purchases(id),
+	product_id  INTEGER NOT NULL REFERENCES products(id),
+	quantity    REAL NOT NULL CHECK (quantity > 0),
+	unit_cost   REAL NOT NULL CHECK (unit_cost >= 0),
+	subtotal    REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_product ON purchase_items(product_id);
 `

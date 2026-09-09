@@ -3,6 +3,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/andreyo/pos/internal/model"
 )
@@ -78,4 +79,28 @@ type CustomerRepository interface {
 	ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error)
 	CreatePayment(ctx context.Context, p *model.CustomerPayment) (*model.CustomerPayment, error)
 	ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error)
+}
+
+// SupplierRepository defines CRUD operations for suppliers.
+type SupplierRepository interface {
+	List(ctx context.Context) ([]*model.Supplier, error)
+	GetByID(ctx context.Context, id int64) (*model.Supplier, error)
+	Create(ctx context.Context, s *model.Supplier) (*model.Supplier, error)
+	Update(ctx context.Context, s *model.Supplier) (*model.Supplier, error)
+	Delete(ctx context.Context, id int64) error
+}
+
+// PurchaseFilter controls listing behavior for GET /api/purchases.
+type PurchaseFilter struct {
+	SupplierID *int64
+	From       *time.Time
+	To         *time.Time
+}
+
+// PurchaseRepository persists supplier purchases (US-052). Create updates
+// products.stock and products.cost and records a stock_entries row in the
+// same transaction, so stock history stays a single source of truth.
+type PurchaseRepository interface {
+	Create(ctx context.Context, p *model.Purchase) (*model.Purchase, error)
+	List(ctx context.Context, filter PurchaseFilter) ([]*model.Purchase, error)
 }

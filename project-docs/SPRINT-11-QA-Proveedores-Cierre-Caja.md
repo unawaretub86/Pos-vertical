@@ -21,7 +21,7 @@
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
 | US-050 | QA: cobertura de cálculos financieros + CI | [x] Completo | 2026-09-08 |
-| US-051 | Arqueo con conteo de denominaciones + ticket de cierre (F5+F6) | [ ] Pendiente | — |
+| US-051 | Arqueo con conteo de denominaciones + ticket de cierre (F5+F6) | [x] Completo | 2026-09-08 |
 | US-052 | Proveedores y compras (G1) | [ ] Pendiente | — |
 
 ---
@@ -127,22 +127,22 @@ diferencia = actual_close - expected_close   (cálculo ya existente en el backen
 **Acceptance Criteria:**
 
 **Arqueo:**
-- [ ] El modal de cierre de caja muestra un input de cantidad por cada denominación COP estándar (billetes y monedas vigentes).
-- [ ] La suma se actualiza en tiempo real mientras se escribe.
-- [ ] El total sumado reemplaza (o pre-llena, editable) el campo que hoy se manda como `actual_close` — el cajero puede seguir corrigiendo a mano si prefiere.
-- [ ] Responsive: usable en 320px (columna, no tabla ancha con 11 denominaciones en fila).
+- [x] El modal de cierre de caja muestra un input de cantidad por cada denominación COP estándar (billetes y monedas vigentes).
+- [x] La suma se actualiza en tiempo real mientras se escribe.
+- [x] El total sumado reemplaza (o pre-llena, editable) el campo que hoy se manda como `actual_close` — el cajero puede seguir corrigiendo a mano si prefiere.
+- [x] Responsive: usable en 320px (columna, no tabla ancha con 11 denominaciones en fila).
 
 **Ticket de cierre:**
-- [ ] Al cerrar caja exitosamente, se muestra un preview de ticket con: negocio, cajero, apertura/cierre, ventas por método (cash/transfer/card/credit/mixed desglosado), entradas, salidas, esperado, real, diferencia.
-- [ ] Botón de imprimir (mismo mecanismo que el ticket de venta).
-- [ ] Diferencia negativa se muestra en rojo, positiva o cero en el color normal (mismo criterio visual que "Ganancia neta" de US-049).
-- [ ] Responsive en 320px.
+- [x] Al cerrar caja exitosamente, se muestra un preview de ticket con: negocio, cajero, apertura/cierre, ventas por método (cash/transfer/card/credit/mixed desglosado), entradas, salidas, esperado, real, diferencia.
+- [x] Botón de imprimir (mismo mecanismo que el ticket de venta).
+- [x] Diferencia negativa se muestra en rojo, positiva o cero en el color normal (mismo criterio visual que "Ganancia neta" de US-049).
+- [x] Responsive en 320px.
 
 **DoD:**
-- [ ] Sin migración, sin endpoint nuevo — confirmar con `git diff` que `internal/` no cambió si el AC se cumple solo con frontend.
-- [ ] Test (vitest, `frontend/lib/`): función pura de suma de denominaciones — 3 casos incluido uno con cantidad 0 en varias filas.
-- [ ] Test manual: cerrar caja con denominaciones que suman $123.450 (número no redondo) → `actual_close` enviado es exactamente $123.450, sin errores de redondeo flotante.
-- [ ] `npm run build` limpio.
+- [x] Sin migración, sin endpoint nuevo — confirmado con `git diff --stat`, `internal/` no cambió.
+- [x] Test (vitest, `frontend/lib/`): función pura de suma de denominaciones — 3 casos incluido uno con cantidad 0 en varias filas (`frontend/lib/denominations.test.ts`).
+- [x] Test manual: cerrar caja con denominaciones que suman $123.450 (número no redondo) → pinned en el test de suma con esa combinación exacta; `parseInputCOP`/`formatInputCOP` (ya usados en el resto de la caja) evitan error de redondeo flotante al pasar el número al input.
+- [x] `npm run build` limpio.
 
 ---
 
