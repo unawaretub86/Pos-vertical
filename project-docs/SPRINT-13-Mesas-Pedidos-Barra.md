@@ -439,10 +439,8 @@ todo el backlog del día).
 
 ---
 
-## Roadmap — qué queda del diseño
+## Roadmap
 
-| Sprint | Features | Por qué ahí |
-|--------|----------|-------------|
-| SPRINT-14 | Para llevar con turno diario · modificadores con precio (tamaño, tipo de leche) | El turno es media US sobre tablas ya creadas. Los modificadores son lo que hace vendible el módulo a cualquier café, pero tocan catálogo y precios: merecen su propio sprint. |
-| SPRINT-15 | Propina · dividir cuenta · transferir ítems entre mesas | Complican el cobro, que en SPRINT-13 recién se estabiliza. Solo valen si el cliente los pide de verdad. |
-| Sin fecha | Plano visual arrastrable · rol "mesero" · comanda impresa · KDS por SSE | Cosmético o dependiente de que el cliente crezca. El plano vende en demo pero no resuelve nada que la lista no resuelva. |
+Lo que queda por construir vive en [roadmap.md](roadmap.md), que es la única fuente. Este documento no reserva números de sprint futuros.
+
+> Antes había aquí una tabla de roadmap propia. Se consolidó el 2026-09-21: las copias por sprint divergieron entre sí y llegaron a reclamar el mismo número de sprint para features distintas.

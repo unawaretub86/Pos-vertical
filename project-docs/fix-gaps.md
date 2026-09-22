@@ -1,5 +1,9 @@
 # Fix Gaps — Facturación Electrónica: Decisiones y Plan de Implementación
 
+> **Tipo:** referencia de implementación · **Vigente:** parcial · **Fecha:** mayo 2026
+> **El nombre engaña: es sobre facturación electrónica, no sobre "gaps" genéricos.** Decisiones de arquitectura de `internal/factelect`. La regla de producto vigente está en [spec/domain/facturacion-dian.md](spec/domain/facturacion-dian.md).
+
+
 > Documento de referencia para implementar `internal/factelect` en POS Vertical.
 > Todas las decisiones de arquitectura están aquí. Leer antes de escribir código.
 > Fecha: Mayo 2026

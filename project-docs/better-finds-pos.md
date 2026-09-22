@@ -1,5 +1,9 @@
 # POS Vertical — Investigación de Mercado y Features Diferenciadoras
 
+> **Tipo:** research · **Vigente:** NO (pero es el más reciente) · **Fecha:** 2026-09-08
+> Investigación de mercado, bloques A–K. **Sus afirmaciones de "esto no existe" se verifican con `grep` antes de usarse** — varias ya quedaron desactualizadas. Lo que viene está en [roadmap.md](roadmap.md), no aquí.
+
+
 > Generado: 2026-09-08
 
 ## Estado general

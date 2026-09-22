@@ -1,5 +1,9 @@
 # Arquitectura — POS Vertical
 
+> **Tipo:** histórico · **Vigente:** NO · **Fecha:** 2026-04-17
+> **No es fuente de verdad sobre el código actual.** Foto de la estructura en esa fecha. Para convenciones y arquitectura vigentes ver [`../CLAUDE.md`](../CLAUDE.md).
+
+
 > Analizado el 2026-04-17. Fuentes: `internal/`, `frontend/`, `project-docs/PRD.md`, `go.mod`.
 
 ---

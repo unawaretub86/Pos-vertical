@@ -1,4 +1,8 @@
 # POS Vertical — Gaps para Primer Cliente
+
+> **Tipo:** research · **Vigente:** NO · **Fecha:** 2026-05-11
+> Investigación de mercado. **Sus afirmaciones de "esto no existe" se verifican con `grep` antes de usarse.** El doc de investigación más reciente y completo es `better-finds-pos.md`. Lo que viene está en [roadmap.md](roadmap.md).
+
 > Generado: 2026-05-11
 
 ## Estado general

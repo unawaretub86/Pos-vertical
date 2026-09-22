@@ -5,16 +5,34 @@
 - **Claude** — Tech Lead & Developer
 
 ## Definition of Done (DoD)
-1. Code compiles without errors (`go build`, `npm run build`)
-2. Existing tests pass (`go test ./...`)
+1. Code compiles without errors (`go build ./...`, `pnpm build` en `frontend/`)
+2. Existing tests pass (`go test ./...`, `pnpm test`)
 3. New code has tests where applicable
 4. Code follows Design System defined in PLAN.md (Phase 0.0)
 5. Mobile responsive (320px, 768px, 1024px)
 6. No console errors
 7. Sprint Document updated (task checked off)
+8. **Si cambió una regla de negocio, `project-docs/spec/` se actualiza en el mismo commit.** Sin esto el spec envejece y vuelve a pasar lo de `PLAN.md`.
 
 ## Design System Reference
 See `PLAN.md` → Fase 0.0 for full token definitions, component specs, and typography rules.
+
+## Dónde está cada cosa
+
+| Pregunta | Documento |
+|---|---|
+| Stack, convenciones de código, trampas conocidas | [`../CLAUDE.md`](../CLAUDE.md) |
+| Qué manda sobre qué en `project-docs/` | [README.md](README.md) |
+| Reglas de negocio vigentes (fiado, caja, rentabilidad) | [spec/](spec/) |
+| **Qué se construye después** | [roadmap.md](roadmap.md) — única fuente |
+
+**Regla de verificación:** ninguna afirmación sobre el código entra en un plan sin `archivo:línea`. Los docs de investigación envejecen; el código no miente. Ver `CLAUDE.md` → Regla 1.
+
+## Validación con el usuario (opcional por sprint)
+
+Cuando un sprint introduce una interacción nueva —no una pantalla más de algo que ya existe— vale la pena una sección `## Validaciones Previas con Usuario` en el documento de sprint: qué mostrarle a Don Carlos o Laura, y qué pregunta concreta hacerle, antes de construir.
+
+Aplica a formas de interactuar que el usuario no ha visto antes. No a features incrementales.
 
 ## Iteration Loop (9 Steps)
 1. **Select** — Pick first unchecked US from Sprint Document
@@ -42,3 +60,6 @@ See `PLAN.md` → Fase 0.0 for full token definitions, component specs, and typo
 | SPRINT-09 | Historial de Cliente, Pedidos y Catálogo | ⬜ Pendiente |
 | SPRINT-10 | Cobro Mixto, Auditoría y Gastos | ✅ Completo |
 | SPRINT-11 | QA de Cálculos, Proveedores/Compras y Cierre de Caja | ✅ Completo |
+| SPRINT-12 | Resumen WhatsApp al Dueño y Acceso LAN desde Celular | ⬜ Pendiente |
+| SPRINT-13 | Mesas, Pedidos y Pantalla de Barra (módulo restaurante) | ⬜ Pendiente |
+| SPRINT-14 | Asistente Local de Consultas (motor de intenciones offline) | ⬜ Pendiente |

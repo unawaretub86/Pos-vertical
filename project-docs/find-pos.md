@@ -1,4 +1,8 @@
 # POS Vertical — Research de Mercado y Diferenciadores
+
+> **Tipo:** research · **Vigente:** NO · **Fecha:** ~mayo 2026
+> Investigación de verticales y rentabilidad. **Sus afirmaciones de "esto no existe" se verifican con `grep` antes de usarse.** El doc de investigación más reciente y completo es `better-finds-pos.md`. Lo que viene está en [roadmap.md](roadmap.md).
+
 > Última actualización: 2026-05-14
 > Fuentes: Reddit (r/POS, r/smallbusiness, r/Entrepreneur), WebSearch (24 páginas), research LATAM fintechs
 

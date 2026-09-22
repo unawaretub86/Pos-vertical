@@ -323,7 +323,7 @@ function CloseModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (hasFaltante) return;
+    if (hasFaltante || counted === '') return;
     setLoading(true);
     try {
       await onConfirm(countedNum);
@@ -431,7 +431,7 @@ function CloseModal({
             <button type="button" className="btn btn-full" onClick={onClose} disabled={loading}>
               Cancelar
             </button>
-            <button type="submit" className="btn btn-full btn-danger" disabled={loading || hasFaltante}>
+            <button type="submit" className="btn btn-full btn-danger" disabled={loading || hasFaltante || counted === ''}>
               {loading ? 'Cerrando...' : `Cerrar Caja · ${formatCOP(summary.expected)}`}
             </button>
           </div>

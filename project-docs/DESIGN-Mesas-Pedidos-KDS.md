@@ -1,5 +1,9 @@
 # Diseño — Módulo de Mesas, Pedidos y Pantalla de Barra (KDS)
 
+> **Tipo:** diseño aprobado · **Vigente:** sí · **Fecha:** 2026-09-20
+> Insumo de SPRINT-13. Manda sobre el diseño del módulo de restaurante.
+
+
 > Fecha: 2026-09-20 · Estado: aprobado por Andrey · Origen: cliente potencial (cafetería)
 > Implementación: SPRINT-13 (a generar desde este documento)
 

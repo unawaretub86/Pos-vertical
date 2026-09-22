@@ -1,5 +1,9 @@
 # Factura Electrónica DIAN — Research & Integration Guide
 
+> **Tipo:** research · **Vigente:** NO · **Fecha:** mayo 2026
+> Investigación de proveedores DIAN. **No es fuente de verdad sobre el código actual.** La regla de producto vigente está en [spec/domain/facturacion-dian.md](spec/domain/facturacion-dian.md).
+
+
 > Investigación para integrar facturación electrónica en POS Vertical.
 > Fuentes: DIAN oficial, Factus, Alanube, Facturalatam, Dataico, MATIAS API, Alegra, SOENAC, DLP Systems, EDICOM.
 > Fecha: Mayo 2026

@@ -169,7 +169,7 @@ export default function CloseTicketPreview({ ticket, onPrint, onClose }: Props) 
       </div>
 
       {/* Action buttons (hidden when printing) */}
-      <div className="ticket-no-print" style={{ display: 'flex', gap: '8px' }}>
+      <div className="ticket-no-print" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
         <button
           onClick={handlePrint}
           style={{

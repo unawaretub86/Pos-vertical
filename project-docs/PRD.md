@@ -1,5 +1,9 @@
 # PRD — POS Genérico MVP
 
+> **Tipo:** histórico · **Vigente:** parcial · **Fecha:** era MVP
+> Las personas siguen vigentes y se extrajeron a [spec/personas.md](spec/personas.md). El resto es historia del MVP; no es fuente de verdad sobre el código actual.
+
+
 ## 1. Executive Summary
 
 ### Problem Statement

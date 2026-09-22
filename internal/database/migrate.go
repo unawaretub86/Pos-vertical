@@ -35,6 +35,7 @@ var dbMigrations = []migration{
 	{version: 11, up: migration11},
 	{version: 12, up: migration12},
 	{version: 13, up: migration13},
+	{version: 14, up: migration14},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -474,4 +475,11 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_product ON purchase_items(product_id);
+`
+
+// migration14 adds the owner's Gmail address + app password to business_config,
+// used to auto-send the register-close summary email (US-053).
+const migration14 = `
+ALTER TABLE business_config ADD COLUMN owner_email TEXT;
+ALTER TABLE business_config ADD COLUMN owner_email_app_password TEXT;
 `

@@ -26,6 +26,8 @@ interface BusinessConfig {
   logo: string;
   default_opening_amount: number;
   allow_global_discount: boolean;
+  owner_email: string;
+  owner_email_app_password: string;
   configured: boolean;
 }
 
@@ -71,6 +73,8 @@ export default function SettingsPage() {
     logo: '',
     default_opening_amount: 0,
     allow_global_discount: false,
+    owner_email: '',
+    owner_email_app_password: '',
   });
   const [fiscal, setFiscal] = useState<FiscalConfig>({
     enabled: false,
@@ -104,6 +108,8 @@ export default function SettingsPage() {
           logo: cfg.logo ?? '',
           default_opening_amount: cfg.default_opening_amount ?? 0,
           allow_global_discount: cfg.allow_global_discount ?? false,
+          owner_email: cfg.owner_email ?? '',
+          owner_email_app_password: cfg.owner_email_app_password ?? '',
         });
         if (cfg.logo) setLogoPreview(cfg.logo);
       })
@@ -318,6 +324,29 @@ export default function SettingsPage() {
                   >
                     Gestionar usuarios →
                   </button>
+                </ConfigRow>
+
+                <ConfigRow label="Correo del dueño" sublabel="Recibe aquí el resumen de cierre de caja automáticamente, sin hacer nada">
+                  <input
+                    className="input"
+                    type="email"
+                    placeholder="dueño@gmail.com"
+                    value={form.owner_email}
+                    onChange={e => setForm(f => ({ ...f, owner_email: e.target.value }))}
+                    style={{ width: '220px' }}
+                  />
+                </ConfigRow>
+
+                <ConfigRow label="Contraseña de aplicación" sublabel="Generada en la cuenta de Gmail de arriba (Cuenta de Google → Seguridad → Contraseñas de aplicaciones), no tu contraseña normal">
+                  <input
+                    className="input"
+                    type="password"
+                    placeholder="•••• •••• •••• ••••"
+                    autoComplete="new-password"
+                    value={form.owner_email_app_password}
+                    onChange={e => setForm(f => ({ ...f, owner_email_app_password: e.target.value }))}
+                    style={{ width: '220px' }}
+                  />
                 </ConfigRow>
               </div>
             </div>

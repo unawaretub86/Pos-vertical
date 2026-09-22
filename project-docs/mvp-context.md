@@ -1,5 +1,9 @@
 # POS Genérico — MVP Context
 
+> **Tipo:** histórico · **Vigente:** parcial · **Fecha:** era MVP
+> La visión y las promesas del producto se extrajeron a [spec/product.md](spec/product.md), que es el documento vigente.
+
+
 ## Visión
 
 POS local, offline-first, distribuible como un solo ejecutable. Genérico para cualquier negocio que venda productos físicos o servicios. Modelo híbrido: funciona 100% local, con sync a la nube opcional en el futuro.

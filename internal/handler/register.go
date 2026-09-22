@@ -3,9 +3,12 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/andreyo/pos/internal/mailer"
 	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/repository"
 	"github.com/andreyo/pos/internal/service"
@@ -96,7 +99,59 @@ func (h *Handler) closeRegister(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "error cerrando caja")
 		return
 	}
+
+	cashier := "—"
+	if claims := appmw.GetClaims(r); claims != nil {
+		cashier = claims.Username
+	}
+	go h.sendRegisterSummaryEmail(summary, cashier)
+
 	respond(w, http.StatusOK, summary)
+}
+
+// sendRegisterSummaryEmail auto-sends the close summary to the owner's inbox
+// (US-053). Fire-and-forget: the register is already closed and persisted by
+// the time this runs, so a missing/misconfigured mailbox or offline network
+// must never affect the close response — only logged server-side.
+func (h *Handler) sendRegisterSummaryEmail(summary *service.RegisterSummary, cashier string) {
+	cfg, err := h.setup.Get()
+	if err != nil || cfg.OwnerEmail == "" || cfg.OwnerEmailAppPassword == "" {
+		return
+	}
+
+	closedAt := time.Now()
+	if summary.Register.ClosedAt != nil {
+		closedAt = *summary.Register.ClosedAt
+	}
+	actualClose := 0.0
+	if summary.Register.ActualClose != nil {
+		actualClose = *summary.Register.ActualClose
+	}
+	difference := 0.0
+	if summary.Register.Difference != nil {
+		difference = *summary.Register.Difference
+	}
+	lines := make([]mailer.PaymentLine, len(summary.ByPaymentMethod))
+	for i, m := range summary.ByPaymentMethod {
+		lines[i] = mailer.PaymentLine{Method: m.Method, Total: m.Total}
+	}
+
+	subject, body := mailer.BuildRegisterSummaryEmail(mailer.RegisterSummaryData{
+		BusinessName:    cfg.Name,
+		Cashier:         cashier,
+		ClosedAt:        closedAt,
+		ByPaymentMethod: lines,
+		CashIn:          summary.CashIn,
+		CashOut:         summary.CashOut,
+		Expected:        summary.Expected,
+		ActualClose:     actualClose,
+		Difference:      difference,
+	})
+
+	smtpCfg := mailer.SMTPConfig{Email: cfg.OwnerEmail, AppPassword: cfg.OwnerEmailAppPassword}
+	if err := mailer.Send(smtpCfg, subject, body); err != nil {
+		log.Printf("register summary email: %v", err)
+	}
 }
 
 func (h *Handler) listMovements(w http.ResponseWriter, r *http.Request) {

@@ -257,11 +257,8 @@ purchase.total          = Σ purchase_item.subtotal
 
 ---
 
-## Roadmap — qué queda del doc fuente
+## Roadmap
 
-| Sprint | Features (ID fuente) | Por qué ahí |
-|--------|----------------------|-------------|
-| SPRINT-12 | I2 (resumen WhatsApp al dueño) + K1 (acceso LAN desde celular) | Combo de 1 día documentado en el bloque K del doc fuente — cubre "ver ventas en celular" sin romper el posicionamiento offline. |
-| SPRINT-13 | H2 (apartados/layaway), G2 (kardex + ajustes de inventario) | Extienden el diferenciador de fiado y cumplen el "requisito 2026" de kardex, pero el propio doc fuente los marca como pedidos del mes 2, no del día 1. |
-| Sin fecha | F7+I4 (PIN rápido + permisos granulares), G3–G7 (vencimientos, combos, etiquetas, historial de precio, foto), H3–H5 (domicilios, impuesto bolsas, cotizaciones), E1 (sync multi-caja), E2 (asistente IA local), scoring de cliente fiado | Necesarios cuando el negocio crece a >1 empleado o multi-caja, o son features de nicho (farmacia/vencimientos, ferretería/combos). No hay señal de que bloqueen la venta al primer cliente. |
-| Con partner externo (no ejecutable en solitario) | H1 (recargas/pago de servicios), capital embebido | Requieren alianza con fintech regulada o agregador (Movilred/Puntored/SuRed) — fuera del alcance de "ejecutable en solitario". |
+Lo que queda por construir vive en [roadmap.md](roadmap.md), que es la única fuente. Este documento no reserva números de sprint futuros.
+
+> Antes había aquí una tabla de roadmap propia. Se consolidó el 2026-09-21: las copias por sprint divergieron entre sí y llegaron a reclamar el mismo número de sprint para features distintas.
