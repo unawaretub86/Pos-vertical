@@ -12,7 +12,7 @@ Convenciones de este comando:
 - `ID` = el identificador de la US (`US-XXX`).
 - Todo comando git va con `git -C "$WT"`.
 - A cada subagente le pasas en el prompt: el `ID`, la ruta absoluta de `WT`, el sprint y el modo (si aplica).
-- **Retomar en vez de relanzar:** si un agente de esta misma US ya corrió en la sesión (ajustes al contrato, T-nuevo, cierre del analyst), continúalo con `SendMessage` a su ID en vez de lanzar uno nuevo. Conserva su contexto y cuesta menos que un arranque en frío (ver `project-docs/pipeline-bench.md`, corrida 1).
+- **Retomar en vez de relanzar (chequeo obligatorio, no opcional):** antes de cada `Agent` de este pipeline, corre primero `ListAgents` y busca en la lista un agente vivo del mismo rol (`analyst`, `test-author`, `implementer`, `qa`) para esta misma `$ID`. Si aparece, usa `SendMessage` a su nombre/ID en vez de `Agent`. Solo lanza `Agent` (arranque en frío) si `ListAgents` no muestra ninguno vivo para ese rol+US. Este chequeo se hizo mal dos corridas seguidas (3 y 4, ver `project-docs/pipeline-bench.md`) por saltárselo al llegar al paso 5 (`close`) — no te lo saltes ahí tampoco.
 - **Benchmark:** anota, de cada notificación de agente, `subagent_tokens`, `tool_uses` y `duration_ms`, y lleva la cuenta de las paradas no planeadas (fuera de los GATE 1 y 2). Se registran en el paso 6.
 - Los errores de gopls dentro del worktree ("not included in your workspace", símbolos `undefined`) son ruido del IDE; lo que cuenta es `go build` y `go test`.
 
@@ -66,7 +66,7 @@ Checkpoint: `git -C "$WT" commit -am "feat($ID): implementation"` (agrega los ar
 
 ## 5. Cierre — agente `analyst`, modo `close`
 
-Lanza `analyst` en modo `close`. Luego verifica con `git -C "$WT" status` que solo cambió `project-docs/` y haz el checkpoint: `git -C "$WT" commit -am "docs($ID): spec delta and sprint closure"`.
+Antes de lanzar nada: `ListAgents` y busca el `analyst` del paso 1 de esta `$ID`. Si sigue vivo, `SendMessage` con el modo `close`; si no, recién ahí `Agent` en frío. Luego verifica con `git -C "$WT" status` que solo cambió `project-docs/` y haz el checkpoint: `git -C "$WT" commit -am "docs($ID): spec delta and sprint closure"`.
 
 ### ◆ GATE 2 — Andrey aprueba
 
