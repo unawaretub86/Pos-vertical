@@ -37,7 +37,7 @@ Fuente: `internal/service/register.go:113` y `:138`.
 - `diferencia < 0` → faltante
 - Solo cuenta el **efectivo**. Las ventas por transferencia, tarjeta o fiado no entran al arqueo: esa plata no está en el cajón.
 
-> **Nota histórica:** `PLAN.md:1134` reporta que faltaba `cash_in` en esta fórmula. **Ya está incluido** (`register.go:113`). Es un ejemplo de por qué `PLAN.md` no es fuente de verdad sobre el estado actual.
+> **Nota histórica:** `archive/2026-05-plan-mvp.md:1135` (antes `PLAN.md`) reporta que faltaba `cash_in` en esta fórmula. **Ya está incluido** (`register.go:113`). Es un ejemplo de por qué ese documento no es fuente de verdad sobre el estado actual.
 
 ## Regla: gastos
 

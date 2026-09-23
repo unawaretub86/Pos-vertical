@@ -1,7 +1,7 @@
 # Plan de Desarrollo — POS Genérico MVP
 
 > **Tipo:** histórico · **Vigente:** NO · **Fecha:** era MVP (abril–mayo 2026)
-> **No es fuente de verdad sobre el código actual.** Checklist del MVP; varios bugs que reporta ya están arreglados (ej. el de `cash_in` en `:1134`, corregido en `internal/service/register.go:113`). Para el estado real, verificar contra el código. Ver [README.md](README.md).
+> **No es fuente de verdad sobre el código actual.** Checklist del MVP; varios bugs que reporta ya están arreglados (ej. el de `cash_in` en `:1135`, corregido en `internal/service/register.go:113`). Para el estado real, verificar contra el código. Ver [README.md](../README.md).
 
 
 ## Convenciones del Checklist

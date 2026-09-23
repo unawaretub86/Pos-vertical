@@ -8,14 +8,14 @@
 1. Code compiles without errors (`go build ./...`, `pnpm build` en `frontend/`)
 2. Existing tests pass (`go test ./...`, `pnpm test`)
 3. New code has tests where applicable
-4. Code follows Design System defined in PLAN.md (Phase 0.0)
+4. Code follows the Design System: tokens vigentes en `frontend/app/globals.css` (`var(--canvas)`, `var(--surface-2)`…) y reglas de frontend de `CLAUDE.md`
 5. Mobile responsive (320px, 768px, 1024px)
 6. No console errors
 7. Sprint Document updated (task checked off)
 8. **Si cambió una regla de negocio, `project-docs/spec/` se actualiza en el mismo commit.** Sin esto el spec envejece y vuelve a pasar lo de `PLAN.md`.
 
 ## Design System Reference
-See `PLAN.md` → Fase 0.0 for full token definitions, component specs, and typography rules.
+Tokens vigentes: `frontend/app/globals.css` (fuente de verdad). Specs originales de componentes y tipografía: `archive/2026-05-plan-mvp.md` → Fase 0.0 (histórico; si difiere de `globals.css`, manda `globals.css`).
 
 ## Dónde está cada cosa
 

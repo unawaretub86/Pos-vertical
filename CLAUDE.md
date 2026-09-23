@@ -90,12 +90,12 @@ Los tests llevan números concretos, no aserciones vagas: *"3 pagos de $30k + $2
 
 ## Flujo de trabajo
 
-Sprints en `project-docs/SPRINT-XX-*.md`. El loop de iteración está en `project-docs/BACKLOG-Development-Workflow.md`: se toma la primera US sin marcar, se implementa contra sus criterios de aceptación, se marca `[x]` al terminar.
+Sprints en `project-docs/sprints/SPRINT-XX-*.md`. El loop de iteración y la tabla de progreso están en `project-docs/workflow.md`: se toma la primera US sin marcar, se implementa contra sus criterios de aceptación, se marca `[x]` al terminar.
 
 Antes de planear una feature, leer `project-docs/README.md` para saber qué documento manda sobre qué. **No todo lo que está en `project-docs/` es vigente** — varios documentos son investigación fechada o historia del MVP, y están marcados como tales en su encabezado.
 
 ## Trampas conocidas
 
-- `PLAN.md` y `ARQUITECTURA.md` describen el código de abril–mayo 2026. Sirven como historia, no como estado actual. Ejemplo: `PLAN.md:1134` reporta un bug de `cash_in` en el cierre de caja que **ya está arreglado** (`internal/service/register.go:113`).
+- `project-docs/archive/2026-05-plan-mvp.md` (antes `PLAN.md`) y `project-docs/archive/2026-04-17-arquitectura.md` (antes `ARQUITECTURA.md`) describen el código de abril–mayo 2026. Sirven como historia, no como estado actual. Ejemplo: `2026-05-plan-mvp.md:1135` reporta un bug de `cash_in` en el cierre de caja que **ya está arreglado** (`internal/service/register.go:113`).
 - Iterar un `map` en Go es aleatorio por diseño. Si el orden importa (evaluación de reglas, prioridades), usar un slice ordenado o los tests fallarán de forma intermitente.
-- Los documentos `*finds*` (`find-pos.md`, `finds-betters.md`, `better-pos.md`, `better-finds-pos.md`) son investigación de mercado, no inventario del código. Sus afirmaciones de "esto no existe" se verifican antes de usarse.
+- Los documentos de `project-docs/research/` (antes `find-pos.md`, `finds-betters.md`, `better-pos.md`, `better-finds-pos.md`, `facElect-finds.md`) son investigación de mercado fechada, no inventario del código. Sus afirmaciones de "esto no existe" se verifican antes de usarse.

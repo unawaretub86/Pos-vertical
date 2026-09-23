@@ -3,7 +3,7 @@
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** cómo la facturación se relaciona con la venta
 > **Actualizado:** 2026-09-21 · Verificado contra `internal/factelect/` en esa fecha.
 
-Este documento cubre **la regla de producto**. El detalle de implementación y la investigación de proveedores viven en `fix-gaps.md` y `facElect-finds.md`, ambos de mayo 2026 y marcados como referencia de implementación, no como estado actual.
+Este documento cubre **la regla de producto**. El detalle de implementación y la investigación de proveedores viven en `project-docs/reference/facturacion-electronica.md` (antes `fix-gaps.md`) y `project-docs/research/2026-05-dian-proveedores.md` (antes `facElect-finds.md`), ambos de mayo 2026 y marcados como referencia de implementación, no como estado actual.
 
 ---
 

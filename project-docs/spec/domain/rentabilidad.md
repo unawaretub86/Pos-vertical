@@ -46,7 +46,7 @@ Se usa `AVG(unit_price)` porque el mismo producto puede haberse vendido a precio
 
 ## El contraste que vende
 
-**El producto que más se vende casi nunca es el que más deja.** `find-pos.md:91` lo documenta con el caso real: arroz a 11% de margen y 89 unidades contra aceite a 38% y 24 unidades.
+**El producto que más se vende casi nunca es el que más deja.** `research/2026-05-verticales-y-rentabilidad.md:93-95` (antes `find-pos.md`) lo documenta con el caso real: arroz a 11% de margen y 89 unidades contra aceite a 38% y 24 unidades.
 
 Cualquier pantalla o respuesta que muestre "lo más vendido" debería poder mostrar ese contraste. Es la diferencia entre entregar un reporte y entregar un consejo.
 

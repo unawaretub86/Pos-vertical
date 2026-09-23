@@ -32,15 +32,15 @@ Cada ítem tiene un ID estable (`R-NN`) que no cambia aunque se mueva de bucket.
 
 | ID | Ítem | Origen | Nota |
 |---|---|---|---|
-| R-10 | G8 — reportes por hora pico y por vendedor | `better-finds-pos.md:163` | `report.go` no agrupa por hora ni por `user_id`. ~0.5 día: dos queries `GROUP BY`. Desbloquea R-20 y es base para comisiones. |
-| R-11 | F7 + I4 — PIN rápido por cajero y permisos granulares | `better-finds-pos.md` (bloque F) | Cambio de turno sin logout completo. Relevante cuando el negocio pasa de 1 empleado. |
+| R-10 | G8 — reportes por hora pico y por vendedor | `research/2026-09-08-investigacion-mercado.md:167` | `report.go` no agrupa por hora ni por `user_id`. ~0.5 día: dos queries `GROUP BY`. Desbloquea R-20 y es base para comisiones. |
+| R-11 | F7 + I4 — PIN rápido por cajero y permisos granulares | `research/2026-09-08-investigacion-mercado.md` (bloque F) | Cambio de turno sin logout completo. Relevante cuando el negocio pasa de 1 empleado. |
 | R-12 | Propina, dividir cuenta, transferir ítems entre mesas | SPRINT-13 | Complican el cobro, que en SPRINT-13 recién se estabiliza. Solo si el cliente los pide. |
 | R-13 | Pantalla "qué me preguntan y no entiendo" | SPRINT-14 | Lee `assistant_queries`. Necesita semanas de uso real acumuladas para mostrar algo. |
 | R-14 | Fechas exactas en el asistente ("15 de abril", "marzo", "el martes") | SPRINT-14 | Entra cuando la bitácora demuestre que se piden cuadres históricos. |
-| R-15 | H2 — apartados / layaway | `better-finds-pos.md` (bloque H) | Extiende el diferenciador de fiado. El doc fuente lo marca como pedido del mes 2, no del día 1. |
-| R-16 | G2 — kardex y ajustes de inventario | `better-finds-pos.md` (bloque G) | "Requisito 2026" según el doc fuente. |
-| R-17 | Scoring interno del cliente fiado | `better-finds-pos.md` (bloque D) | Score de riesgo, límite de crédito sugerido y alerta temprana de mora, con el historial de abonos que ya se guarda. **Ningún competidor local lo hace.** Complejidad media, cero dependencia externa. Es el diferenciador más fuerte sin construir. |
-| R-18 | E1 — sync multi-caja por LAN offline | `better-finds-pos.md` (bloque E1) | 2–5 cajas, mismo inventario, sin nube. La parte dura es resolución de conflictos. Relevante cuando el cliente crece a multi-caja. |
+| R-15 | H2 — apartados / layaway | `research/2026-09-08-investigacion-mercado.md` (bloque H) | Extiende el diferenciador de fiado. El doc fuente lo marca como pedido del mes 2, no del día 1. |
+| R-16 | G2 — kardex y ajustes de inventario | `research/2026-09-08-investigacion-mercado.md` (bloque G) | "Requisito 2026" según el doc fuente. |
+| R-17 | Scoring interno del cliente fiado | `research/2026-09-08-investigacion-mercado.md` (bloque D) | Score de riesgo, límite de crédito sugerido y alerta temprana de mora, con el historial de abonos que ya se guarda. **Ningún competidor local lo hace.** Complejidad media, cero dependencia externa. Es el diferenciador más fuerte sin construir. |
+| R-18 | E1 — sync multi-caja por LAN offline | `research/2026-09-08-investigacion-mercado.md` (bloque E1) | 2–5 cajas, mismo inventario, sin nube. La parte dura es resolución de conflictos. Relevante cuando el cliente crece a multi-caja. |
 
 ## Bloqueado
 
@@ -71,17 +71,10 @@ Cada ítem tiene un ID estable (`R-NN`) que no cambia aunque se mueva de bucket.
 
 ---
 
-## Deuda abierta (no es roadmap, es lo que quedó a medias)
+## Deuda abierta
 
-| US / Sprint | Qué | Desde |
-|---|---|---|
-| US-034 | Factus: validación completa en sandbox | SPRINT-07 — requiere acceso externo |
-| SPRINT-05 | Mobile Responsive, marcado pendiente aunque la base de estilos ya se usa | SPRINT-05 |
-| US-042c, US-043, US-045 | Velocidad de venta, historial del cliente en POS, catálogo por WhatsApp | SPRINT-09 |
-| US-053 | Resumen de cierre de caja por correo — hay trabajo sin commitear en `internal/mailer/` | SPRINT-12 |
-| US-054 | Acceso al POS por WiFi local | SPRINT-12, reasignada a SPRINT-13 |
-| US-055 a US-058 | Módulo restaurante completo | SPRINT-13 |
-| US-059 a US-062 | Asistente local | SPRINT-14 |
+La deuda y las limitaciones verificadas del producto están en [gaps.md](gaps.md).
+Este documento cubre lo que se va a construir, no lo que falta por cerrar.
 
 ---
 
