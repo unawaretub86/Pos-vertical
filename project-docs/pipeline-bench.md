@@ -8,9 +8,11 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 
 > Se actualiza al final de cada sesión de trabajo con el pipeline.
 
-**Última corrida:** 4 (US-065, nivel M, 2026-09-23). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
+**Última corrida:** 5 (US-060, nivel L, 2026-09-23). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
 
-**Pendiente de decisión del PO al retomar:** el ajuste propuesto en la corrida 3 (chequeo explícito de `agentId` vivo antes de `Agent` vs `SendMessage`) sigue sin aplicarse a `us.md` — la corrida 4 repitió el mismo error que iba a prevenir. Próxima US: a elegir del backlog de SPRINT-14 o de items nuevos del roadmap (no quedó ninguno abierto tras cerrar R-45).
+**Aplicado antes de esta corrida:** el ajuste pendiente desde la corrida 3 (chequeo explícito de `agentId` vivo antes de `Agent` vs `SendMessage`) se volvió mecánico en `us.md` (commit `7d3ab08`) y se sostuvo toda la corrida 5 — analyst, test-author y qa se retomaron con `SendMessage` en cada ocasión que seguían vivos, cero arranques en frío innecesarios.
+
+**Próxima US:** US-061 (servicio + endpoint `/ai/ask` + bitácora) y US-062 (widget de chat) siguen pendientes en SPRINT-14, ambas dependen del paquete `internal/assistant/` que cerró esta corrida.
 
 **Cómo retomar:** en una sesión nueva, elegir la próxima US y correr `/us US-XXX [M|L]`.
 
@@ -34,6 +36,7 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 | 2 | 2026-09-23 | US-063 | L | ~310k (A 138k · T 71k · I 35k · Q 67k) | 111 | ~18.5 | 0 | 1 | 4 | 2 (+1 cerrado) | 0 | +466 / −43, 7 archivos |
 | 3 | 2026-09-23 | US-064 | M | ~308k (A 173k = 117k+57k · I 71k · Q 64k) | 145 | ~18.0 | 0 | 1 | 1 | 0 (+1 cerrado) | 0 | +353 / −12, 7 archivos |
 | 4 | 2026-09-23 | US-065 | M | ~282k (A 176k = 117k+59k · I 59k · Q 47k) | 113 | ~13.3 | 0 | 1 | 0 | 1 cerrado (R-45) | 1 (retomar) | +217 / −20, 7 archivos |
+| 5 | 2026-09-23 | US-060 | L | ~522k (A 154k · T 109k · I 175k · Q 85k) | 160 | ~83.8 | 1 (implementer cayó por límite de salida) | 1 | 5 | 1 (R-46) | 0 | +1.333 / −2, 9 archivos |
 
 ### Tendencia
 
@@ -245,3 +248,52 @@ Solo los dos gates. La única fricción no fue una parada del contrato sino un e
 
 - Si se aplica el ajuste de arriba antes de correr: ¿el costo total baja de ~280k a algo más cercano a ~220k (analyst en 1 sola invocación retomada)?
 - El piso de una US M sin errores de retoma sigue sin medirse limpio — van 2 corridas seguidas con el mismo defecto de proceso inflando el costo de analyst en +~50-60k tokens.
+
+---
+
+## Corrida 5 — US-060 (Motor de intenciones T1/T2, nivel L)
+
+**US:** paquete `internal/assistant/` desde cero — normalización, 11 intenciones por regex (T1) y fuzzy matching con Levenshtein (T2), extracción de periodo relativo (hoy/ayer/semana/mes/año + días de la semana con error de dedo). Go puro, sin DB ni HTTP; primera pieza de una cadena de 3 (US-060 → US-061 → US-062). Nivel **L**, primera corrida con el ajuste de retoma mecánico ya aplicado. **Rama:** `us/US-060` → `4f0ba6b` (RED, 31 tests) → `b36f108` (implementación) → `4a20d52` (cierre), fusionados en `dev` por squash.
+
+### Por agente
+
+| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 4 (contrato inicial; ajuste por 2 decisiones GATE 1; agregar T-30/T-31 al contrato; cierre) — **las 4 retomadas con `SendMessage`, cero arranques en frío tras la primera** | 73k → 110k → 115k → 154k (último: 154k) | 23+34+5+20 = 82 | 303+130+29+155 = 617 s |
+| test-author | 2 (29 tests iniciales; agregar T-30/T-31) — retomado con `SendMessage` | 98k → 109k (último: 109k) | 18+6 = 24 | 634+77 = 711 s |
+| implementer | 2 (arranque; **retomado tras un crash**) | falló sin uso reportado → 175k (último: 175k) | 30 (solo la invocación que terminó) | 3.417 s (incluye el turno cortado, retomado en la misma conversación) |
+| qa | 1 | 85k | 24 | 285 s |
+| **Total** | 9 | ~522k (154+109+175+85) | 160 | 5.029 s ≈ 83.8 min |
+
+### Qué encontró
+
+| Tipo | Hallazgo | Quién |
+|---|---|---|
+| Defecto del sprint 🔴 (verificado ejecutando Levenshtein fuera del repo) | El umbral `levenshtein<=1` que el propio sprint usa como ejemplo no alcanza sus propios casos: `"aller"→"ayer"` y `"kien"→"quien"` dan distancia real 2, no 1 | analyst |
+| Ambigüedad de contrato | "Palabra candidata a tiempo que no resuelve" (→ `Unresolved`) no tenía criterio de candidatura definido; "jueves" no estaba en ningún vocabulario del sistema | analyst |
+| Gap de cobertura | AC-13 ("mes pasado") y AC-14 ("este año") estaban en §3 del contrato pero sin fila propia en la tabla de tests de §4 — nadie los iba a probar | test-author |
+| Menor | `ambiguousSeed` compartida a propósito entre bancos T1 de SALES y PROFIT tensiona la letra de AC-25 (no-solapamiento); no bloquea, es tensión entre dos ACs del propio contrato | qa |
+| Menor | Vocabulario de días de la semana no tiene guard de longitud mínima que sí aplica al fuzzy de intents — sin falso positivo hoy, riesgo si el vocabulario crece → **R-46** | qa |
+
+### Paradas no planeadas (1)
+
+**El implementer se cortó a mitad de turno:** `API Error: Claude's response exceeded the 64000 output token maximum`, probablemente generando un archivo completo (con banco de frases y mapa de sinónimos) en un solo bloque de texto. Cero código de producción había quedado escrito (`git status` limpio, tests intactos) — no fue necesario revertir nada. Se retomó con `SendMessage` pidiéndole explícitamente dividir el trabajo en archivos/ediciones más chicas, y terminó sin volver a cortarse. Duración total del agente (3.417 s) incluye el turno perdido, así que no es comparable 1:1 con implementers de corridas anteriores sin este incidente.
+
+### Fricción operativa
+
+- El ajuste de retoma mecánico (aplicado antes de esta corrida, ver `us.md`) funcionó: los 3 agentes con más de una invocación (analyst ×4, test-author ×2, implementer ×2) se retomaron siempre con `SendMessage`, nunca con `Agent` en frío innecesario — primera corrida sin esa violación desde la 2.
+- Al aplicar el fix a `us.md`, el orquestador cometió sin querer `rewrite_links.py` (archivo ajeno pre-staged desde antes de la sesión) en el mismo commit por usar `git commit -m` sin excluirlo del índice. Se corrigió con un commit separado (`git rm --cached`) antes de tocar el worktree de la US. Lección: revisar `git status` después de `git add <archivo>` puntual, no asumir que el índice solo tiene lo que se acaba de agregar.
+- Nivel **L** con test-author funcionó según lo esperado: encontró un gap real de cobertura (AC-13/AC-14 sin test) que en nivel M probablemente habría pasado desapercibido hasta QA o después.
+- El crash del implementer por límite de salida es nuevo en el historial de corridas — no había pasado en las 4 anteriores, posiblemente por el tamaño del banco de frases/sinónimos de esta US frente a fixes chicos anteriores.
+
+### Ajustes propuestos (pendientes del "sí" del PO)
+
+| Ajuste | Dónde |
+|---|---|
+| Cuando el implementer vaya a escribir un archivo grande con tablas/bancos de datos extensos (regex, sinónimos, frases semilla), indicarle de entrada que divida la escritura en varios `Write`/`Edit` en vez de un archivo completo en un solo bloque, para evitar el límite de 64k tokens de salida por turno | `.claude/agents/implementer.md` o `us.md` paso 3 |
+| Antes de cualquier `git commit` en el checkout principal fuera del worktree de la US, revisar `git status` explícitamente para no arrastrar archivos ajenos pre-staged | `us.md`, nota general para el orquestador |
+
+### Qué medir en la corrida 6
+
+- ¿El aviso al implementer sobre dividir archivos grandes evita el crash en la próxima US con volumen de datos similar (US-061 o US-062)?
+- US-061 depende de US-059 (métricas) y US-060 (motor) ya cerradas — buen caso para medir si una US "de integración" (servicio + endpoint + bitácora, con DB y HTTP) cuesta más o menos que el motor puro de esta corrida.

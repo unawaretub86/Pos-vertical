@@ -40,7 +40,7 @@ Este sprint entrega **T1 (regex) + T2 (fuzzy matching)**, Go puro, cero dependen
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
 | US-059 | Extraer las métricas del dashboard a un repositorio parametrizable por rango | [x] Completo | 2026-09-23 |
-| US-060 | Motor de intenciones T1 (regex) + T2 (fuzzy) en Go puro | [ ] Pendiente | — |
+| US-060 | Motor de intenciones T1 (regex) + T2 (fuzzy) en Go puro | [x] Completo | 2026-09-23 |
 | US-061 | Servicio, endpoint `/ai/ask` y bitácora de consultas | [ ] Pendiente | — |
 | US-062 | Widget de chat en la app autenticada | [ ] Pendiente | — |
 | US-063 | Corregir el saldo de la cartera envejecida del dashboard (D-4) | [x] Completo | 2026-09-23 |
@@ -326,6 +326,23 @@ Más `UNKNOWN` y `AMBIGUOUS`, que no son intents de negocio sino estados del mot
 - [ ] Test: ninguna frase del banco semilla de un intent resuelve a un intent distinto (prueba de no-solapamiento entre bancos)
 - [ ] `go test ./internal/assistant/...` corre en menos de 1 segundo
 - [ ] Build limpio (`go build ./...`, `pnpm build`)
+
+### Criterios verificados
+
+> Cerrada el 2026-09-23 (commit `b36f108`, QA vuelta 1: OK, 0 bloqueantes, 2 MENOR — ver disposición en `roadmap.md` bitácora de decisiones). Los checkboxes de arriba son el enunciado original. Dos decisiones se resolvieron en GATE 1 (contrato §2/§8) porque la regla de fuzzy tal como estaba escrita no alcanzaba sus propios ejemplos, verificado ejecutando Levenshtein: (1) lista de sinónimos exactos (`kien→quien`, `aller→ayer`) con prioridad sobre el fuzzy `levenshtein<=1`, sin subir el umbral general; (2) vocabulario fijo de días de la semana, separado del vocabulario temporal, como "candidatas no resueltas" que fuerzan `Unresolved=true`.
+> Tests: `internal/assistant/normalize_test.go`, `internal/assistant/engine_test.go`, `internal/assistant/period_test.go` — 31 casos (T-1 a T-31), todos en verde.
+
+| AC | Criterio (EARS) | Tests |
+|---|---|---|
+| AC-1/AC-2 | CUANDO se normaliza una pregunta (mayúsculas, tildes, signos, espacios), el sistema DEBE producir la misma cadena para variantes equivalentes y conservar la `ñ`. | `TestNormalize_T1_*`, `TestNormalize_T2_*` |
+| AC-3/AC-4 | CUANDO la cadena normalizada coincide con un patrón T1, el sistema DEBE devolver `Confidence=1.0`, `Tier="regex"`, resolviendo empates por el orden fijo del registro (nunca iteración de `map`). | `TestEngine_T3_*` (66 frases), `TestEngine_T4_AmbiguousSeedResolvesByRegistryOrder` (`-count=100`) |
+| AC-5 | CUANDO T1 no coincide y el score fuzzy (`coincide = exacto → sinónimo exacto → levenshtein<=1 con len>=4`) supera 0.60, el sistema DEBE devolver `Tier="fuzzy"`, `Confidence<1.0`. | `TestEngine_T5_FuzzyPhrases`, `TestEngine_T27_ExactSynonymPriority` |
+| AC-6/AC-7 | CUANDO el mejor score es menor a 0.60, `UNKNOWN`; CUANDO dos scores empatan a menos de 0.10, `AMBIGUOUS` con ambos candidatos. | `TestEngine_T6_UnknownBelowThreshold`, `TestEngine_T7_AmbiguousTie` |
+| AC-8 a AC-14 | CUANDO la cadena menciona hoy/ayer/esta semana/semana pasada/este mes/mes pasado/este año (exacto o fuzzy), el sistema DEBE resolver el rango semiabierto correspondiente. | `TestPeriod_T8_*` … `TestPeriod_T12_*`, `TestPeriod_T30_MesPasado`, `TestPeriod_T31_EsteAno` |
+| AC-15/AC-16 | SI un token matchea el vocabulario fijo de días de la semana (`lunes..domingo` + errores de dedo), ENTONCES `Period.Unresolved=true`, nunca `hoy` por defecto; un token ajeno a ambos vocabularios no dispara nada. | `TestPeriod_T13_AllerViaSynonym`, `TestPeriod_T14_JuebesUnresolved`, `TestPeriod_T15_ThreeCasesTogether`, `TestPeriod_T28_AllWeekdays`, `TestPeriod_T29_UnrelatedWordNoop` |
+| AC-17 | CUANDO la cadena contiene un disparador de comparación, el sistema DEBE devolver `Compare=true` conservando `Intent`/`Period` de la parte previa al disparador. | `TestEngine_T16_CompareTrigger` |
+| AC-18/AC-19/AC-20 | CUANDO la cadena es desconocida, vacía, solo espacios o de 5.000 caracteres, el sistema DEBE devolver `UNKNOWN` sin panic ni colgarse. | `TestEngine_T17_UnknownSandwich`, `TestEngine_T18_EmptyAndBlank`, `TestEngine_T19_LongInputNoHang` |
+| AC-21 a AC-26 | El paquete NO DEBE importar `database/sql`/`net/http`/`internal/repository`; `Parse` es la única función exportada; registro en slice ordenado; banco ≥60 frases sin solapamiento; suite < 1s. | `TestEngine_T20_NoForbiddenImports`, `_T21_ParseIsOnlyExportedEngineFunction`, `_T22_DeterministicAcrossRuns` (`-count=50`), `_T23_BankHasAtLeast60Phrases`, `_T24_NoOverlapBetweenIntentBanks`; suite completa 0.376s–0.516s (QA) |
 
 ---
 
