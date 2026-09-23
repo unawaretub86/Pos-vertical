@@ -45,8 +45,9 @@ Este sprint entrega **T1 (regex) + T2 (fuzzy matching)**, Go puro, cero dependen
 | US-062 | Widget de chat en la app autenticada | [ ] Pendiente | — |
 | US-063 | Corregir el saldo de la cartera envejecida del dashboard (D-4) | [x] Completo | 2026-09-23 |
 | US-064 | Corregir `TotalPortfolioBalance`: no restar los saldos a favor (R-44) | [x] Completo | 2026-09-23 |
+| US-065 | Higiene de la fórmula de saldo: `List` reutiliza `customerBalanceFrom`, desempate estable en `AgingReceivables` (R-45) | [x] Completo | 2026-09-23 |
 
-**Esfuerzo total estimado: 6.5 días** (sin contar US-064, que viene del roadmap R-44 y no estaba presupuestada en el sprint original). Dentro del objetivo de ~7. Línea de corte si aprieta: US-062 se reduce a una caja de búsqueda en el dashboard en vez de un widget flotante con historial (−0.5 día). No recortar US-059: sin ella los intents solo responden "hoy" y el asistente queda cojo.
+**Esfuerzo total estimado: 6.5 días** (sin contar US-064 ni US-065, que vienen del roadmap R-44/R-45 y no estaban presupuestadas en el sprint original). Dentro del objetivo de ~7. Línea de corte si aprieta: US-062 se reduce a una caja de búsqueda en el dashboard en vez de un widget flotante con historial (−0.5 día). No recortar US-059: sin ella los intents solo responden "hoy" y el asistente queda cojo.
 
 ---
 
@@ -649,6 +650,69 @@ Clientes con saldo 0 o negativo (saldo a favor) no aportan ni restan al total.
 | AC-7: El cambio NO DEBE alterar las claves ni los tipos del JSON de `GET /api/customers` (`customers`, `total_portfolio`), NI agregar migración, NI tocar `frontend/`. | `internal/handler/customer_test.go`: `TestListCustomers_T5_TotalPortfolioMatchesPositiveBalances` (verifica exactamente 2 claves top-level); confirmado por diff de QA sin cambios en `frontend/` ni `migrate.go` |
 
 Fixture usado en todos los tests de repositorio (Dora/Eli/Fer/Gus, ver contrato `changes/US-064/contract.md` §4): `Dora` fiado $40.000 / abono $10.000 → saldo $30.000; `Eli` fiado $20.000 / abono $5.000 → saldo $15.000; `Fer` fiado $20.000 / abono $20.000 → saldo $0; `Gus` fiado $10.000 / abono $30.000 → saldo −$20.000. `TotalPortfolioBalance` corregido = $45.000 (antes del fix daba $25.000).
+
+---
+
+## US-065 — Higiene de la fórmula de saldo: `List` reutiliza `customerBalanceFrom`, desempate estable en `AgingReceivables`
+
+**Origen:** roadmap R-45, abierto en el QA de US-063 y referenciado como deuda pendiente en el scope de US-064.
+
+**Como** Tech Lead (mantenibilidad),
+**quiero** que exista un solo lugar del código que arme el SQL del saldo, y que el orden de `AgingReceivables` sea determinista incluso con empates,
+**para** que la regla "un saldo, una sola fórmula" de `spec/domain/fiado.md` sea cierta en el código (no solo en el spec), y para que qué 5 clientes ve el dueño en el widget de cartera envejecida no dependa del plan de consultas de SQLite.
+
+**Esfuerzo estimado:** 0.3 días. **Impacto:** Bajo para el usuario final en el caso general (mismos números que hoy), pero real: con empate de `days_overdue` y `LIMIT 5`, hoy puede quedar fuera del widget un cliente con más deuda que uno que sí aparece, solo por el orden de inserción de las filas.
+
+**Estado verificado:**
+- `CustomerRepository.List` (`internal/repository/customer.go:24-39`) construye el SQL con una copia textual idéntica, carácter por carácter, del `SELECT`/`FROM` de saldo (`c.id, c.name, ...`, dos `LEFT JOIN` agregados) en vez de reusar `customerBalanceExpr` / `customerBalanceFrom` (`internal/repository/metrics.go:265`, `:270-281`), que viven en el mismo paquete `repository` y ya usan `Debtors`, `AgingReceivables` (`metrics.go:293-295`, `:331-333`) y `TotalPortfolioBalance` (`customer.go:154`). Verificado con lectura línea por línea de ambos bloques: son el mismo texto.
+- Verificado en esta sesión (2026-09-23, cambio temporal en `customer.go`, revertido): reescribir `List` para usar `customerBalanceExpr`/`customerBalanceFrom` compila (`go build ./...`) y **toda** la suite (`go test ./internal/repository/... ./internal/handler/...`) sigue en verde sin tocar ninguna aserción, incluida `TestMetricsRepo_T35_AgingBalanceMatchesDebtorsListAndBalance` que compara `List` contra `Debtors`/`AgingReceivables`. No hay test hoy que ejercite `List` con un término de búsqueda no vacío (ni en `internal/repository` ni en `internal/handler`); es el punto de concatenación de string que este cambio toca, así que se agrega cobertura para ese caso.
+- `MetricsRepository.AgingReceivables` (`internal/repository/metrics.go:326-339`) ordena solo `ORDER BY days_overdue DESC` (`:336`), sin desempate. `Debtors` sí desempata: `ORDER BY balance DESC, c.name ASC` (`:297`), documentado en `spec/domain/fiado.md:38`.
+- Verificado ejecutando (test temporal, borrado): con Zeta (saldo $10.000, 5 días), Alfa (saldo $50.000, 5 días) y Beto (saldo $50.000, 5 días) — los tres con el mismo `days_overdue` —, `AgingReceivables(ctx, 5)` devuelve hoy `[Zeta, Alfa, Beto]` (orden de inserción/rowid), no `[Alfa, Beto, Zeta]` (saldo descendente, luego nombre). Con `AgingReceivables(ctx, 2)` el resultado hoy es `[Zeta $10.000, Alfa $50.000]`: **Beto, que debe $50.000, queda fuera del corte mientras Zeta, que debe $10.000, permanece** — solo por el orden de inserción de las filas, no por ningún criterio de negocio.
+
+**Cambios (higiene, sin cambio de regla de negocio):**
+```
+1) CustomerRepository.List usa customerBalanceExpr + customerBalanceFrom
+   (metrics.go) en vez de su copia textual. Mismo resultado, una sola fuente.
+2) AgingReceivables agrega desempate estable:
+   ORDER BY days_overdue DESC, balance DESC, c.name ASC
+   (mismo criterio de empate que ya usa Debtors, con days_overdue como
+   criterio primario, que no cambia).
+```
+
+**Scope — qué NO entra:**
+- Unificar `CustomerRepository.Balance` (`customer.go:127-142`) con `customerBalanceExpr`/`customerBalanceFrom`: tiene una forma distinta (subconsultas correlacionadas por un solo cliente) y el roadmap R-45 no lo menciona.
+- R-05 (desfase UTC/hora local) y R-06 (`to` inclusivo en `SalesSummary`). No relacionados.
+- Cambios de frontend o del contrato JSON de `/api/dashboard/today` y `/api/customers` (mismas claves, mismo tipo).
+- Agregar cobertura de `search` a nivel HTTP (`GET /api/customers?search=`): no existe hoy ese parámetro en el handler; fuera de alcance de esta US de higiene.
+
+**Acceptance Criteria:**
+- [x] `CustomerRepository.List` calcula el saldo con `customerBalanceExpr`/`customerBalanceFrom` (mismas constantes que `Debtors`, `AgingReceivables` y `TotalPortfolioBalance`), no con una copia propia del SQL
+- [x] Con término de búsqueda no vacío, `List` sigue filtrando por nombre o teléfono y devolviendo el saldo correcto
+- [x] Dos o más clientes con el mismo `days_overdue` en `AgingReceivables` quedan ordenados por saldo descendente y, si también empatan en saldo, por nombre ascendente
+- [x] Con `LIMIT` menor que la cantidad de clientes empatados en días, el desempate (no el orden de inserción) decide quién entra
+- [x] Clientes con `days_overdue` distinto no cambian de orden entre sí (el desempate es solo un criterio secundario/terciario)
+- [x] Todos los balances y `days_overdue` de los tests existentes (T-16, T-17, T-30 a T-36) siguen dando los mismos números
+
+**DoD:**
+- [x] Sin migración, sin cambio de contrato HTTP
+- [x] `internal/repository/customer_test.go`: nuevo test de `List` con búsqueda no vacía
+- [x] `internal/repository/metrics_test.go`: nuevos tests de desempate de `AgingReceivables` (orden y efecto de `LIMIT`)
+- [x] Ningún test existente cambia su aserción numérica
+- [x] `spec/domain/fiado.md` no necesita cambio de regla (mismo saldo, mismo orden primario); se puede anotar la fuente única si el implementer lo cree útil, sin agregar afirmación nueva
+- [x] Build limpio (`go build ./...`, `go test ./...`, `pnpm build`)
+
+**Criterios verificados** (cierre 2026-09-23, QA vuelta 1 OK, 0 bloqueantes, 1 menor — redacción redundante en `spec/domain/fiado.md:38`, corregida en el cierre sin cambio de contenido):
+
+| AC (EARS) | Test |
+|---|---|
+| AC-1: CUANDO se invoca `CustomerRepository.List`, el sistema DEBE calcular `balance` y `oldest_debt_at` con las mismas constantes `customerBalanceExpr`/`customerBalanceFrom` que usan `Debtors`, `AgingReceivables` y `TotalPortfolioBalance`, sin una copia textual propia del SQL. | `internal/repository/customer.go:24-28` (revisión de código, QA); no-regresión: `TestMetricsRepo_T35_AgingBalanceMatchesDebtorsListAndBalance` |
+| AC-2: SI se pasa un término de búsqueda no vacío a `List`, ENTONCES el sistema DEBE seguir filtrando por `c.name LIKE`/`c.phone LIKE` y devolver el saldo correcto para los clientes que matchean. | `internal/repository/customer_test.go`: `TestCustomerRepo_T5_ListSearchFiltersByNameOrPhone` (por nombre, por teléfono, sin búsqueda) |
+| AC-3: MIENTRAS dos o más clientes de `AgingReceivables` tengan el mismo `days_overdue`, el sistema DEBE ordenarlos por `balance` descendente. | `internal/repository/metrics_test.go`: `TestMetricsRepo_T40_AgingTieBreakByBalanceThenName` |
+| AC-4: SI además empatan en `balance`, ENTONCES el sistema DEBE ordenarlos por `name` ascendente. | `internal/repository/metrics_test.go`: `TestMetricsRepo_T40_AgingTieBreakByBalanceThenName` (Alfa antes que Beto, mismo saldo) |
+| AC-5: CUANDO el `limit` es menor que la cantidad de clientes empatados en `days_overdue`, el sistema DEBE decidir el corte con el desempate de AC-3/AC-4 (saldo, luego nombre), no con el orden de inserción. | `internal/repository/metrics_test.go`: `TestMetricsRepo_T41_AgingTieBreakDecidesLimitCutoff` |
+| AC-6 (no-regresión): MIENTRAS los clientes tengan `days_overdue` distintos entre sí, el sistema DEBE seguir ordenándolos por `days_overdue` descendente sin que el desempate lo altere. | `internal/repository/metrics_test.go`: `TestMetricsRepo_T16_AgingReceivables`, `TestMetricsRepo_T31_AgingSeveralCreditsAndPayments` (corridos explícitamente en QA, aserciones sin cambios) |
+| AC-7 (no-regresión): el cambio NO DEBE alterar ningún balance ni `days_overdue` devuelto por `Debtors`, `AgingReceivables`, `List`, `Balance` o `TotalPortfolioBalance` para ningún fixture existente. | `go test ./...` completo en verde; `TestMetricsRepo_T14_DebtorsTieByName` corrido explícitamente en QA |
+| AC-8 (no-regresión): el cambio NO DEBE agregar migración, NI alterar las claves/tipos del JSON de `GET /api/dashboard/today` (`aging_receivables`) ni de `GET /api/customers`, NI tocar `frontend/`. | `git diff dev...HEAD --stat` (QA): sin `internal/database/migrate.go`, sin `internal/handler/`, sin `frontend/` |
 
 ---
 

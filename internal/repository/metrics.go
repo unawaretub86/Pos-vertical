@@ -320,9 +320,12 @@ func (r *metricsRepo) Debtors(ctx context.Context, limit int) ([]Debtor, error) 
 }
 
 // AgingReceivables returns up to limit customers with balance > 0 ordered by
-// days since their oldest completed credit sale. The balance is the same one
-// returned by Debtors and CustomerRepository.List. Rows whose days_overdue is
-// NULL (unparseable created_at) are excluded explicitly.
+// days since their oldest completed credit sale, descending. The balance is
+// the same one returned by Debtors and CustomerRepository.List. Rows whose
+// days_overdue is NULL (unparseable created_at) are excluded explicitly. When
+// two or more customers tie on days_overdue, they are broken by the same
+// criterion as Debtors: balance descending and, if that also ties, name
+// ascending.
 func (r *metricsRepo) AgingReceivables(ctx context.Context, limit int) ([]AgingReceivable, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
@@ -333,7 +336,7 @@ func (r *metricsRepo) AgingReceivables(ctx context.Context, limit int) ([]AgingR
 		customerBalanceFrom+`
 		WHERE `+customerBalanceExpr+` > 0
 			AND julianday(sp_sum.oldest_at) IS NOT NULL
-		ORDER BY days_overdue DESC
+		ORDER BY days_overdue DESC, balance DESC, c.name ASC
 		LIMIT ?`,
 		limit,
 	)

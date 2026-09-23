@@ -8,9 +8,9 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 
 > Se actualiza al final de cada sesión de trabajo con el pipeline.
 
-**Última corrida:** 3 (US-064, nivel M, 2026-09-23). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
+**Última corrida:** 4 (US-065, nivel M, 2026-09-23). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
 
-**Pendiente de decisión del PO al retomar:** ninguna. Los 3 ajustes de la corrida 2 ya se aplicaron a `us.md` antes de la corrida 3. Próxima US: a elegir del roadmap (`R-45` es candidata directa, ya acotada por esta corrida) o del backlog de SPRINT-14.
+**Pendiente de decisión del PO al retomar:** el ajuste propuesto en la corrida 3 (chequeo explícito de `agentId` vivo antes de `Agent` vs `SendMessage`) sigue sin aplicarse a `us.md` — la corrida 4 repitió el mismo error que iba a prevenir. Próxima US: a elegir del backlog de SPRINT-14 o de items nuevos del roadmap (no quedó ninguno abierto tras cerrar R-45).
 
 **Cómo retomar:** en una sesión nueva, elegir la próxima US y correr `/us US-XXX [M|L]`.
 
@@ -33,6 +33,7 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 | 1 | 2026-09-23 | US-059 | L | ~440k (A 169k · T 102k · I 71k · Q 101k) | 125 | ~27.5 | 2 | 1 | 5 | 5 | 0 | +1.547 / −224, 13 archivos |
 | 2 | 2026-09-23 | US-063 | L | ~310k (A 138k · T 71k · I 35k · Q 67k) | 111 | ~18.5 | 0 | 1 | 4 | 2 (+1 cerrado) | 0 | +466 / −43, 7 archivos |
 | 3 | 2026-09-23 | US-064 | M | ~308k (A 173k = 117k+57k · I 71k · Q 64k) | 145 | ~18.0 | 0 | 1 | 1 | 0 (+1 cerrado) | 0 | +353 / −12, 7 archivos |
+| 4 | 2026-09-23 | US-065 | M | ~282k (A 176k = 117k+59k · I 59k · Q 47k) | 113 | ~13.3 | 0 | 1 | 0 | 1 cerrado (R-45) | 1 (retomar) | +217 / −20, 7 archivos |
 
 ### Tendencia
 
@@ -199,3 +200,48 @@ Solo los dos gates. La nota de §8 (corregir la cifra de R-44) era informativa, 
 
 - Si se corrige la fricción de retomar, ¿baja el costo de analyst en un cierre similar (2 invocaciones → 1 retomada)?
 - Nivel M sigue dando ~300k tokens totales pese a saltar test-author: el ahorro de saltar un agente (~65-100k) se compensa con más costo de analyst por el error de retoma. Repetir nivel M sin ese error para aislar el verdadero piso de costo de una US chica.
+
+---
+
+## Corrida 4 — US-065 (R-45, nivel M)
+
+**US:** higiene de la fórmula de saldo detectada en el QA de US-063 — `CustomerRepository.List` deja de duplicar textualmente el `FROM` de saldo (reusa `customerBalanceExpr`/`customerBalanceFrom`) y `AgingReceivables` gana desempate estable (`balance DESC, name ASC`) cuando empata `days_overdue`. Bug fix chico + refactor de higiene, nivel M. **Rama:** `us/R-45` → `ee4f334` (implementación) → `0c3cf4a` (cierre), fusionados en `dev`. El analyst registró la US en el sprint como **US-065** durante el modo `contract` (R-45 venía del roadmap, sin entrada propia en el sprint).
+
+### Por agente
+
+| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 2 (contrato + registro de la US; cierre) — **de nuevo lanzados en frío, no retomados con SendMessage** | 117k + 59k = 176k | 41 + 19 = 60 | 360 + 123 s = 483 s |
+| test-author | 0 (nivel M lo salta) | — | — | — |
+| implementer | 1 | 59k | 27 | 165 s |
+| qa | 1 | 47k | 26 | 148 s |
+| **Total** | 4 | ~282k | 113 | 796 s ≈ 13.3 min |
+
+### Qué encontró
+
+| Tipo | Hallazgo | Quién |
+|---|---|---|
+| Defecto menor | Redacción redundante en `spec/domain/fiado.md:38` — la frase nueva del delta repetía "ordena por `days_overdue` descendente" dos veces en la misma oración | qa |
+
+Sin discrepancias de alcance: el texto de `roadmap.md:48` describía con precisión ambos puntos (confirmado con grep y, en el caso del desempate, ejecutando un fixture temporal que mostró el bug real — con `LIMIT` menor que los empatados, el cliente con mayor deuda podía quedar fuera del corte por orden de inserción).
+
+### Paradas no planeadas: 0
+
+Solo los dos gates. La única fricción no fue una parada del contrato sino un error del orquestador (ver abajo).
+
+### Fricción operativa
+
+- **Se repitió la violación de "retomar en vez de relanzar" de la corrida 3, pese a estar documentada como ajuste pendiente:** el orquestador lanzó un `analyst` nuevo (`ab24d286fefcf0abb`) para el modo `close` en vez de retomar con `SendMessage` al `analyst` del contrato (`ae7f21565663133bd`), que seguía vivo en la sesión. El ajuste propuesto en la corrida 3 ("chequeo explícito de `agentId` vivo antes de `Agent` vs `SendMessage`") nunca se aplicó a `us.md` — quedó como propuesta pendiente del "sí" del PO y nadie volvió a plantearlo antes de la corrida 4. Mismo costo extra de arranque en frío (~59k tokens) que en la corrida 3.
+- Mismo estado sucio preexistente que en la corrida 3 (`rewrite_links.py` staged en el checkout principal, gitlinks modificados en `.claude/worktrees/*`), ya autorizado por Andrey entonces; se dejó intacto de nuevo, sin volver a preguntar porque no cambió desde la corrida anterior.
+- Nivel **M** volvió a funcionar sin fricción de contrato/tests: el implementer escribió los 3 tests nuevos (T-39, T-40, T-41) más los cambios de código en un solo commit, sin que QA encontrara tests débiles por faltar el test-author.
+
+### Ajustes propuestos (pendientes del "sí" del PO)
+
+| Ajuste | Dónde |
+|---|---|
+| El de la corrida 3 sigue sin aplicarse y sigue siendo necesario: antes de lanzar cualquier agente, el orquestador debe listar explícitamente (no solo "recordar") los `agentId` vivos de la sesión para esa US antes de decidir `Agent` vs `SendMessage`. Dos corridas seguidas con el mismo error sugiere que hace falta un paso mecánico en `us.md`, no una nota de convención | `.claude/commands/us.md` pasos 1 y 5 |
+
+### Qué medir en la corrida 5
+
+- Si se aplica el ajuste de arriba antes de correr: ¿el costo total baja de ~280k a algo más cercano a ~220k (analyst en 1 sola invocación retomada)?
+- El piso de una US M sin errores de retoma sigue sin medirse limpio — van 2 corridas seguidas con el mismo defecto de proceso inflando el costo de analyst en +~50-60k tokens.

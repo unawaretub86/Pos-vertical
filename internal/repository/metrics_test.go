@@ -563,6 +563,89 @@ func TestMetricsRepo_T17_AgingReceivablesPaymentsCountedOnce(t *testing.T) {
 	}
 }
 
+// ─── T-40, T-41 (US-065): AgingReceivables tie-break ─────────────────────────
+
+// seedAgingTieBreak seeds Zeta (id 1, saldo $10.000, days_overdue 5), Alfa
+// (id 2, saldo $50.000, days_overdue 5) and Beto (id 3, saldo $50.000,
+// days_overdue 5). Insertion order (Zeta, Alfa, Beto) deliberately does not
+// match the expected output order, so a leftover ORDER BY rowid/id would fail
+// both T-40 and T-41.
+func seedAgingTieBreak(t *testing.T, db *database.DB) {
+	t.Helper()
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Zeta', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Alfa', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (3, 'Beto', '', '')`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 10000, 10000, 'completed', 'credit', datetime('now','-5 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 2, 50000, 50000, 'completed', 'credit', datetime('now','-5 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 50000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (3, 1, 3, 50000, 50000, 'completed', 'credit', datetime('now','-5 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (3, 'credit', 50000)`)
+}
+
+func TestMetricsRepo_T40_AgingTieBreakByBalanceThenName(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	seedAgingTieBreak(t, db)
+
+	// Dora: saldo $5.000, days_overdue 9 (control de no-regresion: days_overdue manda primero).
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (4, 'Dora', '', '')`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (4, 1, 4, 5000, 5000, 'completed', 'credit', datetime('now','-9 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (4, 'credit', 5000)`)
+
+	items, err := NewMetricsRepository(db.DB).AgingReceivables(ctx, 5)
+	if err != nil {
+		t.Fatalf("AgingReceivables(5): %v", err)
+	}
+	want := []struct {
+		name    string
+		balance float64
+		days    int
+	}{
+		{"Dora", 5000, 9},
+		{"Alfa", 50000, 5},
+		{"Beto", 50000, 5},
+		{"Zeta", 10000, 5},
+	}
+	if len(items) != len(want) {
+		t.Fatalf("AgingReceivables(5) len = %d, want %d: %+v", len(items), len(want), items)
+	}
+	for i, w := range want {
+		if items[i].Name != w.name || items[i].Balance != w.balance || items[i].DaysOverdue != w.days {
+			t.Errorf("items[%d] = %+v, want %s %.0f / %d dias", i, items[i], w.name, w.balance, w.days)
+		}
+	}
+}
+
+func TestMetricsRepo_T41_AgingTieBreakDecidesLimitCutoff(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	seedAgingTieBreak(t, db)
+
+	items, err := NewMetricsRepository(db.DB).AgingReceivables(ctx, 2)
+	if err != nil {
+		t.Fatalf("AgingReceivables(2): %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("AgingReceivables(2) len = %d, want 2: %+v", len(items), items)
+	}
+	want := []struct {
+		name    string
+		balance float64
+	}{{"Alfa", 50000}, {"Beto", 50000}}
+	for i, w := range want {
+		if items[i].Name != w.name || items[i].Balance != w.balance {
+			t.Errorf("items[%d] = %+v, want %s %.0f", i, items[i], w.name, w.balance)
+		}
+	}
+	for _, it := range items {
+		if it.Name == "Zeta" {
+			t.Errorf("Zeta (saldo mas bajo, $10.000) no debe entrar en el corte LIMIT 2, got %+v", items)
+		}
+	}
+}
+
 // ─── T-18: empty range ───────────────────────────────────────────────────────
 
 func TestMetricsRepo_T18_EmptyRange(t *testing.T) {

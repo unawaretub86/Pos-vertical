@@ -152,3 +152,59 @@ func TestCustomerRepo_T4_TotalPortfolioBalance_ClosedDBWrapsError(t *testing.T) 
 		t.Errorf("TotalPortfolioBalance: error %q is not wrapped with %%w", err)
 	}
 }
+
+// ─── T-5 (US-065 T-39): AC-1, AC-2 ───────────────────────────────────────────
+
+// TestCustomerRepo_T5_ListSearchFiltersByNameOrPhone covers List after it stops
+// having its own textual copy of the balance SQL and reuses
+// customerBalanceExpr/customerBalanceFrom (US-065): search by name, search by
+// phone and the no-search path must keep returning the right balances.
+func TestCustomerRepo_T5_ListSearchFiltersByNameOrPhone(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Ana', '3001111111', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Beto', '3002222222', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (3, 'Carla', '3003333333', '')`)
+
+	// Ana: fiado $20.000, sin abono -> saldo 20.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 20000, 20000, 'completed', 'credit', datetime('now','-1 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 20000)`)
+	// Beto: fiado $30.000, abono $10.000 -> saldo 20.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 2, 30000, 30000, 'completed', 'credit', datetime('now','-1 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 30000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (2, 10000, datetime('now'))`)
+	// Carla: sin fiado.
+
+	repo := NewCustomerRepository(db.DB)
+
+	t.Run("por nombre", func(t *testing.T) {
+		got, err := repo.List(ctx, "Ana")
+		if err != nil {
+			t.Fatalf("List(Ana): %v", err)
+		}
+		if len(got) != 1 || got[0].Name != "Ana" || got[0].Balance != 20000 {
+			t.Errorf("List(Ana) = %+v, want 1 resultado Ana con saldo 20000", got)
+		}
+	})
+
+	t.Run("por telefono", func(t *testing.T) {
+		got, err := repo.List(ctx, "300222")
+		if err != nil {
+			t.Fatalf("List(300222): %v", err)
+		}
+		if len(got) != 1 || got[0].Name != "Beto" || got[0].Balance != 20000 {
+			t.Errorf("List(300222) = %+v, want 1 resultado Beto con saldo 20000", got)
+		}
+	})
+
+	t.Run("sin busqueda", func(t *testing.T) {
+		got, err := repo.List(ctx, "")
+		if err != nil {
+			t.Fatalf("List(\"\"): %v", err)
+		}
+		if len(got) != 3 {
+			t.Errorf("List(\"\") len = %d, want 3 (Ana, Beto, Carla)", len(got))
+		}
+	})
+}

@@ -24,19 +24,8 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
 	query := `
 		SELECT
 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
-			COALESCE(sp_sum.amount, 0) - COALESCE(cp_sum.amount, 0) AS balance,
-			sp_sum.oldest_at AS oldest_debt_at
-		FROM customers c
-		LEFT JOIN (
-			SELECT s2.customer_id, SUM(sp.amount) AS amount, MIN(s2.created_at) AS oldest_at
-			FROM sale_payments sp
-			JOIN sales s2 ON s2.id = sp.sale_id
-			WHERE sp.method = 'credit' AND s2.status = 'completed'
-			GROUP BY s2.customer_id
-		) sp_sum ON sp_sum.customer_id = c.id
-		LEFT JOIN (
-			SELECT customer_id, SUM(amount) AS amount FROM customer_payments GROUP BY customer_id
-		) cp_sum ON cp_sum.customer_id = c.id`
+			` + customerBalanceExpr + ` AS balance,
+			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
 
 	args := []any{}
 	if strings.TrimSpace(search) != "" {
