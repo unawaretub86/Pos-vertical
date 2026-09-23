@@ -21,3 +21,6 @@ web/out/*
 .idea/
 .vscode/
 *.swp
+
+# Agent pipeline scratch (contracts and QA reports live only inside the US worktree)
+changes/
