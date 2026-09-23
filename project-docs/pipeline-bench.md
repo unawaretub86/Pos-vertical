@@ -21,6 +21,17 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 | # | Fecha | US | Nivel | Tokens (último valor por agente) | Tools | Min agente | Paradas no planeadas | Vueltas QA | Defectos | Roadmap | Violaciones | Diff |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | 2026-09-23 | US-059 | L | ~440k (A 169k · T 102k · I 71k · Q 101k) | 125 | ~27.5 | 2 | 1 | 5 | 5 | 0 | +1.547 / −224, 13 archivos |
+| 2 | 2026-09-23 | US-063 | L | ~310k (A 138k · T 71k · I 35k · Q 67k) | 111 | ~18.5 | 0 | 1 | 4 | 2 (+1 cerrado) | 0 | +466 / −43, 7 archivos |
+
+### Tendencia
+
+| | Corrida 1 | Corrida 2 | Lectura |
+|---|---|---|---|
+| Tokens | ~440k | ~310k (−30%) | Baja por el tamaño de la US y porque se retomaron agentes en vez de relanzarlos |
+| Min agente | ~27.5 | ~18.5 | — |
+| Paradas no planeadas | 2 | **0** | El ajuste "el analista verifica ejecutando" funcionó |
+| Vueltas QA | 1 | 1 | — |
+| Violaciones | 0 | 0 | La separación entre tests y código se sostiene |
 
 ---
 
@@ -81,3 +92,54 @@ Las dos vinieron de que el Analista **dedujo** comportamiento en vez de **ejecut
 - ¿Bajan las paradas no planeadas con la verificación ejecutada del Analista?
 - Costo de una US **M** frente a una **L**.
 - R-04 es un fix pequeño: sirve para ver si el pipeline sobra en cambios chicos.
+
+---
+
+## Corrida 2 — US-063 (fix del bug D-4, desde el roadmap R-04)
+
+**US:** corregir el saldo de la cartera envejecida del dashboard (SPRINT-14). Bug fix que cambia un número visible para el dueño. **Commits de la rama:** `180e201` → `fbccc6b` (RED) → `d999fad` → `0c5b276`, fusionados en un solo commit en `dev`.
+
+### Por agente
+
+| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 3 (contrato + registro de la US, decisiones de GATE 1, cierre); retomado con `SendMessage` | 138k | 33 + 8 + 18 = 59 | 333 + 33 + 122 s = 488 s |
+| test-author | 1 | 71k | 15 | 222 s |
+| implementer | 1 | 35k | 7 | 113 s |
+| qa | 1 | 67k | 30 | 290 s |
+| **Total** | 6 | ~310k | 111 | 1.112 s ≈ 18.5 min |
+
+### Qué encontró
+
+| Tipo | Hallazgo | Quién |
+|---|---|---|
+| Defecto 🔴 (alcance real mayor) | DISC-1: el bug no solo daba montos equivocados, también **ocultaba deudores**. Eli debía $15.000 y no aparecía porque el cálculo le daba −$15.000 | analyst (ejecutado) |
+| Defecto 🔴 | DISC-3: `TotalPortfolioBalance` resta los saldos a favor ($40.000 vs $55.000) → R-44 | analyst |
+| Defecto (efecto en UI) | DISC-4: el modal de abono mostraba la deuda equivocada y la fila desaparecía tras abonar. Lo resuelve el fix del backend | analyst (leído) |
+| Defecto menor | `ORDER BY days_overdue DESC` sin desempate con `LIMIT` → R-45 | qa |
+| Deuda | `CustomerRepository.List` duplica la fórmula de saldo → R-45 | implementer + qa |
+
+Con la búsqueda por grep se confirmó que no hay otros JOIN que multipliquen montos.
+
+### Paradas no planeadas: 0
+
+Solo se pasó por los dos gates. El Analista ejecutó el comportamiento actual con un test temporal antes de escribir el contrato, y ningún test cayó en `PASA⚠️`.
+
+### Fricción operativa
+
+- La US venía del roadmap y no existía en el sprint. `/us` supone que existe (paso 0.2), así que el Analista la registró en modo `contract`. Eso dejó el sprint modificado en el worktree, y el orquestador lo commiteó aparte (`docs(US-063): register US`) para que el commit `RED` tuviera solo tests.
+- El GATE 1 dejó decisiones que solo tocaban §7 y §8 del contrato. El Analista las registró **en paralelo** con el test-author, sin conflicto.
+- El roadmap no tenía formato para ítems cerrados; el Analista creó la sección "Cerrados".
+
+### Ajustes propuestos (pendientes del "sí" del PO)
+
+| Ajuste | Dónde |
+|---|---|
+| Paso 0.2: si la US viene del roadmap (R-NN), el Analista la registra en el sprint durante el modo `contract` y el orquestador la commitea aparte antes de `RED` | `.claude/commands/us.md` |
+| Si las decisiones del GATE 1 solo tocan §7 y §8, el test-author puede correr en paralelo | `.claude/commands/us.md` |
+| Formato "Cerrados" del roadmap documentado en su encabezado | `project-docs/roadmap.md` |
+
+### Qué medir en la corrida 3
+
+- Una US **M** (sin test-author), para comparar el costo contra L.
+- Si R-44 (otro fix chico, de saldo) confirma que ~300k tokens es el piso de una US L, o si baja más.

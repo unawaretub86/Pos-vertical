@@ -257,18 +257,17 @@ func (r *metricsRepo) LowStock(ctx context.Context, limit int) ([]LowStockItem, 
 	return items, nil
 }
 
-// Debtors returns customers with balance > 0 ordered by balance descending and
-// name ascending. The balance uses the same formula as CustomerRepository.List.
-// limit <= 0 means no limit.
-func (r *metricsRepo) Debtors(ctx context.Context, limit int) ([]Debtor, error) {
-	if limit <= 0 {
-		limit = -1 // SQLite: negative LIMIT means no limit
-	}
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT
-			c.id, c.name, c.phone,
-			COALESCE(sp_sum.amount, 0) - COALESCE(cp_sum.amount, 0) AS balance,
-			sp_sum.oldest_at AS oldest_debt_at
+// customerBalanceExpr is the customer balance (spec/domain/fiado.md): credit
+// lines of completed sales minus customer payments. It must be used together
+// with customerBalanceFrom, which aggregates both sides per customer before
+// joining so that no payment is counted more than once. It is the same formula
+// as CustomerRepository.List.
+const customerBalanceExpr = `COALESCE(sp_sum.amount, 0) - COALESCE(cp_sum.amount, 0)`
+
+// customerBalanceFrom exposes c (customers), sp_sum (credit per customer, with
+// oldest_at = MIN(created_at) of its completed credit sales) and cp_sum
+// (payments per customer).
+const customerBalanceFrom = `
 		FROM customers c
 		LEFT JOIN (
 			SELECT s2.customer_id, SUM(sp.amount) AS amount, MIN(s2.created_at) AS oldest_at
@@ -279,8 +278,22 @@ func (r *metricsRepo) Debtors(ctx context.Context, limit int) ([]Debtor, error) 
 		) sp_sum ON sp_sum.customer_id = c.id
 		LEFT JOIN (
 			SELECT customer_id, SUM(amount) AS amount FROM customer_payments GROUP BY customer_id
-		) cp_sum ON cp_sum.customer_id = c.id
-		WHERE COALESCE(sp_sum.amount, 0) - COALESCE(cp_sum.amount, 0) > 0
+		) cp_sum ON cp_sum.customer_id = c.id`
+
+// Debtors returns customers with balance > 0 ordered by balance descending and
+// name ascending. The balance uses the same formula as CustomerRepository.List.
+// limit <= 0 means no limit.
+func (r *metricsRepo) Debtors(ctx context.Context, limit int) ([]Debtor, error) {
+	if limit <= 0 {
+		limit = -1 // SQLite: negative LIMIT means no limit
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			c.id, c.name, c.phone,
+			`+customerBalanceExpr+` AS balance,
+			sp_sum.oldest_at AS oldest_debt_at`+
+		customerBalanceFrom+`
+		WHERE `+customerBalanceExpr+` > 0
 		ORDER BY balance DESC, c.name ASC
 		LIMIT ?`,
 		limit,
@@ -306,26 +319,20 @@ func (r *metricsRepo) Debtors(ctx context.Context, limit int) ([]Debtor, error) 
 	return debtors, nil
 }
 
-// AgingReceivables returns up to limit customers with debt ordered by days since
-// their oldest credit sale. The query is moved verbatim from the dashboard,
-// including its balance defect (payments are multiplied by the number of credit
-// payments of the customer); it is fixed in a later US. Rows whose days_overdue
-// is NULL (unparseable created_at) are excluded explicitly.
+// AgingReceivables returns up to limit customers with balance > 0 ordered by
+// days since their oldest completed credit sale. The balance is the same one
+// returned by Debtors and CustomerRepository.List. Rows whose days_overdue is
+// NULL (unparseable created_at) are excluded explicitly.
 func (r *metricsRepo) AgingReceivables(ctx context.Context, limit int) ([]AgingReceivable, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT
 			c.id,
 			c.name,
-			COALESCE(SUM(sp.amount), 0) - COALESCE(SUM(cp.paid), 0) AS balance,
-			CAST(julianday('now') - julianday(MIN(s.created_at)) AS INTEGER) AS days_overdue
-		FROM customers c
-		JOIN sales s ON s.customer_id = c.id AND s.status = 'completed'
-		JOIN sale_payments sp ON sp.sale_id = s.id AND sp.method = 'credit'
-		LEFT JOIN (
-			SELECT customer_id, SUM(amount) AS paid FROM customer_payments GROUP BY customer_id
-		) cp ON cp.customer_id = c.id
-		GROUP BY c.id, c.name
-		HAVING balance > 0 AND days_overdue IS NOT NULL
+			`+customerBalanceExpr+` AS balance,
+			CAST(julianday('now') - julianday(sp_sum.oldest_at) AS INTEGER) AS days_overdue`+
+		customerBalanceFrom+`
+		WHERE `+customerBalanceExpr+` > 0
+			AND julianday(sp_sum.oldest_at) IS NOT NULL
 		ORDER BY days_overdue DESC
 		LIMIT ?`,
 		limit,

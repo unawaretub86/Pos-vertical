@@ -43,6 +43,7 @@ Este sprint entrega **T1 (regex) + T2 (fuzzy matching)**, Go puro, cero dependen
 | US-060 | Motor de intenciones T1 (regex) + T2 (fuzzy) en Go puro | [ ] Pendiente | — |
 | US-061 | Servicio, endpoint `/ai/ask` y bitácora de consultas | [ ] Pendiente | — |
 | US-062 | Widget de chat en la app autenticada | [ ] Pendiente | — |
+| US-063 | Corregir el saldo de la cartera envejecida del dashboard (D-4) | [x] Completo | 2026-09-23 |
 
 **Esfuerzo total estimado: 6.5 días.** Dentro del objetivo de ~7. Línea de corte si aprieta: US-062 se reduce a una caja de búsqueda en el dashboard en vez de un widget flotante con historial (−0.5 día). No recortar US-059: sin ella los intents solo responden "hoy" y el asistente queda cojo.
 
@@ -525,6 +526,67 @@ SUGERENCIAS
 - [ ] Verificación manual: preguntar "cuánto vendí hoy" y contrastar el número con la tarjeta del dashboard — deben coincidir
 - [ ] Verificación manual: entrar como `cashier` y confirmar que el botón no existe
 - [ ] Build limpio (`go build ./...`, `pnpm build`)
+
+---
+
+## US-063 — Corregir el saldo de la cartera envejecida del dashboard (D-4)
+
+**Origen:** roadmap R-04 (defecto D-4, detectado y preservado a propósito en US-059).
+
+**Como** Don Carlos (dueño),
+**quiero** que la lista de "cartera envejecida" del dashboard muestre lo que cada cliente me debe de verdad,
+**para** cobrarle la cifra correcta y no perder de vista a quien lleva más días debiendo.
+
+**Esfuerzo estimado:** 0.5 días. **Impacto:** Alto. Toca el diferenciador del producto: el mismo cliente aparece con un saldo en el dashboard y con otro en `/customers` y en `/reports/portfolio`, y un cliente con varios fiados y abonos puede desaparecer de la lista aunque deba.
+
+**Estado verificado:**
+- `MetricsRepository.AgingReceivables` (`internal/repository/metrics.go:314-331`) une `customer_payments` agregado por cliente a **cada fila** de `sale_payments` con `method='credit'` (`:322-326`) y hace `SUM(cp.paid)` (`:319`): los abonos se multiplican por la cantidad de líneas de fiado del cliente. El comentario de `:309-313` lo documenta como defecto preservado.
+- `Debtors` (`metrics.go:263-285`) y `CustomerRepository.List` (`internal/repository/customer.go:24-39`) usan tablas derivadas agregadas por cliente y dan el saldo correcto.
+- Ejecutado el 2026-09-23 (test temporal, borrado): Dora (fiados $25.000 + $25.000, abono $10.000) → aging **$30.000**, `Debtors` y `List` **$40.000**. Eli (3 fiados de $10.000, abonos $5.000 + $10.000) → debe $15.000 pero **no aparece** en aging (el defecto le calcula −$15.000).
+- Los tests `TestMetricsRepo_T17_AgingReceivablesPreservesD4` (`internal/repository/metrics_test.go:536`, aserción `:558`) y `TestDashboardToday_T22_AgingReceivables` (`internal/handler/metrics_equivalence_test.go:241`, fila `:260`) fijan hoy el valor con defecto (30.000) con el comentario "preserva D-4, se corrige en US posterior".
+- El dashboard permite abonar desde la cartera envejecida y muestra la deuda de esa fila (`frontend/app/page.tsx:285`); el backend valida el abono contra el saldo correcto (`internal/service/customer.go:92-97`).
+
+**Regla de negocio:**
+```
+saldo en cartera envejecida = saldo(cliente) de spec/domain/fiado.md
+  = SUM(sale_payments.amount credit, venta 'completed') − SUM(customer_payments.amount)
+Solo clientes con saldo > 0. days_overdue = días desde la venta a crédito
+'completed' más vieja (sin cambio). Orden: days_overdue DESC. Límite: 5.
+```
+
+**Scope — qué NO entra:**
+- `TotalPortfolioBalance` y el total de `/customers` (otra definición de "cartera"; ver roadmap al cierre).
+- El desfase UTC/local y las filas con `days_overdue` NULL (R-05).
+- Cambios de frontend o del contrato JSON de `/api/dashboard/today`.
+
+**Acceptance Criteria:**
+- [ ] El saldo de cada fila de `aging_receivables` es igual al saldo del mismo cliente en `/reports/portfolio` y `/customers`
+- [ ] Dora (fiados $25.000 + $25.000, abono $10.000) aparece con $40.000 y 7 días
+- [ ] Un cliente con saldo exacto $0 no aparece; uno con abonos mayores que lo fiado tampoco
+- [ ] `days_overdue` y el orden de la lista no cambian
+
+**DoD:**
+- [ ] Sin migración, sin cambio de contrato HTTP
+- [ ] T-17 y T-22 pasan de 30.000 a 40.000 y pierden el comentario "preserva D-4"
+- [ ] Build limpio (`go build ./...`, `go test ./...`, `pnpm build`)
+
+### Criterios verificados
+
+> Cerrada el 2026-09-23 (QA vuelta 1: OK, 0 bloqueantes, 2 menores → roadmap R-45). Los checkboxes de arriba son el enunciado original. Decisiones del PO en GATE 1: el total neto de `TotalPortfolioBalance` es un bug fuera de alcance (roadmap R-44); se acepta el cambio visible (saldos mayores en aging y clientes antes ocultos). `AgingReceivables` y `Debtors` comparten ahora `customerBalanceExpr` / `customerBalanceFrom` (`internal/repository/metrics.go:265,270`). Sin cambio de regla en `spec/domain/fiado.md` (solo la fuente nueva).
+> Tests: `internal/repository/metrics_test.go` (repo) e `internal/handler/metrics_equivalence_test.go` (handler). Humo manual de QA: 2 fiados de $25.000 + abono de $10.000 → aging, portfolio, `/customers` y `/customers/1/balance` = 40.000.
+
+| AC | Criterio (EARS) | Tests |
+|---|---|---|
+| AC-1 | CUANDO se invoca `AgingReceivables(limit)`, el sistema DEBE calcular el saldo como `SUM(sale_payments.amount credit de ventas 'completed') − SUM(customer_payments.amount)`, contando cada abono una sola vez sin importar cuántos fiados tenga el cliente. | `TestMetricsRepo_T17_AgingReceivablesPaymentsCountedOnce` (Dora 40.000 / 7 días), `_T31_AgingSeveralCreditsAndPayments` |
+| AC-2 | CUANDO un admin llama `GET /api/dashboard/today`, el saldo de cada fila de `aging_receivables` DEBE ser igual al del mismo cliente en `/reports/portfolio` y `/customers`. | `TestMetricsRepo_T35_AgingBalanceMatchesDebtorsListAndBalance`, `TestDashboardToday_T36_AgingBalanceMatchesPortfolioAndCustomers`, `TestDashboardToday_T22_AgingReceivables` |
+| AC-3 | MIENTRAS un cliente tenga saldo > 0 y `days_overdue` no NULL, el sistema DEBE incluirlo aunque tenga varios fiados y varios abonos. | `TestMetricsRepo_T31_AgingSeveralCreditsAndPayments` (Eli 3 × $10.000 − $15.000 = 15.000 / 9 días, antes oculta) |
+| AC-4 | SI el saldo de un cliente es exactamente 0, ENTONCES el sistema NO DEBE incluirlo. | `TestMetricsRepo_T32_AgingExcludesExactZeroBalance`, `_T16_AgingReceivables` |
+| AC-5 | SI los abonos superan lo fiado, ENTONCES el sistema NO DEBE incluir al cliente. | `TestMetricsRepo_T33_AgingExcludesNegativeBalance` |
+| AC-6 | `days_overdue` DEBE seguir siendo `hoy − MIN(created_at)` de las ventas 'completed' con línea credit, sin distinguir abonos; orden `days_overdue DESC`; máximo `limit` filas. | `TestMetricsRepo_T17_AgingReceivablesPaymentsCountedOnce`, `_T31_AgingSeveralCreditsAndPayments`, `_T16_AgingReceivables` |
+| AC-7 | CUANDO un cliente tenga ventas mixtas o anuladas, el saldo DEBE contar solo las líneas `credit` de ventas `completed`. | `TestMetricsRepo_T34_AgingMixedAndVoidedSales` (Iván: credit $15.000 de venta mixta + $20.000 − $5.000 = 30.000 / 8 días; la anulada no cuenta) |
+| AC-8 | (no-regresión) MIENTRAS una fila tenga `days_overdue` NULL, el SQL DEBE excluirla; SI la query falla, el error DEBE volver envuelto con `%w`; sin deudores, slice vacío no-nil. | `TestMetricsRepo_T30_AgingExcludesNullDaysOverdue`, `_T19_ClosedDBWrapsErrors`, `_T18_EmptyRange` |
+| AC-9 | El cambio NO DEBE agregar migraciones, NI cambiar el JSON de `aging_receivables` (`customer_id`, `name`, `balance`, `days_overdue`), NI tocar `frontend/`. | `TestDashboardToday_T36_AgingBalanceMatchesPortfolioAndCustomers` (claves JSON); revisión de QA: `git diff dev...HEAD --stat` sin `frontend/` ni `migrate.go` |
+| AC-10 | `go build`, `go test`, `pnpm build` y `pnpm test` DEBEN pasar. | Ejecución de QA (T-37): todos exit 0. `pnpm lint` sigue con los 41 problemas previos (R-35) |
 
 ---
 

@@ -533,7 +533,7 @@ func TestMetricsRepo_T16_AgingReceivables(t *testing.T) {
 	}
 }
 
-func TestMetricsRepo_T17_AgingReceivablesPreservesD4(t *testing.T) {
+func TestMetricsRepo_T17_AgingReceivablesPaymentsCountedOnce(t *testing.T) {
 	db := openMetricsDB(t)
 	ctx := context.Background()
 
@@ -554,9 +554,9 @@ func TestMetricsRepo_T17_AgingReceivablesPreservesD4(t *testing.T) {
 	if items[0].CustomerID != 1 || items[0].Name != "Dora" {
 		t.Errorf("items[0] = %+v, want Dora (id 1)", items[0])
 	}
-	// preserva D-4, se corrige en US posterior: el saldo real es 40.000
-	if items[0].Balance != 30000 {
-		t.Errorf("Dora balance = %.0f, want 30000", items[0].Balance)
+	// 25.000 + 25.000 − 10.000 = 40.000: the payment is subtracted once, not once per credit sale.
+	if items[0].Balance != 40000 {
+		t.Errorf("Dora balance = %.0f, want 40000", items[0].Balance)
 	}
 	if items[0].DaysOverdue != 7 {
 		t.Errorf("Dora days_overdue = %v, want 7", items[0].DaysOverdue)
@@ -686,5 +686,241 @@ func TestMetricsRepo_T30_AgingExcludesNullDaysOverdue(t *testing.T) {
 	}
 	if items[0].CustomerID != 2 || items[0].Name != "Beto" || items[0].Balance != 20000 || items[0].DaysOverdue != 10 {
 		t.Errorf("items[0] = %+v, want Beto (id 2) 20000 / 10 days", items[0])
+	}
+}
+
+// ─── T-31..T-35: AgingReceivables uses the single balance definition (US-063) ─
+
+// agingRow is a compact expected row for aging assertions.
+type agingRow struct {
+	id      int64
+	name    string
+	balance float64
+	days    int
+}
+
+func assertAging(t *testing.T, got []AgingReceivable, want []agingRow) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("AgingReceivables len = %d, want %d: got %+v, want %+v", len(got), len(want), got, want)
+	}
+	for i, w := range want {
+		g := got[i]
+		if g.CustomerID != w.id || g.Name != w.name || g.Balance != w.balance || g.DaysOverdue != w.days {
+			t.Errorf("aging[%d] = {%d %s %.0f %d}, want {%d %s %.0f %d}",
+				i, g.CustomerID, g.Name, g.Balance, g.DaysOverdue, w.id, w.name, w.balance, w.days)
+		}
+	}
+}
+
+// seedAgingT31 seeds Beto, Eli and Dora with datetime('now', ...) timestamps.
+// Beto (id 1): credit 30.000 (−10 d), payment 10.000 → 20.000 / 10 d.
+// Eli (id 2): 3 × credit 10.000 (−9, −8, −7 d), payments 5.000 + 10.000 → 15.000 / 9 d.
+// Dora (id 3): credit 25.000 (−7 d) + 25.000 (−6 d), payment 10.000 → 40.000 / 7 d.
+func seedAgingT31(t *testing.T, db *database.DB) {
+	t.Helper()
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Beto', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Eli', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (3, 'Dora', '', '')`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 30000, 30000, 'completed', 'credit', datetime('now','-10 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 30000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (1, 10000, datetime('now','-1 days'))`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 2, 10000, 10000, 'completed', 'credit', datetime('now','-9 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (3, 1, 2, 10000, 10000, 'completed', 'credit', datetime('now','-8 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (3, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (4, 1, 2, 10000, 10000, 'completed', 'credit', datetime('now','-7 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (4, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (2, 5000, datetime('now','-2 days'))`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (2, 10000, datetime('now','-1 days'))`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (5, 1, 3, 25000, 25000, 'completed', 'credit', datetime('now','-7 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (5, 'credit', 25000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (6, 1, 3, 25000, 25000, 'completed', 'credit', datetime('now','-6 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (6, 'credit', 25000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (3, 10000, datetime('now','-1 days'))`)
+}
+
+func TestMetricsRepo_T31_AgingSeveralCreditsAndPayments(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	seedAgingT31(t, db)
+
+	items, err := NewMetricsRepository(db.DB).AgingReceivables(ctx, 5)
+	if err != nil {
+		t.Fatalf("AgingReceivables(5): %v", err)
+	}
+	// Eli: 30.000 − 15.000 = 15.000 (must appear); Dora: 50.000 − 10.000 = 40.000.
+	assertAging(t, items, []agingRow{
+		{1, "Beto", 20000, 10},
+		{2, "Eli", 15000, 9},
+		{3, "Dora", 40000, 7},
+	})
+}
+
+func TestMetricsRepo_T32_AgingExcludesExactZeroBalance(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Fer', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Ana', '', '')`)
+
+	// Fer: 2 × 20.000 (−5, −4 d), payment 40.000 → exactly 0.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 20000, 20000, 'completed', 'credit', datetime('now','-5 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 1, 20000, 20000, 'completed', 'credit', datetime('now','-4 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (1, 40000, datetime('now','-1 days'))`)
+	// Ana (control): 20.000 (−3 d), payment 5.000 → 15.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (3, 1, 2, 20000, 20000, 'completed', 'credit', datetime('now','-3 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (3, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (2, 5000, datetime('now','-1 days'))`)
+
+	items, err := NewMetricsRepository(db.DB).AgingReceivables(ctx, 5)
+	if err != nil {
+		t.Fatalf("AgingReceivables(5): %v", err)
+	}
+	assertAging(t, items, []agingRow{{2, "Ana", 15000, 3}})
+}
+
+func TestMetricsRepo_T33_AgingExcludesNegativeBalance(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Gus', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Hana', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (3, 'Beto', '', '')`)
+
+	// Gus: 10.000 (−3 d), payment 25.000 → −15.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 10000, 10000, 'completed', 'credit', datetime('now','-3 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (1, 25000, datetime('now','-1 days'))`)
+	// Hana: 2 × 30.000 (−6, −5 d), payment 70.000 → −10.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 2, 30000, 30000, 'completed', 'credit', datetime('now','-6 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 30000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (3, 1, 2, 30000, 30000, 'completed', 'credit', datetime('now','-5 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (3, 'credit', 30000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (2, 70000, datetime('now','-1 days'))`)
+	// Beto (control): 20.000 (−10 d), no payments → 20.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (4, 1, 3, 20000, 20000, 'completed', 'credit', datetime('now','-10 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (4, 'credit', 20000)`)
+
+	items, err := NewMetricsRepository(db.DB).AgingReceivables(ctx, 5)
+	if err != nil {
+		t.Fatalf("AgingReceivables(5): %v", err)
+	}
+	assertAging(t, items, []agingRow{{3, "Beto", 20000, 10}})
+}
+
+func TestMetricsRepo_T34_AgingMixedAndVoidedSales(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Iván', '', '')`)
+	// Mixed completed sale (−8 d): credit 15.000 + cash 10.000 → contributes 15.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 25000, 25000, 'completed', 'mixed', datetime('now','-8 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 15000)`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'cash', 10000)`)
+	// Credit completed sale (−4 d): 20.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 1, 20000, 20000, 'completed', 'credit', datetime('now','-4 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 20000)`)
+	// Credit voided sale (−12 d): 50.000 → counts neither for balance nor for days.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (3, 1, 1, 50000, 50000, 'voided', 'credit', datetime('now','-12 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (3, 'credit', 50000)`)
+	// Payment 5.000 → 15.000 + 20.000 − 5.000 = 30.000.
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (1, 5000, datetime('now','-1 days'))`)
+
+	items, err := NewMetricsRepository(db.DB).AgingReceivables(ctx, 5)
+	if err != nil {
+		t.Fatalf("AgingReceivables(5): %v", err)
+	}
+	assertAging(t, items, []agingRow{{1, "Iván", 30000, 8}})
+}
+
+func TestMetricsRepo_T35_AgingBalanceMatchesDebtorsListAndBalance(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	seedAgingT31(t, db)
+
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (4, 'Fer', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (5, 'Gus', '', '')`)
+	// Fer: 2 × 20.000 (−5, −4 d), payment 40.000 → 0.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (7, 1, 4, 20000, 20000, 'completed', 'credit', datetime('now','-5 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (7, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (8, 1, 4, 20000, 20000, 'completed', 'credit', datetime('now','-4 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (8, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (4, 40000, datetime('now','-1 days'))`)
+	// Gus: 10.000 (−3 d), payment 25.000 → −15.000.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (9, 1, 5, 10000, 10000, 'completed', 'credit', datetime('now','-3 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (9, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (5, 25000, datetime('now','-1 days'))`)
+
+	metrics := NewMetricsRepository(db.DB)
+	customers := NewCustomerRepository(db.DB)
+
+	aging, err := metrics.AgingReceivables(ctx, 5)
+	if err != nil {
+		t.Fatalf("AgingReceivables(5): %v", err)
+	}
+	debtors, err := metrics.Debtors(ctx, 0)
+	if err != nil {
+		t.Fatalf("Debtors(0): %v", err)
+	}
+	list, err := customers.List(ctx, "")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+
+	debtorBal := map[int64]float64{}
+	for _, d := range debtors {
+		debtorBal[d.ID] = d.Balance
+	}
+	listBal := map[int64]float64{}
+	for _, c := range list {
+		listBal[c.ID] = c.Balance
+	}
+
+	// Anchors: Debtors(0) is exactly {Beto 1: 20.000, Eli 2: 15.000, Dora 3: 40.000}; List agrees.
+	wantBal := map[int64]float64{1: 20000, 2: 15000, 3: 40000}
+	if len(debtors) != len(wantBal) {
+		t.Errorf("Debtors(0) = %+v, want exactly ids {1,2,3}", debtors)
+	}
+	for id, want := range wantBal {
+		if debtorBal[id] != want || listBal[id] != want {
+			t.Errorf("id %d: Debtors %.0f / List %.0f, want %.0f", id, debtorBal[id], listBal[id], want)
+		}
+	}
+
+	// Invariant: the set of aging ids equals the set of Debtors(0) ids…
+	if len(aging) != len(debtors) {
+		t.Errorf("aging len = %d, Debtors(0) len = %d, want the same set: aging %+v, debtors %+v", len(aging), len(debtors), aging, debtors)
+	}
+	seen := map[int64]bool{}
+	for _, a := range aging {
+		seen[a.CustomerID] = true
+		// …and each aging balance equals Debtors, List and Balance() for the same id.
+		dBal, ok := debtorBal[a.CustomerID]
+		if !ok {
+			t.Errorf("aging row %d (%s) not in Debtors(0)", a.CustomerID, a.Name)
+		} else if a.Balance != dBal {
+			t.Errorf("%s: aging balance %.0f != Debtors balance %.0f", a.Name, a.Balance, dBal)
+		}
+		if lBal, ok := listBal[a.CustomerID]; !ok || a.Balance != lBal {
+			t.Errorf("%s: aging balance %.0f != List balance %.0f (found %v)", a.Name, a.Balance, lBal, ok)
+		}
+		bal, err := customers.Balance(ctx, a.CustomerID)
+		if err != nil {
+			t.Fatalf("Balance(%d): %v", a.CustomerID, err)
+		}
+		if a.Balance != bal {
+			t.Errorf("%s: aging balance %.0f != Balance() %.0f", a.Name, a.Balance, bal)
+		}
+	}
+	for id, bal := range debtorBal {
+		if !seen[id] {
+			t.Errorf("debtor id %d (balance %.0f) missing from aging", id, bal)
+		}
 	}
 }

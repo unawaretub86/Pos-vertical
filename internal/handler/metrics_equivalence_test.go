@@ -13,9 +13,12 @@ import (
 	"github.com/andreyo/pos/internal/database"
 )
 
-// US-059 — equivalence tests. T-20..T-23 pin the numbers of the pre-refactor
-// code and must pass both before and after extracting MetricsRepository.
-// T-24, T-28 and T-29 pin approved behavior changes (Q6, Q7).
+// US-059 — equivalence tests. T-20, T-21 and T-23 pin the numbers of the
+// pre-refactor code and must pass both before and after extracting
+// MetricsRepository. T-24, T-28 and T-29 pin approved behavior changes (Q6, Q7).
+// US-063 — T-22 pins the corrected aging balance (D-4 fixed: each customer
+// payment is subtracted once); T-36 pins the single-balance invariant across
+// /dashboard/today, /reports/portfolio and /customers.
 
 func eqToday0() time.Time {
 	now := time.Now()
@@ -256,8 +259,7 @@ func TestDashboardToday_T22_AgingReceivables(t *testing.T) {
 	}
 	want := []agingReceivable{
 		{CustomerID: 2, Name: "Beto", Balance: 20000, DaysOverdue: 10},
-		// preserva D-4, se corrige en US posterior: el saldo real es 40.000
-		{CustomerID: 4, Name: "Dora", Balance: 30000, DaysOverdue: 7},
+		{CustomerID: 4, Name: "Dora", Balance: 40000, DaysOverdue: 7},
 		{CustomerID: 1, Name: "Ana", Balance: 15000, DaysOverdue: 3},
 	}
 	got := env.Data.Aging
@@ -268,6 +270,107 @@ func TestDashboardToday_T22_AgingReceivables(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("aging_receivables[%d] = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+}
+
+// ─── T-36: one balance definition across dashboard, portfolio and customers ─
+
+func TestDashboardToday_T36_AgingBalanceMatchesPortfolioAndCustomers(t *testing.T) {
+	db := setupTestDB(t)
+	seedAgingDatetime(t, db)
+	h := New(db)
+
+	// /dashboard/today → aging_receivables (raw rows, to check the JSON keys too).
+	wd := callDashboardToday(h)
+	if wd.Code != http.StatusOK {
+		t.Fatalf("dashboard status %d, want 200; body %s", wd.Code, wd.Body.String())
+	}
+	var dash struct {
+		Data struct {
+			Aging []map[string]json.RawMessage `json:"aging_receivables"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(wd.Body.Bytes(), &dash); err != nil {
+		t.Fatalf("decode dashboard: %v", err)
+	}
+
+	// /reports/portfolio.
+	wp := callPortfolio(h)
+	if wp.Code != http.StatusOK {
+		t.Fatalf("portfolio status %d, want 200; body %s", wp.Code, wp.Body.String())
+	}
+	var port struct {
+		Data []struct {
+			ID      int64   `json:"id"`
+			Balance float64 `json:"balance"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(wp.Body.Bytes(), &port); err != nil {
+		t.Fatalf("decode portfolio: %v", err)
+	}
+	portBal := map[int64]float64{}
+	for _, p := range port.Data {
+		portBal[p.ID] = p.Balance
+	}
+
+	// /customers.
+	reqC := httptest.NewRequest(http.MethodGet, "/api/customers", nil)
+	wc := httptest.NewRecorder()
+	h.listCustomers(wc, reqC)
+	if wc.Code != http.StatusOK {
+		t.Fatalf("customers status %d, want 200; body %s", wc.Code, wc.Body.String())
+	}
+	var cust struct {
+		Data struct {
+			Customers []struct {
+				ID      int64   `json:"id"`
+				Balance float64 `json:"balance"`
+			} `json:"customers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(wc.Body.Bytes(), &cust); err != nil {
+		t.Fatalf("decode customers: %v", err)
+	}
+	custBal := map[int64]float64{}
+	for _, c := range cust.Data.Customers {
+		custBal[c.ID] = c.Balance
+	}
+
+	if len(dash.Data.Aging) != 3 {
+		t.Fatalf("aging_receivables len = %d, want 3 (Beto, Dora, Ana); body %s", len(dash.Data.Aging), wd.Body.String())
+	}
+	wantKeys := []string{"customer_id", "name", "balance", "days_overdue"}
+	for i, row := range dash.Data.Aging {
+		if len(row) != len(wantKeys) {
+			t.Errorf("aging_receivables[%d] has %d keys, want exactly %v: %v", i, len(row), wantKeys, row)
+		}
+		for _, k := range wantKeys {
+			if _, ok := row[k]; !ok {
+				t.Errorf("aging_receivables[%d] missing key %q", i, k)
+			}
+		}
+		var id int64
+		var bal float64
+		if err := json.Unmarshal(row["customer_id"], &id); err != nil {
+			t.Fatalf("aging_receivables[%d].customer_id: %v", i, err)
+		}
+		if err := json.Unmarshal(row["balance"], &bal); err != nil {
+			t.Fatalf("aging_receivables[%d].balance: %v", i, err)
+		}
+		pb, ok := portBal[id]
+		if !ok || bal != pb {
+			t.Errorf("customer %d: aging balance %.0f != portfolio balance %.0f (found %v)", id, bal, pb, ok)
+		}
+		cb, ok := custBal[id]
+		if !ok || bal != cb {
+			t.Errorf("customer %d: aging balance %.0f != /customers balance %.0f (found %v)", id, bal, cb, ok)
+		}
+		if id == 4 && bal != 40000 {
+			t.Errorf("Dora (id 4) aging balance = %.0f, want 40000", bal)
+		}
+	}
+	if portBal[4] != 40000 || custBal[4] != 40000 {
+		t.Errorf("Dora (id 4): portfolio %.0f / customers %.0f, want 40000 / 40000", portBal[4], custBal[4])
 	}
 }
 
