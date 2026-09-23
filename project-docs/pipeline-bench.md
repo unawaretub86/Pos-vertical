@@ -4,6 +4,18 @@
 
 Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de detalle. El orquestador lo hace en el paso 6 de `.claude/commands/us.md`, en el mismo commit del merge. Sirve para decidir con datos, no con impresiones, si el pipeline vale lo que cuesta y qué ajustar. El diseño está en [tosdd-plan.md](tosdd-plan.md).
 
+## Estado actual — dónde retomar
+
+> Se actualiza al final de cada sesión de trabajo con el pipeline.
+
+**Última corrida:** 2 (US-063, `9085b01`, 2026-09-23). Corrida N/A en curso: ninguna, no hay worktrees `us/*` abiertos.
+
+**Pendiente de decisión del PO al retomar:**
+1. ¿Se aplican los 3 ajustes propuestos en la corrida 2 (US desde el roadmap en el paso 0, test-author en paralelo tras el GATE 1, formato "Cerrados" del roadmap)?
+2. ¿Corrida 3 = **R-44** (`TotalPortfolioBalance` resta saldos a favor, prioridad alta), y en nivel **M** para medir costo M vs L?
+
+**Cómo retomar:** en una sesión nueva, responder esas dos preguntas y correr `/us US-064 M` (o L). R-44 no existe todavía en el sprint: el Analista la registra como US-064 en SPRINT-14, como se hizo con US-063.
+
 ## Cómo se mide
 
 | Métrica | Fuente | Nota |
