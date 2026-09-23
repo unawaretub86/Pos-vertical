@@ -141,17 +141,19 @@ func (r *customerRepo) Balance(ctx context.Context, id int64) (float64, error) {
 	return balance, nil
 }
 
-// TotalPortfolioBalance returns the sum of all outstanding customer balances.
+// TotalPortfolioBalance returns the sum of the outstanding balances of
+// customers whose balance is > 0 (spec/domain/glosario.md: cartera). It
+// aggregates the same per-customer formula as List/Balance/Debtors/
+// AgingReceivables (customerBalanceExpr/customerBalanceFrom in metrics.go),
+// so a customer who overpaid (negative balance) never reduces what the
+// others owe.
 func (r *customerRepo) TotalPortfolioBalance(ctx context.Context) (float64, error) {
 	var total float64
 	err := r.db.QueryRowContext(ctx, `
-		SELECT
-			COALESCE((
-				SELECT SUM(sp.amount) FROM sale_payments sp
-				JOIN sales s ON s.id = sp.sale_id
-				WHERE sp.method = 'credit' AND s.status = 'completed'
-			), 0)
-			- COALESCE((SELECT SUM(amount) FROM customer_payments), 0)
+		SELECT COALESCE(SUM(balance), 0) FROM (
+			SELECT `+customerBalanceExpr+` AS balance`+customerBalanceFrom+`
+		) balances
+		WHERE balance > 0
 	`).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("portfolio balance: %w", err)

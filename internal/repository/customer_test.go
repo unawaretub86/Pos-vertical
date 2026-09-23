@@ -1,0 +1,154 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/andreyo/pos/internal/database"
+)
+
+// seedPortfolioT1 seeds the fixture shared by T-1, T-2 (case 2), T-3, T-5:
+//
+//	Dora: fiado $40.000, abono $10.000  -> saldo  $30.000  (en cartera)
+//	Eli:  fiado $20.000, abono  $5.000  -> saldo  $15.000  (en cartera)
+//	Fer:  fiado $20.000, abono $20.000  -> saldo      $0   (fuera de cartera)
+//	Gus:  fiado $10.000, abono $30.000  -> saldo -$20.000  (saldo a favor, fuera de cartera)
+//
+// TotalPortfolioBalance correcto = 30.000 + 15.000 = 45.000
+// Valor con el bug (verificado, US-064 contract §2/§4) = 25.000
+func seedPortfolioT1(t *testing.T, db *database.DB) {
+	t.Helper()
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Dora', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Eli', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (3, 'Fer', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (4, 'Gus', '', '')`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 40000, 40000, 'completed', 'credit', datetime('now','-5 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 40000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (1, 10000, datetime('now','-1 days'))`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 2, 20000, 20000, 'completed', 'credit', datetime('now','-4 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (2, 5000, datetime('now','-1 days'))`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (3, 1, 3, 20000, 20000, 'completed', 'credit', datetime('now','-3 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (3, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (3, 20000, datetime('now','-1 days'))`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (4, 1, 4, 10000, 10000, 'completed', 'credit', datetime('now','-2 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (4, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (4, 30000, datetime('now','-1 days'))`)
+}
+
+// seedPortfolioFerGus seeds only Fer and Gus of the T-1 fixture (both with
+// balance <= 0), for T-2 case B.
+func seedPortfolioFerGus(t *testing.T, db *database.DB) {
+	t.Helper()
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (3, 'Fer', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (4, 'Gus', '', '')`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (3, 1, 3, 20000, 20000, 'completed', 'credit', datetime('now','-3 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (3, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (3, 20000, datetime('now','-1 days'))`)
+
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (4, 1, 4, 10000, 10000, 'completed', 'credit', datetime('now','-2 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (4, 'credit', 10000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (4, 30000, datetime('now','-1 days'))`)
+}
+
+// ─── T-1: AC-1, AC-2, AC-3 ───────────────────────────────────────────────────
+
+func TestCustomerRepo_T1_TotalPortfolioBalance_ExcludesZeroAndNegative(t *testing.T) {
+	db := openMetricsDB(t)
+	seedPortfolioT1(t, db)
+	repo := NewCustomerRepository(db.DB)
+
+	got, err := repo.TotalPortfolioBalance(context.Background())
+	if err != nil {
+		t.Fatalf("TotalPortfolioBalance: %v", err)
+	}
+
+	const bugValue = 25000.0 // (40000+20000+20000+10000) - (10000+5000+20000+30000), the bug this US fixes
+	if got == bugValue {
+		t.Fatalf("TotalPortfolioBalance = %v, still the buggy net value (R-44)", got)
+	}
+	const want = 45000.0 // 30.000 (Dora) + 15.000 (Eli)
+	if got != want {
+		t.Errorf("TotalPortfolioBalance = %v, want %v", got, want)
+	}
+}
+
+// ─── T-2: AC-4 ───────────────────────────────────────────────────────────────
+
+func TestCustomerRepo_T2_TotalPortfolioBalance_NoDebtorsIsZero(t *testing.T) {
+	t.Run("sin clientes", func(t *testing.T) {
+		db := openMetricsDB(t)
+		repo := NewCustomerRepository(db.DB)
+
+		got, err := repo.TotalPortfolioBalance(context.Background())
+		if err != nil {
+			t.Fatalf("TotalPortfolioBalance: %v", err)
+		}
+		if got != 0 {
+			t.Errorf("TotalPortfolioBalance = %v, want 0", got)
+		}
+	})
+
+	t.Run("solo clientes con saldo <= 0", func(t *testing.T) {
+		db := openMetricsDB(t)
+		seedPortfolioFerGus(t, db)
+		repo := NewCustomerRepository(db.DB)
+
+		got, err := repo.TotalPortfolioBalance(context.Background())
+		if err != nil {
+			t.Fatalf("TotalPortfolioBalance: %v", err)
+		}
+		if got != 0 {
+			t.Errorf("TotalPortfolioBalance = %v, want 0", got)
+		}
+	})
+}
+
+// ─── T-3: AC-1 (equivalence with Balance) ───────────────────────────────────
+
+func TestCustomerRepo_T3_TotalPortfolioBalance_MatchesSumOfBalance(t *testing.T) {
+	db := openMetricsDB(t)
+	seedPortfolioT1(t, db)
+	repo := NewCustomerRepository(db.DB)
+	ctx := context.Background()
+
+	doraBalance, err := repo.Balance(ctx, 1)
+	if err != nil {
+		t.Fatalf("Balance(Dora): %v", err)
+	}
+	eliBalance, err := repo.Balance(ctx, 2)
+	if err != nil {
+		t.Fatalf("Balance(Eli): %v", err)
+	}
+
+	want := doraBalance + eliBalance
+	got, err := repo.TotalPortfolioBalance(ctx)
+	if err != nil {
+		t.Fatalf("TotalPortfolioBalance: %v", err)
+	}
+	if got != want {
+		t.Errorf("TotalPortfolioBalance = %v, want %v (Balance(Dora)=%v + Balance(Eli)=%v)", got, want, doraBalance, eliBalance)
+	}
+}
+
+// ─── T-4: AC-6 ───────────────────────────────────────────────────────────────
+
+func TestCustomerRepo_T4_TotalPortfolioBalance_ClosedDBWrapsError(t *testing.T) {
+	db := openMetricsDB(t)
+	repo := NewCustomerRepository(db.DB)
+	db.Close()
+
+	_, err := repo.TotalPortfolioBalance(context.Background())
+	if err == nil {
+		t.Fatal("TotalPortfolioBalance: err = nil, want error on closed DB")
+	}
+	if errors.Unwrap(err) == nil {
+		t.Errorf("TotalPortfolioBalance: error %q is not wrapped with %%w", err)
+	}
+}

@@ -44,8 +44,9 @@ Este sprint entrega **T1 (regex) + T2 (fuzzy matching)**, Go puro, cero dependen
 | US-061 | Servicio, endpoint `/ai/ask` y bitácora de consultas | [ ] Pendiente | — |
 | US-062 | Widget de chat en la app autenticada | [ ] Pendiente | — |
 | US-063 | Corregir el saldo de la cartera envejecida del dashboard (D-4) | [x] Completo | 2026-09-23 |
+| US-064 | Corregir `TotalPortfolioBalance`: no restar los saldos a favor (R-44) | [x] Completo | 2026-09-23 |
 
-**Esfuerzo total estimado: 6.5 días.** Dentro del objetivo de ~7. Línea de corte si aprieta: US-062 se reduce a una caja de búsqueda en el dashboard en vez de un widget flotante con historial (−0.5 día). No recortar US-059: sin ella los intents solo responden "hoy" y el asistente queda cojo.
+**Esfuerzo total estimado: 6.5 días** (sin contar US-064, que viene del roadmap R-44 y no estaba presupuestada en el sprint original). Dentro del objetivo de ~7. Línea de corte si aprieta: US-062 se reduce a una caja de búsqueda en el dashboard en vez de un widget flotante con historial (−0.5 día). No recortar US-059: sin ella los intents solo responden "hoy" y el asistente queda cojo.
 
 ---
 
@@ -587,6 +588,67 @@ Solo clientes con saldo > 0. days_overdue = días desde la venta a crédito
 | AC-8 | (no-regresión) MIENTRAS una fila tenga `days_overdue` NULL, el SQL DEBE excluirla; SI la query falla, el error DEBE volver envuelto con `%w`; sin deudores, slice vacío no-nil. | `TestMetricsRepo_T30_AgingExcludesNullDaysOverdue`, `_T19_ClosedDBWrapsErrors`, `_T18_EmptyRange` |
 | AC-9 | El cambio NO DEBE agregar migraciones, NI cambiar el JSON de `aging_receivables` (`customer_id`, `name`, `balance`, `days_overdue`), NI tocar `frontend/`. | `TestDashboardToday_T36_AgingBalanceMatchesPortfolioAndCustomers` (claves JSON); revisión de QA: `git diff dev...HEAD --stat` sin `frontend/` ni `migrate.go` |
 | AC-10 | `go build`, `go test`, `pnpm build` y `pnpm test` DEBEN pasar. | Ejecución de QA (T-37): todos exit 0. `pnpm lint` sigue con los 41 problemas previos (R-35) |
+
+---
+
+## US-064 — Corregir `TotalPortfolioBalance`: no restar los saldos a favor
+
+**Origen:** roadmap R-44 (prioridad alta), abierto en el GATE 1 de US-063.
+
+**Como** Don Carlos (dueño),
+**quiero** que el total de cartera de `/customers` sea lo que de verdad me deben,
+**para** no ver un total más bajo (o absurdo) solo porque un cliente abonó de más.
+
+**Esfuerzo estimado:** 0.3 días. **Impacto:** Alto. Toca el diferenciador del producto: el total que ve el dueño en `/customers` puede ser menor que la suma real de lo que le deben, o incluso caer si un cliente paga de más.
+
+**Estado verificado:**
+- `CustomerRepository.TotalPortfolioBalance` (`internal/repository/customer.go:145-160`) resta `SUM(customer_payments.amount)` de **todos** los clientes de `SUM(sale_payments.amount credit, completed)` de **todos** los clientes, en una sola resta global: no agrega por cliente ni filtra `balance > 0`. `List` y `Balance`, en el mismo archivo, sí lo hacen por cliente (`:24-39`, `:127-142`).
+- `MetricsRepository` ya expone la fórmula de saldo por cliente como constantes reutilizables en el mismo paquete `repository`: `customerBalanceExpr` (`internal/repository/metrics.go:265`) y `customerBalanceFrom` (`:270-281`), usadas por `Debtors` y `AgingReceivables`.
+- Se expone como `total_portfolio` en `GET /api/customers` (`internal/handler/customer.go:31-39`).
+- Ejecutado el 2026-09-23 (test temporal, borrado): con Dora ($40.000 fiado / $10.000 abono → $30.000), Eli ($20.000 / $5.000 → $15.000), Fer ($20.000 / $20.000 → $0), Gus ($10.000 / $30.000 → −$20.000): `TotalPortfolioBalance` da **$25.000**; la suma de saldos `> 0` es **$45.000**.
+- Contradice `spec/domain/glosario.md:11` ("Cartera... suma de saldos con `balance > 0`") y `spec/domain/fiado.md:37` ("El cliente con saldo `0` o negativo no está en cartera"). El glosario no cambia (decisión del PO en el GATE 1 de US-063).
+
+**Regla de negocio:**
+```
+total_portfolio = SUM(saldo(cliente)) para cada cliente con saldo(cliente) > 0
+saldo(cliente)  = spec/domain/fiado.md (misma fórmula que List, Balance, Debtors,
+                  AgingReceivables): créditos de ventas 'completed' menos abonos,
+                  agregados por cliente antes de sumar/restar.
+Clientes con saldo 0 o negativo (saldo a favor) no aportan ni restan al total.
+```
+
+**Scope — qué NO entra:**
+- R-45 (higiene de fórmula: `List` duplica el FROM de saldo en vez de reusar `customerBalanceFrom`; desempate de `AgingReceivables`). Ya está en el roadmap.
+- R-05 (desfase UTC/hora local) y R-06 (`to` inclusivo en `SalesSummary`). No relacionados.
+- Agregar rango de fechas a `TotalPortfolioBalance` (sigue siendo histórico total).
+- Cambiar el filtro `has_balance=true` de `listCustomers` o el contrato JSON de `/api/customers`.
+
+**Acceptance Criteria:**
+- [x] `TotalPortfolioBalance` devuelve la suma de los saldos de clientes con `balance > 0`, con la misma fórmula que `List`/`Balance`
+- [x] Un cliente con saldo exactamente 0 no aporta al total
+- [x] Un cliente con saldo negativo (abonó de más) no resta del total de los demás
+- [x] Sin clientes, o con todos en saldo `≤ 0`, el total es 0 sin error
+- [x] `GET /api/customers`: `total_portfolio` es igual a la suma de `customers[].balance` positivos del mismo payload
+
+**DoD:**
+- [x] Sin migración, sin cambio de contrato HTTP
+- [x] `internal/repository/customer_test.go` (nuevo) con la fórmula corregida verificada contra el valor con el bug (25.000 → 45.000 con el fixture Dora/Eli/Fer/Gus)
+- [x] `internal/handler/customer_test.go` (nuevo) verificando `total_portfolio` end-to-end
+- [x] Build limpio (`go build ./...`, `go test ./...`, `pnpm build`)
+
+**Criterios verificados** (cierre 2026-09-23, QA vuelta 1 OK, 0 bloqueantes/menores):
+
+| AC (EARS) | Test |
+|---|---|
+| AC-1: CUANDO se invoca `CustomerRepository.TotalPortfolioBalance`, el sistema DEBE devolver la suma de los saldos de los clientes con `balance > 0`, calculados con la misma fórmula que `List`/`Balance` (créditos de ventas `completed` menos abonos, agregados por cliente antes de sumar). | `internal/repository/customer_test.go`: `TestCustomerRepo_T1_TotalPortfolioBalance_ExcludesZeroAndNegative`, `TestCustomerRepo_T3_TotalPortfolioBalance_MatchesSumOfBalance` |
+| AC-2: SI el saldo de un cliente es exactamente `0`, ENTONCES ese cliente NO DEBE aportar al total. | `internal/repository/customer_test.go`: `TestCustomerRepo_T1_TotalPortfolioBalance_ExcludesZeroAndNegative` (Fer, saldo 0), `TestCustomerRepo_T2_TotalPortfolioBalance_NoDebtorsIsZero` |
+| AC-3: SI un cliente abonó más de lo que fiado (saldo negativo), ENTONCES ese cliente NO DEBE restar del total de los demás. | `internal/repository/customer_test.go`: `TestCustomerRepo_T1_TotalPortfolioBalance_ExcludesZeroAndNegative` (Gus, saldo −20.000), `TestCustomerRepo_T2_TotalPortfolioBalance_NoDebtorsIsZero` |
+| AC-4: MIENTRAS no haya clientes, o ninguno tenga saldo `> 0`, el sistema DEBE devolver `0`, nunca `nil` ni error. | `internal/repository/customer_test.go`: `TestCustomerRepo_T2_TotalPortfolioBalance_NoDebtorsIsZero` (subcasos "sin clientes" y "solo clientes con saldo <= 0") |
+| AC-5: CUANDO un admin llama `GET /api/customers`, el campo `total_portfolio` DEBE ser igual a la suma de los `balance` positivos de los clientes listados en el mismo payload. | `internal/handler/customer_test.go`: `TestListCustomers_T5_TotalPortfolioMatchesPositiveBalances` |
+| AC-6: SI la consulta a la base de datos falla, ENTONCES `TotalPortfolioBalance` DEBE devolver el error envuelto con `%w` (no-regresión) y el handler DEBE seguir respondiendo 500 "error calculando cartera". | `internal/repository/customer_test.go`: `TestCustomerRepo_T4_TotalPortfolioBalance_ClosedDBWrapsError` |
+| AC-7: El cambio NO DEBE alterar las claves ni los tipos del JSON de `GET /api/customers` (`customers`, `total_portfolio`), NI agregar migración, NI tocar `frontend/`. | `internal/handler/customer_test.go`: `TestListCustomers_T5_TotalPortfolioMatchesPositiveBalances` (verifica exactamente 2 claves top-level); confirmado por diff de QA sin cambios en `frontend/` ni `migrate.go` |
+
+Fixture usado en todos los tests de repositorio (Dora/Eli/Fer/Gus, ver contrato `changes/US-064/contract.md` §4): `Dora` fiado $40.000 / abono $10.000 → saldo $30.000; `Eli` fiado $20.000 / abono $5.000 → saldo $15.000; `Fer` fiado $20.000 / abono $20.000 → saldo $0; `Gus` fiado $10.000 / abono $30.000 → saldo −$20.000. `TotalPortfolioBalance` corregido = $45.000 (antes del fix daba $25.000).
 
 ---
 

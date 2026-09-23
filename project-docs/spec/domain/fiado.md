@@ -1,7 +1,7 @@
 # Dominio — Fiado (crédito a clientes)
 
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** saldo del cliente, abonos, cartera
-> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`; US-063: la cartera envejecida usa la misma fórmula de saldo).
+> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`; US-063: la cartera envejecida usa la misma fórmula de saldo; US-064: `total_portfolio` de `GET /customers` usa la misma fórmula y excluye saldos `≤ 0`).
 
 El fiado es **el diferenciador del producto**. Los competidores lo tratan como un campo contable; aquí es una relación con historia. Cualquier cambio en estas reglas cambia la propuesta de valor, no solo el código.
 
@@ -37,6 +37,7 @@ Consecuencias que hay que respetar:
 - El cliente con saldo `0` o negativo **no está en cartera**. La cartera filtra `balance > 0`.
 - Orden de la cartera: saldo descendente y, en empate, nombre ascendente. Fuente: `MetricsRepository.Debtors` (`internal/repository/metrics.go:286`, orden en `:297`), misma fórmula de saldo que `customer.go:24-40`.
 - La cartera envejecida del dashboard (`MetricsRepository.AgingReceivables`, `internal/repository/metrics.go:326`) usa la misma fórmula de saldo que `Debtors`: ambos arman el saldo con `customerBalanceExpr` (`metrics.go:265`) sobre `customerBalanceFrom` (`metrics.go:270`), que agrega fiados y abonos por cliente antes de unir, así que cada abono cuenta una sola vez. Filtra `balance > 0` y ordena por `days_overdue` descendente (`metrics.go:334-336`).
+- `total_portfolio` de `GET /customers` (`CustomerRepository.TotalPortfolioBalance`, `internal/repository/customer.go:145`) usa la misma fórmula agregada por cliente (`customerBalanceExpr`/`customerBalanceFrom`) y excluye saldos `≤ 0`, sumando solo los positivos — no una resta global de todos los fiados menos todos los abonos (ese era el bug de R-44, corregido en US-064).
 
 ## Regla: antigüedad de la deuda
 

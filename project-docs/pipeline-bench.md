@@ -8,13 +8,11 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 
 > Se actualiza al final de cada sesión de trabajo con el pipeline.
 
-**Última corrida:** 2 (US-063, `9085b01`, 2026-09-23). Corrida N/A en curso: ninguna, no hay worktrees `us/*` abiertos.
+**Última corrida:** 3 (US-064, nivel M, 2026-09-23). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
 
-**Pendiente de decisión del PO al retomar:**
-1. ¿Se aplican los 3 ajustes propuestos en la corrida 2 (US desde el roadmap en el paso 0, test-author en paralelo tras el GATE 1, formato "Cerrados" del roadmap)?
-2. ¿Corrida 3 = **R-44** (`TotalPortfolioBalance` resta saldos a favor, prioridad alta), y en nivel **M** para medir costo M vs L?
+**Pendiente de decisión del PO al retomar:** ninguna. Los 3 ajustes de la corrida 2 ya se aplicaron a `us.md` antes de la corrida 3. Próxima US: a elegir del roadmap (`R-45` es candidata directa, ya acotada por esta corrida) o del backlog de SPRINT-14.
 
-**Cómo retomar:** en una sesión nueva, responder esas dos preguntas y correr `/us US-064 M` (o L). R-44 no existe todavía en el sprint: el Analista la registra como US-064 en SPRINT-14, como se hizo con US-063.
+**Cómo retomar:** en una sesión nueva, elegir la próxima US y correr `/us US-XXX [M|L]`.
 
 ## Cómo se mide
 
@@ -34,6 +32,7 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | 2026-09-23 | US-059 | L | ~440k (A 169k · T 102k · I 71k · Q 101k) | 125 | ~27.5 | 2 | 1 | 5 | 5 | 0 | +1.547 / −224, 13 archivos |
 | 2 | 2026-09-23 | US-063 | L | ~310k (A 138k · T 71k · I 35k · Q 67k) | 111 | ~18.5 | 0 | 1 | 4 | 2 (+1 cerrado) | 0 | +466 / −43, 7 archivos |
+| 3 | 2026-09-23 | US-064 | M | ~308k (A 173k = 117k+57k · I 71k · Q 64k) | 145 | ~18.0 | 0 | 1 | 1 | 0 (+1 cerrado) | 0 | +353 / −12, 7 archivos |
 
 ### Tendencia
 
@@ -155,3 +154,48 @@ Solo se pasó por los dos gates. El Analista ejecutó el comportamiento actual c
 
 - Una US **M** (sin test-author), para comparar el costo contra L.
 - Si R-44 (otro fix chico, de saldo) confirma que ~300k tokens es el piso de una US L, o si baja más.
+
+---
+
+## Corrida 3 — US-064 (R-44, nivel M)
+
+**US:** corregir `TotalPortfolioBalance` para que no reste los saldos a favor (bug declarado en el GATE 1 de US-063). Bug fix chico, sin test-author separado (nivel M). **Rama:** `us/US-064` → `78fbdac` (registro) → `71a30a2` (implementación) → `a78a959` (cierre), fusionados en `dev`.
+
+### Por agente
+
+| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 2 (contrato + registro de la US; cierre) — **lanzados en frío, no retomados con SendMessage** | 117k + 57k = 173k | 39 + 22 = 61 | 375 + 161 s = 536 s |
+| test-author | 0 (nivel M lo salta) | — | — | — |
+| implementer | 1 | 71k | 35 | 234 s |
+| qa | 1 | 64k | 49 | 310 s |
+| **Total** | 4 | ~308k | 145 | 1.080 s ≈ 18.0 min |
+
+### Qué encontró
+
+| Tipo | Hallazgo | Quién |
+|---|---|---|
+| Defecto de doc | El texto de R-44 en el roadmap citaba cifras del seed de `TestMetricsRepo_T35` ($40.000/$55.000) que no coinciden con lo que ese seed produce al ejecutarlo ($60.000/$75.000) — el texto olvidó a un cliente del seed (Beto, $20.000) | analyst (ejecutado) |
+
+Sin discrepancias bloqueantes de alcance. El bug en sí ya estaba caracterizado desde el GATE 1 de US-063; esta corrida solo lo confirmó ejecutando con un fixture propio (25.000 con el bug, 45.000 correcto) y lo corrigió.
+
+### Paradas no planeadas: 0
+
+Solo los dos gates. La nota de §8 (corregir la cifra de R-44) era informativa, no bloqueante, y Andrey la resolvió en el mismo GATE 1.
+
+### Fricción operativa
+
+- **Violación de la convención "retomar en vez de relanzar":** el orquestador lanzó un `analyst` nuevo para el modo `close` (`a7354c5de9d3b5136`) en vez de retomar con `SendMessage` al `analyst` del contrato (`ac2bf2bf927d46ac4`), que seguía vivo en la sesión. Costó un arranque en frío extra (~57k tokens) en vez de una retoma más barata. Es un error del orquestador, no de un agente — corregir en la próxima corrida.
+- Antes del paso 0 se encontraron gitlinks sucios preexistentes en `.claude/worktrees/*` (residuos de worktrees de Claude Code, no del POS) y un `rewrite_links.py` staged sin relación. La regla del paso 0.1 exige parar; se consultó a Andrey, que autorizó seguir. No se tocó ninguno de los dos.
+- Nivel **M** funcionó sin fricción: el implementer escribió tests e implementación en un solo commit, siguiendo la tabla de tests del contrato igual de detallada que en nivel L; QA no encontró tests debilitados por faltar el test-author.
+
+### Ajustes propuestos (pendientes del "sí" del PO)
+
+| Ajuste | Dónde |
+|---|---|
+| Antes de lanzar cualquier agente, el orquestador revisa explícitamente si ya hay un `agentId` vivo en la sesión para ese rol y esa US antes de decidir `Agent` vs `SendMessage` (no solo "recordarlo", sino un chequeo explícito en el paso correspondiente) | `.claude/commands/us.md` pasos 1 y 5 |
+
+### Qué medir en la corrida 4
+
+- Si se corrige la fricción de retomar, ¿baja el costo de analyst en un cierre similar (2 invocaciones → 1 retomada)?
+- Nivel M sigue dando ~300k tokens totales pese a saltar test-author: el ahorro de saltar un agente (~65-100k) se compensa con más costo de analyst por el error de retoma. Repetir nivel M sin ese error para aislar el verdadero piso de costo de una US chica.
