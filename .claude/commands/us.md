@@ -19,17 +19,21 @@ Convenciones de este comando:
 ## 0. Preparar el worktree
 
 1. En el checkout principal, `git status --porcelain`. Si hay cambios sin commitear en `CLAUDE.md`, `project-docs/`, `.claude/` o en el código, **detente y avisa a Andrey**: el worktree sale del último commit de `dev` y los agentes no verían esos cambios.
-2. Ubica la US con Grep en `project-docs/sprints/` y confirma que sigue `[ ]`.
+2. Ubica la US con Grep en `project-docs/sprints/`. Si no existe pero `$ID` corresponde a un ítem `R-NN` del roadmap (`project-docs/roadmap.md`), es una US que viene del roadmap: no la registres aquí, el `analyst` la registra en el paso 1 (modo `contract`) y el orquestador la commitea aparte antes de `RED` (ver paso 1). Si existe, confirma que sigue `[ ]`.
 3. Crea el worktree: `git worktree add "../Pos-vertical-wt/$ID" -b "us/$ID" dev`. Si la rama ya existe, pregunta a Andrey si se retoma o se descarta.
 4. `mkdir -p "$WT/changes/$ID"`.
 
 ## 1. Contrato — agente `analyst`, modo `contract`
 
-Lanza `analyst`. Luego verifica que existe `$WT/changes/$ID/contract.md` y que tiene las 8 secciones de la plantilla.
+Lanza `analyst`. Si `$ID` viene del roadmap (paso 0.2), pásale también que registre la US en el sprint correspondiente durante este mismo modo `contract`. Luego verifica que existe `$WT/changes/$ID/contract.md` y que tiene las 8 secciones de la plantilla.
+
+Si el analyst tocó el sprint (registro de US desde roadmap), haz ese checkpoint aparte, **antes** de `RED`: `git -C "$WT" commit -am "docs($ID): register US"`.
 
 ### ◆ GATE 1 — Andrey aprueba el contrato
 
-Muestra el resumen del analyst, las DISCREPANCIAS y las preguntas para el PO, con la ruta del contrato. **Detente y espera.** Si Andrey pide cambios, vuelve a lanzar `analyst` con sus correcciones. No avances sin un "sí" explícito.
+Muestra el resumen del analyst, las DISCREPANCIAS y las preguntas para el PO, con la ruta del contrato. **Detente y espera.** Si Andrey pide cambios, vuelve a lanzar `analyst` con sus correcciones.
+
+Si las correcciones de Andrey solo tocan §7 (Fuera de alcance) y §8 (Preguntas para el PO) del contrato — es decir, no cambian criterios de aceptación ni casos de prueba — puedes lanzar el `test-author` del paso 2 **en paralelo** con el ajuste del analyst, en vez de esperar a que el analyst termine. No avances al paso 3 sin un "sí" explícito de Andrey al contrato.
 
 ## 2. Tests en rojo — agente `test-author` (solo nivel L)
 
