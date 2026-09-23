@@ -39,7 +39,7 @@ Este sprint entrega **T1 (regex) + T2 (fuzzy matching)**, Go puro, cero dependen
 
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
-| US-059 | Extraer las métricas del dashboard a un repositorio parametrizable por rango | [ ] Pendiente | — |
+| US-059 | Extraer las métricas del dashboard a un repositorio parametrizable por rango | [x] Completo | 2026-09-23 |
 | US-060 | Motor de intenciones T1 (regex) + T2 (fuzzy) en Go puro | [ ] Pendiente | — |
 | US-061 | Servicio, endpoint `/ai/ask` y bitácora de consultas | [ ] Pendiente | — |
 | US-062 | Widget de chat en la app autenticada | [ ] Pendiente | — |
@@ -140,6 +140,32 @@ type MetricsRepository interface {
 - [ ] Test: `Debtors(5)` con 3 clientes (saldos 80.000, 150.000 y 0) → devuelve 2 clientes, el de 150.000 primero
 - [ ] Test: rango vacío (mañana) → `Sold` devuelve 0 / 0 sin error
 - [ ] Build limpio (`go build ./...`, `pnpm build` en `frontend/`)
+
+### Criterios verificados
+
+> Cerrada el 2026-09-23 (QA vuelta 1: OK, 0 bloqueantes). Los checkboxes de arriba son el enunciado original. Lo que se verificó es esto, con las decisiones del PO en GATE 1: se amplió la interfaz con `TopSeller` y `AgingReceivables`; "sin SQL inline" aplica solo a `getDashboardToday`; el saldo de la cartera envejecida se preserva con su defecto actual (D-4, roadmap R-04); portfolio vacío devuelve `[]`; un error de DB responde 500.
+> Tests: `internal/repository/metrics_test.go` (repo) e `internal/handler/metrics_equivalence_test.go` (handler).
+
+| AC | Criterio (EARS) | Tests |
+|---|---|---|
+| AC-1 | CUANDO un admin llama `GET /api/dashboard/today` y la DB responde sin error, el sistema DEBE devolver el mismo JSON que antes del refactor (13 campos, mismos valores y orden, `top_by_margin` vacío con menos de 2 productos con costo, listas `[]` y nunca `null`). | `TestDashboardToday_T20_Golden`, `TestDashboardToday_T21_TopByMarginNeedsTwo`, `TestDashboardToday_T22_AgingReceivables` (pasan también contra `dev`) |
+| AC-2 | CUANDO se corre `go test`, los tests de `internal/handler/dashboard_test.go` DEBEN pasar sin modificar el archivo. | `TestGetDashboardToday_GrossProfit`, `TestGetDashboardToday_NoSales`; diff vacío (QA, T-25) |
+| AC-3 | CUANDO un admin llama `GET /api/reports/portfolio`, el sistema DEBE devolver `{id, name, phone, balance, oldest_debt_at}` de los clientes con `balance > 0`, ordenados por saldo DESC y nombre ASC. | `TestPortfolio_T23_OrderAndFields` |
+| AC-4 | MIENTRAS no haya deudores, `/reports/portfolio` DEBE devolver `data: []`. | `TestPortfolio_T24_EmptyIsArray` |
+| AC-5 | `getDashboardToday` NO DEBE contener SQL; solo calcula la ventana `[hoy 00:00, mañana 00:00)` local y llama a `MetricsRepository`. | Revisión de QA (T-26): `grep` sin coincidencias en `getDashboardToday` |
+| AC-6 | El sistema DEBE exponer `MetricsRepository` en `internal/repository/metrics.go` con `NewMetricsRepository(db)`, cableado en `handler.New` como `metrics`. | Revisión de QA (T-27): `handler.go:29,49,81` |
+| AC-7 | CUANDO se invoca un método de flujo con `from, to`, el sistema DEBE filtrar `created_at >= from AND created_at < to` con las mismas definiciones SQL del dashboard. | `TestMetricsRepo_T1_SoldTodayAndYesterday`, `_T2_SoldHalfOpenMidnight`, `_T3_SoldIgnoresVoided`, `_T4_Profit`, `_T6_CashFlow`, `_T7_CreditFlow`, `_T8_TopByMargin`, `_T9_TopByMarginSingleItem`, `_T11_LowStock` |
+| AC-8 | CUANDO se invoca `Debtors(limit)`, el sistema DEBE usar la fórmula de saldo de `customer.go`, filtrar `balance > 0`, ordenar por saldo DESC y nombre ASC en SQL, y aplicar el límite (`<= 0` = todos). | `TestMetricsRepo_T12_Debtors`, `_T13_DebtorsLimit`, `_T14_DebtorsTieByName`, `_T15_DebtorsIgnoresVoidedCredit` |
+| AC-9 | CUANDO se invoca `TopSeller(from, to)`, el sistema DEBE devolver el producto con mayor cantidad vendida, o `""`/0 sin error si no hay ventas. | `TestMetricsRepo_T10_TopSeller`, `_T18_EmptyRange` |
+| AC-10 | CUANDO se invoca `AgingReceivables(limit)`, el sistema DEBE devolver la misma lista que el dashboard anterior, **incluido el defecto D-4** (decisión del PO). | `TestMetricsRepo_T16_AgingReceivables`, `_T17_AgingReceivablesPreservesD4`, `TestDashboardToday_T22_AgingReceivables` |
+| AC-10b | MIENTRAS una fila de aging tenga `days_overdue` NULL, el SQL DEBE excluirla explícitamente; los errores de scan se propagan. | `TestMetricsRepo_T30_AgingExcludesNullDaysOverdue` |
+| AC-11 | CUANDO se invoca `Profit`, `expenses` DEBE ser igual a `ExpenseRepository.SumRange` del mismo rango y `net = gross − expenses`. | `TestMetricsRepo_T4_Profit`, `_T5_ProfitExpensesMatchSumRange` |
+| AC-12 | MIENTRAS el rango no tenga datos, cada método DEBE devolver 0 / `""` y slices vacíos no-nil, sin error. | `TestMetricsRepo_T18_EmptyRange` |
+| AC-13 | SI una query falla, ENTONCES el método DEBE devolver el error envuelto con `%w`. | `TestMetricsRepo_T19_ClosedDBWrapsErrors` |
+| AC-14 | El cambio NO DEBE agregar migraciones (última: 14). | Revisión de QA (T-27): `migrate.go:38` |
+| AC-15 | `go build`, `go test`, `pnpm build` y `pnpm test` DEBEN pasar. | Ejecución de QA: todos exit 0. `pnpm lint` falla por 41 problemas anteriores en `frontend/`, que no toca esta US (roadmap R-35) |
+| AC-16 | SI `getDashboardToday` recibe error del repositorio, ENTONCES DEBE responder 500 `"error obteniendo métricas"` sin cifras. | `TestDashboardToday_T28_DBErrorReturns500` |
+| AC-17 | SI `Debtors` falla, ENTONCES `getPortfolio` DEBE responder 500 `"error obteniendo cartera"` (no-regresión). | `TestPortfolio_T29_DBErrorReturns500` |
 
 ---
 

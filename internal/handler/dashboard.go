@@ -10,25 +10,13 @@ import (
 
 // ─── /dashboard/today ────────────────────────────────────────────────────────
 
-type topMarginItem struct {
-	Name      string  `json:"name"`
-	MarginPct float64 `json:"margin_pct"`
-	UnitsSold float64 `json:"units_sold"`
-}
-
-type lowStockItem struct {
-	ProductID int64   `json:"product_id"`
-	Name      string  `json:"name"`
-	Stock     float64 `json:"stock"`
-	MinStock  float64 `json:"min_stock"`
-}
-
-type agingReceivable struct {
-	CustomerID  int64   `json:"customer_id"`
-	Name        string  `json:"name"`
-	Balance     float64 `json:"balance"`
-	DaysOverdue int     `json:"days_overdue"`
-}
+// JSON item types of /dashboard/today. They alias the repository types, which
+// carry the same JSON tags, so the payload stays byte-for-byte the same.
+type (
+	topMarginItem   = repository.MarginItem
+	lowStockItem    = repository.LowStockItem
+	agingReceivable = repository.AgingReceivable
+)
 
 type todayResponse struct {
 	SoldToday             float64           `json:"sold_today"`
@@ -46,9 +34,19 @@ type todayResponse struct {
 	AgingReceivables      []agingReceivable `json:"aging_receivables"`
 }
 
+const dashboardListLimit = 5
+
+// getDashboardToday computes today's window [00:00, next 00:00) in local time
+// and assembles the response from MetricsRepository. Any error → 500 with no
+// partial figures.
 func (h *Handler) getDashboardToday(w http.ResponseWriter, r *http.Request) {
+	if err := h.writeDashboardToday(w, r); err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo métricas")
+	}
+}
+
+func (h *Handler) writeDashboardToday(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	db := h.db.DB
 
 	now := time.Now()
 	loc := now.Location()
@@ -56,172 +54,51 @@ func (h *Handler) getDashboardToday(w http.ResponseWriter, r *http.Request) {
 	todayEnd := todayStart.Add(24 * time.Hour)
 
 	var resp todayResponse
+	var err error
 
-	// Vendido hoy (all completed sales)
-	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(total), 0)
-		FROM sales
-		WHERE status = 'completed' AND created_at >= ? AND created_at < ?`,
-		todayStart, todayEnd,
-	).Scan(&resp.SoldToday) //nolint:errcheck
+	if resp.SoldToday, _, err = h.metrics.Sold(ctx, todayStart, todayEnd); err != nil {
+		return err
+	}
 
-	// Fiado nuevo hoy
-	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(sp.amount), 0)
-		FROM sale_payments sp
-		JOIN sales s ON s.id = sp.sale_id
-		WHERE s.status = 'completed' AND sp.method = 'credit' AND s.created_at >= ? AND s.created_at < ?`,
-		todayStart, todayEnd,
-	).Scan(&resp.CreditNewToday) //nolint:errcheck
+	if resp.CreditNewToday, resp.CreditCollectedToday, err = h.metrics.CreditFlow(ctx, todayStart, todayEnd); err != nil {
+		return err
+	}
 
-	// Cobrado de fiado hoy (customer_payments)
-	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(amount), 0)
-		FROM customer_payments
-		WHERE created_at >= ? AND created_at < ?`,
-		todayStart, todayEnd,
-	).Scan(&resp.CreditCollectedToday) //nolint:errcheck
-
-	// Efectivo en caja estimado = cash sales today − cash_out movements today
-	var cashSales, cashOut float64
-	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(sp.amount), 0)
-		FROM sale_payments sp
-		JOIN sales s ON s.id = sp.sale_id
-		WHERE s.status = 'completed' AND sp.method = 'cash' AND s.created_at >= ? AND s.created_at < ?`,
-		todayStart, todayEnd,
-	).Scan(&cashSales) //nolint:errcheck
-
-	db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(amount), 0)
-		FROM register_movements
-		WHERE type = 'cash_out' AND created_at >= ? AND created_at < ?`,
-		todayStart, todayEnd,
-	).Scan(&cashOut) //nolint:errcheck
-
+	cashSales, cashOut, err := h.metrics.CashFlow(ctx, todayStart, todayEnd)
+	if err != nil {
+		return err
+	}
 	resp.CashEstimated = cashSales - cashOut
 
-	// Producto más vendido hoy (by quantity)
-	var name sql.NullString
-	var qty sql.NullFloat64
-	db.QueryRowContext(ctx, `
-		SELECT p.name, COALESCE(SUM(si.quantity), 0) AS qty
-		FROM sale_items si
-		JOIN products p ON p.id = si.product_id
-		JOIN sales s ON s.id = si.sale_id
-		WHERE s.status = 'completed' AND s.created_at >= ? AND s.created_at < ?
-		GROUP BY p.id, p.name
-		ORDER BY qty DESC
-		LIMIT 1`,
-		todayStart, todayEnd,
-	).Scan(&name, &qty) //nolint:errcheck
-
-	if name.Valid {
-		resp.TopProductName = name.String
-		resp.TopProductQty = qty.Float64
+	if resp.TopProductName, resp.TopProductQty, err = h.metrics.TopSeller(ctx, todayStart, todayEnd); err != nil {
+		return err
 	}
 
-	// Ganancia bruta hoy + conteo de productos sin costo configurado
-	db.QueryRowContext(ctx, `
-		SELECT
-			COALESCE(SUM(CASE WHEN p.cost > 0 THEN (si.unit_price - p.cost) * si.quantity ELSE 0 END), 0),
-			COUNT(DISTINCT CASE WHEN p.cost = 0 THEN si.product_id END)
-		FROM sale_items si
-		JOIN products p ON p.id = si.product_id
-		JOIN sales s ON s.id = si.sale_id
-		WHERE s.status = 'completed' AND s.created_at >= ? AND s.created_at < ?`,
-		todayStart, todayEnd,
-	).Scan(&resp.GrossProfit, &resp.UnconfiguredCostCount) //nolint:errcheck
-
-	// Gastos de hoy → ganancia neta (US-049)
-	resp.ExpensesToday, _ = h.expenses.SumRange(ctx, todayStart, todayEnd)
-	resp.NetProfit = resp.GrossProfit - resp.ExpensesToday
-
-	// Top 5 productos por margen (solo cost > 0)
-	marginRows, err := db.QueryContext(ctx, `
-		SELECT
-			p.name,
-			((AVG(si.unit_price) - p.cost) / AVG(si.unit_price)) * 100 AS margin_pct,
-			SUM(si.quantity) AS units_sold
-		FROM sale_items si
-		JOIN products p ON p.id = si.product_id
-		JOIN sales s ON s.id = si.sale_id
-		WHERE s.status = 'completed'
-			AND s.created_at >= ? AND s.created_at < ?
-			AND p.cost > 0
-		GROUP BY p.id, p.name, p.cost
-		ORDER BY margin_pct DESC
-		LIMIT 5`,
-		todayStart, todayEnd,
-	)
-	if err == nil {
-		defer marginRows.Close()
-		var items []topMarginItem
-		for marginRows.Next() {
-			var item topMarginItem
-			if scanErr := marginRows.Scan(&item.Name, &item.MarginPct, &item.UnitsSold); scanErr == nil {
-				items = append(items, item)
-			}
-		}
-		if len(items) >= 2 {
-			resp.TopByMargin = items
-		}
-	}
-	if resp.TopByMargin == nil {
-		resp.TopByMargin = []topMarginItem{}
+	if resp.GrossProfit, resp.ExpensesToday, resp.NetProfit, resp.UnconfiguredCostCount, err =
+		h.metrics.Profit(ctx, todayStart, todayEnd); err != nil {
+		return err
 	}
 
-	// US-042b: productos bajo stock mínimo (top 5 por déficit)
-	lowRows, err := db.QueryContext(ctx, `
-		SELECT id, name, stock, min_stock
-		FROM products
-		WHERE active = 1 AND min_stock > 0 AND stock < min_stock
-		ORDER BY (min_stock - stock) DESC
-		LIMIT 5`)
-	if err == nil {
-		defer lowRows.Close()
-		for lowRows.Next() {
-			var item lowStockItem
-			if scanErr := lowRows.Scan(&item.ProductID, &item.Name, &item.Stock, &item.MinStock); scanErr == nil {
-				resp.LowStock = append(resp.LowStock, item)
-			}
-		}
+	margin, err := h.metrics.TopByMargin(ctx, todayStart, todayEnd, dashboardListLimit)
+	if err != nil {
+		return err
 	}
-	if resp.LowStock == nil {
-		resp.LowStock = []lowStockItem{}
+	// Presentation rule: the margin ranking is only meaningful with 2+ products.
+	resp.TopByMargin = []topMarginItem{}
+	if len(margin) >= 2 {
+		resp.TopByMargin = margin
 	}
 
-	// US-041: cartera envejecida — top 5 clientes con deuda, ordenados por días (más urgente primero)
-	agingRows, err := db.QueryContext(ctx, `
-		SELECT
-			c.id,
-			c.name,
-			COALESCE(SUM(sp.amount), 0) - COALESCE(SUM(cp.paid), 0) AS balance,
-			CAST(julianday('now') - julianday(MIN(s.created_at)) AS INTEGER) AS days_overdue
-		FROM customers c
-		JOIN sales s ON s.customer_id = c.id AND s.status = 'completed'
-		JOIN sale_payments sp ON sp.sale_id = s.id AND sp.method = 'credit'
-		LEFT JOIN (
-			SELECT customer_id, SUM(amount) AS paid FROM customer_payments GROUP BY customer_id
-		) cp ON cp.customer_id = c.id
-		GROUP BY c.id, c.name
-		HAVING balance > 0
-		ORDER BY days_overdue DESC
-		LIMIT 5`)
-	if err == nil {
-		defer agingRows.Close()
-		for agingRows.Next() {
-			var item agingReceivable
-			if scanErr := agingRows.Scan(&item.CustomerID, &item.Name, &item.Balance, &item.DaysOverdue); scanErr == nil {
-				resp.AgingReceivables = append(resp.AgingReceivables, item)
-			}
-		}
+	if resp.LowStock, err = h.metrics.LowStock(ctx, dashboardListLimit); err != nil {
+		return err
 	}
-	if resp.AgingReceivables == nil {
-		resp.AgingReceivables = []agingReceivable{}
+
+	if resp.AgingReceivables, err = h.metrics.AgingReceivables(ctx, dashboardListLimit); err != nil {
+		return err
 	}
 
 	respond(w, http.StatusOK, resp)
+	return nil
 }
 
 // dashboardResponse is the aggregated payload for the dashboard screen.

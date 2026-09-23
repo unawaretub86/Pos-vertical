@@ -1,7 +1,7 @@
 # Dominio — Caja (apertura, movimientos, cierre)
 
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** arqueo, cuadre, diferencia de caja
-> **Actualizado:** 2026-09-21 · Verificado contra el código en esa fecha.
+> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`).
 
 La caja es donde el sistema se gana o pierde la confianza del cajero. Un cuadre que da mal sin explicación hace que la tienda vuelva al cuadernillo.
 
@@ -38,6 +38,17 @@ Fuente: `internal/service/register.go:113` y `:138`.
 - Solo cuenta el **efectivo**. Las ventas por transferencia, tarjeta o fiado no entran al arqueo: esa plata no está en el cajón.
 
 > **Nota histórica:** `archive/2026-05-plan-mvp.md:1135` (antes `PLAN.md`) reporta que faltaba `cash_in` en esta fórmula. **Ya está incluido** (`register.go:113`). Es un ejemplo de por qué ese documento no es fuente de verdad sobre el estado actual.
+
+## Regla: efectivo estimado del día (dashboard)
+
+```
+efectivo estimado = pagos en efectivo de ventas completadas del rango
+                    − movimientos cash_out del rango
+```
+
+No incluye la base de apertura ni los `cash_in`: es un indicador de flujo del día, no el arqueo. El arqueo es "efectivo esperado al cierre".
+
+Fuente: `MetricsRepository.CashFlow` (`internal/repository/metrics.go:112`, pagos `cash` en `:118`, `cash_out` en `:128`); la resta la hace `internal/handler/dashboard.go`.
 
 ## Regla: gastos
 

@@ -26,6 +26,7 @@ type Handler struct {
 	setup        *repository.SetupRepository
 	stockEntries repository.StockEntryRepository
 	reports      repository.ReportRepository
+	metrics      repository.MetricsRepository
 	audit        repository.AuditRepository
 	expenses     *service.ExpenseService
 	suppliers    *service.SupplierService
@@ -45,6 +46,7 @@ func New(db *database.DB) *Handler {
 	setupRepo := repository.NewSetupRepository(db.DB)
 	stockRepo := repository.NewStockEntryRepository(db.DB)
 	reportRepo := repository.NewReportRepository(db.DB)
+	metricsRepo := repository.NewMetricsRepository(db.DB)
 	auditRepo := repository.NewAuditRepository(db.DB)
 	expenseRepo := repository.NewExpenseRepository(db.DB)
 	eledocRepo := repository.NewElectronicDocRepository(db.DB)
@@ -76,6 +78,7 @@ func New(db *database.DB) *Handler {
 		setup:        setupRepo,
 		stockEntries: stockRepo,
 		reports:      reportRepo,
+		metrics:      metricsRepo,
 		audit:        auditRepo,
 		expenses:     service.NewExpenseService(expenseRepo, registerSvc),
 		suppliers:    service.NewSupplierService(supplierRepo),

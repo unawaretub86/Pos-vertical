@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/andreyo/pos/internal/model"
 )
@@ -63,16 +62,7 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
 		); err != nil {
 			return nil, fmt.Errorf("customer scan: %w", err)
 		}
-		if oldestDebt.Valid && oldestDebt.String != "" {
-			t, err := time.Parse("2006-01-02T15:04:05Z", oldestDebt.String)
-			if err != nil {
-				// try alternate SQLite datetime format
-				t, err = time.Parse("2006-01-02 15:04:05", oldestDebt.String)
-			}
-			if err == nil {
-				cwb.OldestDebtAt = &t
-			}
-		}
+		cwb.OldestDebtAt = parseOldestDebt(oldestDebt)
 		customers = append(customers, &cwb)
 	}
 	return customers, rows.Err()

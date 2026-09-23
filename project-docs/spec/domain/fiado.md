@@ -1,7 +1,7 @@
 # Dominio — Fiado (crédito a clientes)
 
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** saldo del cliente, abonos, cartera
-> **Actualizado:** 2026-09-21 · Verificado contra el código en esa fecha.
+> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`).
 
 El fiado es **el diferenciador del producto**. Los competidores lo tratan como un campo contable; aquí es una relación con historia. Cualquier cambio en estas reglas cambia la propuesta de valor, no solo el código.
 
@@ -35,6 +35,7 @@ Consecuencias que hay que respetar:
 - **Una venta anulada deja de contar automáticamente**, porque el filtro es `status='completed'`. No hay que "revertir" la deuda a mano.
 - **No existe un saldo desactualizado.** Cualquier pantalla que muestre saldo lo lee de la misma query. Si alguna vez aparece un saldo distinto en dos pantallas, es un bug de query, no de sincronización.
 - El cliente con saldo `0` o negativo **no está en cartera**. La cartera filtra `balance > 0`.
+- Orden de la cartera: saldo descendente y, en empate, nombre ascendente. Fuente: `MetricsRepository.Debtors` (`internal/repository/metrics.go:263`, orden en `:284`), misma fórmula de saldo que `customer.go:24-40`.
 
 ## Regla: antigüedad de la deuda
 

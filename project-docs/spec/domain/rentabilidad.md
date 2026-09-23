@@ -1,7 +1,7 @@
 # Dominio — Rentabilidad (costo, margen, ganancia)
 
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** ganancia bruta, ganancia neta, margen
-> **Actualizado:** 2026-09-21 · Verificado contra el código en esa fecha.
+> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`).
 
 "Cuánto vendí" no es "cuánto gané", y la diferencia entre las dos es lo que hace que un tendero deje de vender a pérdida sin saberlo. `find-pos.md:41` lo identificó como un hueco que los competidores locales no cubren.
 
@@ -15,7 +15,7 @@ ganancia bruta = SUM( (sale_items.unit_price − products.cost) * sale_items.qua
                  solo ventas con status = 'completed'
 ```
 
-Fuente: `internal/handler/dashboard.go` (query de ganancia bruta).
+Fuente: `internal/repository/metrics.go:86` (`MetricsRepository.Profit`; filtro `cost > 0` en `:91`). Dashboard y asistente leen esta misma función.
 
 **El filtro `cost > 0` es la regla crítica.** Un producto sin costo configurado no suma ganancia — se excluye del cálculo en vez de asumir costo cero, porque asumir cero reportaría 100% de margen y sería una mentira peligrosa.
 
@@ -41,6 +41,8 @@ Por producto, en el top por margen:
 ```
 margen_pct(producto) = ((AVG(unit_price) − cost) / AVG(unit_price)) * 100
 ```
+
+Fuente: `internal/repository/metrics.go:166` (`MetricsRepository.TopByMargin`). El dashboard muestra el top por margen solo si hay al menos 2 productos con costo configurado en el rango; con menos, la lista va vacía (`internal/handler/dashboard.go:87-90`).
 
 Se usa `AVG(unit_price)` porque el mismo producto puede haberse vendido a precios distintos (descuento, mayorista) dentro del rango.
 
