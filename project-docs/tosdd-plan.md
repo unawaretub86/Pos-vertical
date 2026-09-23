@@ -54,7 +54,7 @@ Cada subagente arranca en frío y vuelve a leer `CLAUDE.md`, el sprint y el cód
 
 Son dos arranques en frío menos por US y un canal de comunicación menos que se puede desalinear.
 
-**Aclaración sobre el Analista:** que sea "el mismo agente" al inicio y al cierre significa **la misma definición, no la misma memoria**. Al cierre arranca en frío y retoma todo desde `contract.md`. Por eso el contrato debe dejar el delta del spec escrito de forma explícita (sección "Delta de spec"), no implícito en la conversación.
+**Aclaración sobre el Analista:** que sea "el mismo agente" al inicio y al cierre significa **la misma definición**. Si la sesión sigue viva, el orquestador lo **retoma** con `SendMessage` y conserva su contexto. Esa fue la corrida 1: 3 retomas llevaron al Analista de 136k a 169k tokens, contra ~100k de cada arranque en frío. Si la sesión se cortó, arranca en frío y retoma desde `contract.md`. Por eso el contrato igual debe dejar el delta del spec escrito de forma explícita (sección "Delta de spec"), no implícito en la conversación.
 
 ### Por qué test-author e implementer siguen separados
 
@@ -198,8 +198,8 @@ La reorganización de `project-docs/` había dejado punteros rotos en `CLAUDE.md
 |---|---|---|
 | 1 | ~~Corregir punteros rotos~~ ✅ hecho 2026-09-23 | Los agentes dependen de que los punteros sean ciertos |
 | 2 | ~~Infraestructura del pipeline~~ ✅ hecho 2026-09-23 — ver §8 | La infraestructura mínima del pipeline |
-| 3 | Pilotear con **US-059** (SPRINT-14: extraer las métricas del dashboard a un repositorio parametrizable por rango) | Refactor puro, sin feature visible y con tests claros. Calibra los agentes con bajo riesgo antes de algo grande como el módulo de mesas (SPRINT-13) |
-| 4 | Retrospectiva del piloto: ajustar prompts, niveles y gates | Los prompts se calibran con uso real, no en papel |
+| 3 | ~~Pilotear con **US-059**~~ ✅ hecho 2026-09-23 (`cd2e590`), ver `pipeline-bench.md` corrida 1 — (SPRINT-14: extraer las métricas del dashboard a un repositorio parametrizable por rango) | Refactor puro, sin feature visible y con tests claros. Calibra los agentes con bajo riesgo antes de algo grande como el módulo de mesas (SPRINT-13) |
+| 4 | ~~Retrospectiva del piloto~~ ✅ hecho 2026-09-23: 7 ajustes, listados en `pipeline-bench.md` corrida 1 | Los prompts se calibran con uso real, no en papel |
 | 5 | Si el piloto funciona: agregar el pipeline a `workflow.md` y volver vigente este documento | Regla 2: si cambia cómo se trabaja, cambia el doc que lo define |
 
 ---
@@ -228,6 +228,7 @@ La reorganización de `project-docs/` había dejado punteros rotos en `CLAUDE.md
 | Agente 4 | `.claude/agents/qa.md` | Revisión del diff + CI + smoke con el binario; solo escribe `qa.md` |
 | Plantilla | `.claude/templates/contract.md` | 8 secciones: objetivo, estado verificado, AC en EARS, tests, archivos, delta de spec, fuera de alcance, preguntas |
 | Scratch | `changes/` en `.gitignore` | Vive dentro del worktree y se borra con él |
+| Benchmark | `project-docs/pipeline-bench.md` | Una fila y un detalle por corrida de `/us` (tokens, tiempo, paradas, vueltas de QA, defectos). Lo escribe el orquestador en el paso 6 |
 
 **Checkpoints en la rama de la US:** `test(US-XXX)` (rojo) → `feat(US-XXX)` (verde) → `docs(US-XXX)` (cierre). Sirven para que el orquestador verifique con `git diff` que el implementer no tocó los tests. A `dev` llega un único commit por el `--squash`.
 

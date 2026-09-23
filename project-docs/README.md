@@ -62,6 +62,7 @@ Los nombres anteriores eran parecidos e indistinguibles entre sí. Si solo vas a
 |---|---|---|
 | [`2026-09-20-mesas-pedidos-kds.md`](design/2026-09-20-mesas-pedidos-kds.md) | `DESIGN-Mesas-Pedidos-KDS.md` | Diseño aprobado del módulo restaurante (2026-09-20), insumo de SPRINT-13 |
 | [`tosdd-plan.md`](tosdd-plan.md) | — | **Propuesta** (2026-09-23), pendiente de aprobación: orquestación agéntica con SDD (4 agentes, gates del PO, piloto US-059). No vigente hasta que se apruebe e incorpore a `workflow.md` |
+| [`pipeline-bench.md`](pipeline-bench.md) | — | **Vigente.** Benchmark de cada corrida del pipeline `/us`: tokens, tiempo, paradas, defectos encontrados y ajustes aplicados |
 | [`facturacion-electronica.md`](reference/facturacion-electronica.md) | `fix-gaps.md` | Plan de implementación de facturación electrónica. **El nombre engañaba**: no es sobre "gaps" genéricos. Referencia de implementación, mayo 2026 |
 | [`2026-04-17-arquitectura.md`](archive/2026-04-17-arquitectura.md) | `ARQUITECTURA.md` | Foto del código al 2026-04-17. Histórico |
 

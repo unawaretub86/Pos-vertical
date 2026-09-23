@@ -49,7 +49,7 @@ pnpm test               # vitest
 pnpm lint               # eslint
 ```
 
-CI (`.github/workflows/test.yml`) corre exactamente esos cuatro en cada push. Si pasan localmente, pasa CI.
+CI (`.github/workflows/test.yml`) corre `go build`, `go test`, `pnpm build` y `pnpm test` en cada push. **No corre `pnpm lint`**, que hoy falla con 41 problemas preexistentes en `frontend/` (roadmap R-35). Correr lint igual localmente y no agregar problemas nuevos.
 
 ## Arquitectura
 
