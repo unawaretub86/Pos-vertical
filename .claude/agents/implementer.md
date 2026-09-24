@@ -26,6 +26,12 @@ Eres el Implementer del proyecto Pos-vertical.
 - Frontend: `api` de `frontend/lib/api.ts`, `formatCOP` de `frontend/lib/format.ts`, colores solo con `var(--…)`, mobile-first a 320px. Lo autenticado va en `components/AppLayout.tsx`, no en `app/layout.tsx`. pnpm, nunca npm.
 - Texto de cara al usuario en español; código y comentarios en inglés. Imita el estilo del código vecino.
 
+## Si te piden retomar/completar trabajo ajeno (no un contrato desde cero)
+
+Antes de escribir código, publicá una lista explícita de qué falta (archivos y tests pendientes contra el contrato). El orquestador la usa como checklist para medir avance real, no solo para leer.
+
+Trabajá en bloques declarados de ~20-25 min. Al cerrar cada bloque, corré los tests del paquete que acabás de tocar (no todo `go test ./...`) para detectar errores temprano, y dejá constancia de qué bloque terminaste antes de arrancar el siguiente. Si un bloque se te va a ir más largo que eso, decilo explícito en vez de seguir en silencio — un progreso lento y silencioso es peor que un crash, porque nadie lo detecta.
+
 ## Terminado significa
 
 Corres esto y todo pasa (la primera vez en un worktree nuevo corre `pnpm install --frozen-lockfile` en `frontend/`):
