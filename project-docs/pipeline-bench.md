@@ -8,11 +8,13 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 
 > Se actualiza al final de cada sesión de trabajo con el pipeline.
 
-**Última corrida:** 5 (US-060, nivel L, 2026-09-23). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
+**Última corrida:** 6 (US-061, nivel M, 2026-09-24). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
 
-**Aplicado antes de esta corrida:** el ajuste pendiente desde la corrida 3 (chequeo explícito de `agentId` vivo antes de `Agent` vs `SendMessage`) se volvió mecánico en `us.md` (commit `7d3ab08`) y se sostuvo toda la corrida 5 — analyst, test-author y qa se retomaron con `SendMessage` en cada ocasión que seguían vivos, cero arranques en frío innecesarios.
+**Aplicado antes de esta corrida:** el ajuste de retoma mecánico seguía vigente, pero esta corrida NO tuvo agentes vivos para retomar en ningún punto — las 3 invocaciones del analyst y las 3 del implementer fueron arranques en frío legítimos (`ListAgents` vacío cada vez), no violaciones del chequeo.
 
-**Próxima US:** US-061 (servicio + endpoint `/ai/ask` + bitácora) y US-062 (widget de chat) siguen pendientes en SPRINT-14, ambas dependen del paquete `internal/assistant/` que cerró esta corrida.
+**Nuevo problema, sin ajuste aplicado todavía (propuesto al PO al cierre de esta corrida):** el implementer se colgó DOS veces. La primera (600s sin progreso) la agarró el watchdog automático. La segunda corrió **5 horas reales** sin que el watchdog la cortara — el orquestador la mató a mano con `TaskStop` tras una queja del PO. El ajuste de la corrida 5 ("avisarle que divida archivos grandes") no alcanza para este tipo de cuelgue silencioso.
+
+**Próxima US:** US-062 (widget de chat), la última pendiente de SPRINT-14, depende de esta US-061 ya cerrada (endpoint `/ai/ask` funcional).
 
 **Cómo retomar:** en una sesión nueva, elegir la próxima US y correr `/us US-XXX [M|L]`.
 
@@ -37,6 +39,7 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 | 3 | 2026-09-23 | US-064 | M | ~308k (A 173k = 117k+57k · I 71k · Q 64k) | 145 | ~18.0 | 0 | 1 | 1 | 0 (+1 cerrado) | 0 | +353 / −12, 7 archivos |
 | 4 | 2026-09-23 | US-065 | M | ~282k (A 176k = 117k+59k · I 59k · Q 47k) | 113 | ~13.3 | 0 | 1 | 0 | 1 cerrado (R-45) | 1 (retomar) | +217 / −20, 7 archivos |
 | 5 | 2026-09-23 | US-060 | L | ~522k (A 154k · T 109k · I 175k · Q 85k) | 160 | ~83.8 | 1 (implementer cayó por límite de salida) | 1 | 5 | 1 (R-46) | 0 | +1.333 / −2, 9 archivos |
+| 6 | 2026-09-24 | US-061 | M | ~708k (A 372k=149k+109k+115k · I 186k, 2 intentos previos sin telemetría · Q 150k) | 281 (incompleto, 2 intentos de implementer sin `tool_uses` reportado) | ~46.7 agente (+~310 min de pared perdidos en 2 cuelgues, ver abajo) | 2 (implementer colgado dos veces) | 1 | 6 | 2 nuevos (R-47, R-48) + 1 cerrado parcial (R-06) | 0 | +1.867 / −20, 16 archivos |
 
 ### Tendencia
 
@@ -297,3 +300,54 @@ Solo los dos gates. La única fricción no fue una parada del contrato sino un e
 
 - ¿El aviso al implementer sobre dividir archivos grandes evita el crash en la próxima US con volumen de datos similar (US-061 o US-062)?
 - US-061 depende de US-059 (métricas) y US-060 (motor) ya cerradas — buen caso para medir si una US "de integración" (servicio + endpoint + bitácora, con DB y HTTP) cuesta más o menos que el motor puro de esta corrida.
+
+## Corrida 6 — US-061 (servicio, endpoint `/ai/ask` y bitácora, nivel M)
+
+**US:** pega US-059 (métricas) con US-060 (motor de intenciones) — servicio nuevo (`internal/service/assistant.go`), repo de bitácora (`internal/repository/assistant_queries.go`), handler+endpoint (`internal/handler/assistant.go`), migración 15. Nivel **M**, sin test-author. **Rama:** `us/US-061` → `1454fd6` (implementación+tests, sin RED separado) → `f793074` (cierre), fusionados en `dev` por squash.
+
+### Por agente
+
+| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 3 (contrato inicial; corrección con las 6 decisiones de GATE 1 — el orquestador investigó D-2 por su cuenta antes de relanzar; cierre) — **las 3 en frío, `ListAgents` nunca mostró una viva** | 149k → 109k → 115k (último: 115k) | 41+51+33 = 125 | 374+522+275 = 1.171 s |
+| implementer | 3 (arranque; retomado en frío tras crash por límite de salida a los 600s; retomado en frío otra vez tras un segundo cuelgue de 5h matado a mano) | falló sin uso reportado → falló sin uso reportado → 186k (último: 186k, único con telemetría) | 79 (solo la invocación que terminó) | 846 s reportados (agente) + ~310 min de pared sin telemetría en los 2 intentos fallidos |
+| qa | 1 | 150k | 77 | 785 s |
+| **Total** | 7 | ~708k (372+186+150, subestimado — 2 intentos de implementer sin `subagent_tokens`) | 281 (subestimado, mismo motivo) | 2.802 s de telemetría ≈ 46.7 min + ~310 min de pared no medidos |
+
+### Qué encontró
+
+| Tipo | Hallazgo | Quién |
+|---|---|---|
+| Defecto real 🔴 (bloqueante, roadmap R-06) | `buildDateWhere` (report.go:192) inclusivo en `to` — el PO exigió corregirlo global en vez de aceptar el riesgo; el fix también destapó el mismo bug latente en `dashboard.go:142-159` | analyst, decisión GATE 1 |
+| Gap real | `ReportRepository.TopProducts` ordena por ingresos, pero el spec de TOP_PRODUCTS exige el contraste "#1 por unidades" — investigado por el orquestador (no por el analyst) tras la instrucción del PO "averigualo, buscá"; resuelto con un método nuevo (`TopSellers`) para no romper el endpoint de reportes existente que sí depende del orden por ingresos | orquestador + analyst |
+| Riesgo real, atrapado antes de producción | El motor nunca devuelve `Tier="none"`; la migración exige `CHECK tier IN (...,'none')`. Sin mapear `""→"none"` antes del INSERT, el 100% de las consultas `UNKNOWN` —justo las que la bitácora existe para capturar— habrían roto el INSERT | analyst, en el contrato inicial (AC-15) |
+| Defecto preexistente en `dev`, no de esta US | `SalesSummary` agrupado colapsa en un solo bucket cuando `created_at` es un `time.Time` literal insertado a mano (patrón de fixture del proyecto); no se dispara hoy porque `sale.go` siempre usa `DEFAULT CURRENT_TIMESTAMP`. QA lo reprodujo contra `dev` sin el diff de esta US → **R-48** | qa |
+| Menor, aceptado | 4 frases de entrenamiento nuevas en `engine.go` no listadas en el contrato original — QA verificó que revertirlas rompe 4/7 casos de `Period.Label` y que no rompen nada de US-060 | qa |
+| Deferido a roadmap | R-06 solo cubre `report.go`; `ExpenseRepository.List` (expense.go:73) sigue con `to` inclusivo, sin US que lo dispare todavía → cierre parcial de R-06 | analyst, modo close |
+| Deferido a roadmap | `frontend/app/reports/page.tsx:98` arma `to` como 23:59:59 en vez de inicio del día siguiente; tras el fix de `buildDateWhere` queda una ventana de 1 segundo sin cubrir → **R-47** | analyst, contrato |
+
+### Paradas no planeadas (2)
+
+**Intento 1 del implementer:** cortado por el mismo límite de salida que ya había pasado en la corrida 5 (archivo grande en un solo bloque), esta vez detectado por el watchdog automático a los 600s sin progreso. El orquestador verificó `git status`/`go build` antes de relanzar: nada roto, se retomó en frío con instrucción explícita de trabajar en bloques chicos.
+
+**Intento 2 del implementer, el hallazgo nuevo de esta corrida:** el mismo aviso de "dividí el trabajo en bloques chicos" hizo que el agente avanzara MUY lento en vez de cortarse — corrió **5 horas reales** (el PO preguntó "¿cómo carajo lleva 5 horas?") sin que el watchdog de 600s lo detectara como colgado, porque técnicamente seguía haciendo tool calls, solo que a un ritmo altísimo de lentitud (diff final de esa vuelta: +15 líneas sobre el intento anterior). El orquestador comparó el progreso real (`git diff --stat` entre el estado post-crash-1 y el estado a las 5h) para confirmar que no era percepción, mató el proceso con `TaskStop`, verificó que el archivo a medio editar (`engine.go`) no había quedado roto (`go build` pasó igual), y relanzó una tercera vez con alcance deliberadamente acotado (solo los 2 archivos de test que faltaban, con la instrucción de correr `go test` de esos paquetes después de cada bloque en vez de al final). Esa tercera vuelta sí terminó, en 846s.
+
+### Fricción operativa
+
+- El ajuste de la corrida 5 ("avisar que divida archivos grandes") **no es suficiente por sí solo** contra los cuelgues del implementer — puede evitar el crash de salida (lo hizo) y al mismo tiempo producir un colgado silencioso mucho peor (lentitud extrema no detectada por el watchdog de tiempo-sin-progreso).
+- Los 2 intentos fallidos del implementer no generaron notificación con `subagent_tokens`/`tool_uses` — el benchmark de esta corrida subestima el costo real en tokens y herramientas de esos 2 intentos, solo tiene el de la vuelta que terminó.
+- El orquestador no tiene un mecanismo propio de vigilancia activa fuera de las notificaciones — probó `ScheduleWakeup` para chequear en 20 min y lo canceló de inmediato al notar que esa herramienta es específica de `/loop` y no aplica a esta sesión. El chequeo del intento 2 (a las 5h) fue reactivo, disparado por la queja del PO, no por vigilancia propia del orquestador.
+- Investigar D-2 (orquestador en vez de analyst) funcionó bien: la instrucción del PO fue "buscá vos", y verificar código real (`grep` de `TopProducts`/`TopByMargin`, quién más llama a `TopProducts`) antes de relanzar al analyst evitó una vuelta extra de preguntas.
+
+### Ajustes propuestos (pendientes del "sí" del PO)
+
+| Ajuste | Dónde |
+|---|---|
+| Darle al implementer un límite de tiempo de pared explícito (ej. 20-25 min) para completar un bloque de trabajo declarado, no solo watchdog de progreso; si lo excede, el orquestador chequea `git diff --stat` contra el último checkpoint conocido y decide matar/continuar con datos, no a ciegas | `.claude/agents/implementer.md`, `us.md` paso 3 |
+| Cuando el implementer arranca una vuelta de "completá lo que falta" (no un contrato completo desde cero), pedirle una lista explícita de los tests/archivos pendientes ANTES de escribir código, para que el orquestador pueda medir avance real contra un checklist en vez de solo `git diff --stat` | `.claude/agents/implementer.md` |
+| No usar `ScheduleWakeup` fuera de una sesión `/loop` — confirmado en esta corrida que es específico de esa skill y hay que cancelarlo si se llama por error | nota operativa para el orquestador, no requiere cambio de archivo |
+
+### Qué medir en la corrida 7
+
+- ¿El límite de tiempo de pared (si el PO lo aprueba) reduce los cuelgues silenciosos del implementer, o el problema es específico de "vueltas de completar trabajo ajeno" como la de esta corrida?
+- US-062 (widget de chat, frontend) es la primera US de este bloque que toca React/Next.js — buen caso para medir si el patrón de cuelgues es un problema del agente `implementer` en general o algo específico de Go/backend.

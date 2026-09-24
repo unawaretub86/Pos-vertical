@@ -41,7 +41,7 @@ Este sprint entrega **T1 (regex) + T2 (fuzzy matching)**, Go puro, cero dependen
 |----|--------|--------|-------|
 | US-059 | Extraer las métricas del dashboard a un repositorio parametrizable por rango | [x] Completo | 2026-09-23 |
 | US-060 | Motor de intenciones T1 (regex) + T2 (fuzzy) en Go puro | [x] Completo | 2026-09-23 |
-| US-061 | Servicio, endpoint `/ai/ask` y bitácora de consultas | [ ] Pendiente | — |
+| US-061 | Servicio, endpoint `/ai/ask` y bitácora de consultas | [x] Completo | 2026-09-24 |
 | US-062 | Widget de chat en la app autenticada | [ ] Pendiente | — |
 | US-063 | Corregir el saldo de la cartera envejecida del dashboard (D-4) | [x] Completo | 2026-09-23 |
 | US-064 | Corregir `TotalPortfolioBalance`: no restar los saldos a favor (R-44) | [x] Completo | 2026-09-23 |
@@ -465,6 +465,35 @@ CREATE INDEX IF NOT EXISTS idx_assistant_queries_intent ON assistant_queries(int
 - [ ] Test: formato de moneda → 1234567.4 se renderiza `$1.234.567`
 - [ ] Test: con ventas hoy y ayer distintas, "cuanto vendi el juebes" **no** devuelve ninguna de las dos cifras; responde preguntando la fecha
 - [ ] Build limpio (`go build ./...`, `pnpm build`)
+
+### Criterios verificados
+
+> Cerrada el 2026-09-24 (commit `1454fd6`, QA vuelta 1: OK, 0 bloqueantes, 2 MENOR — ver disposición abajo y en `roadmap.md` bitácora de decisiones). Los checkboxes de arriba son el enunciado original, ampliado en GATE 1 (Andrey, 2026-09-23): además de servicio+endpoint+bitácora, esta US corrigió `buildDateWhere` (`internal/repository/report.go`, cierre parcial de R-06 — solo esta función, no `ExpenseRepository.List`) y agregó `MetricsRepository.TopSellers` (ranking por unidades para `TOP_PRODUCTS`, sin tocar `ReportRepository.TopProducts` que sigue por revenue).
+> Tests: `internal/service/assistant_test.go`, `internal/handler/assistant_test.go`, `internal/repository/report_test.go`, `internal/repository/metrics_test.go` — 25 casos (T-1 a T-25), todos en verde. `go build ./...`, `go vet ./...`, `go test ./...`, `pnpm build` y `pnpm test` en verde; `pnpm lint` en 41 problemas preexistentes sin cambio (R-35).
+
+| AC | Criterio (EARS) | Tests |
+|---|---|---|
+| AC-1 | CUANDO se resuelve un intent con `Period.Unresolved=false`, el sistema DEBE responder en español con cifras de `MetricsRepository`/`ReportRepository`/`ExpenseRepository`, iguales a las de `/dashboard/today` en el mismo rango. | `TestAssistant_T1_SalesToday`, `TestAskAssistant_T2_SalesTotalMatchesDashboard` |
+| AC-2/AC-3 | CUANDO el #1 por unidades y el #1 por margen difieren en `TOP_PRODUCTS`, el sistema DEBE agregar la línea de contraste; SI coinciden o `TopByMargin` está vacío, NO DEBE agregarla. | `TestAssistant_T3_TopProductsContrastLine` |
+| AC-4 | CUANDO `PROFIT`/`MARGIN`/`TOP_MARGIN` tienen `unconfiguredCost > 0`, el sistema DEBE agregar la advertencia de costos sin configurar. | `TestAssistant_T4_UnconfiguredCostWarning` |
+| AC-5 | CUANDO no hay datos en el rango, el sistema DEBE devolver el texto propio de "sin datos", nunca `"$0"`. | `TestAssistant_T5_NoDataNeverBareZero` |
+| AC-6/AC-7 | `UNKNOWN` DEBE devolver texto fijo + exactamente 3 sugerencias; `AMBIGUOUS` DEBE devolver "¿Te referís a...?" + los candidatos del motor. | `TestAssistant_T6_UnknownReturnsThreeSuggestions`, `TestAssistant_T7_AmbiguousOffersCandidates` |
+| AC-8 | CUANDO `Query.Compare=true`, el sistema DEBE devolver ambas cifras y la variación porcentual con signo siempre visible (`+`/`-`). | `TestAssistant_T8_CompareShowsSignedDrop`, `TestAssistant_T8_CompareShowsSignedRise` |
+| AC-9 | Toda respuesta con cifras DEBE nombrar el periodo con `Period.Label` (7 valores). | `TestAssistant_T9_PeriodLabelNamedInText` |
+| AC-10 | CUANDO `Period.Unresolved=true`, el sistema NO DEBE incluir cifras: pregunta la fecha con 4 chips. | `TestAssistant_T10_UnresolvedPeriodAsksForDate` |
+| AC-11 | Los montos DEBEN formatearse como `$1.234.567` (COP, sin decimales, `math.Round`). | `TestAssistant_T11_FormatCOP` |
+| AC-12/AC-13/AC-14 | Sin token → 401 sin invocar servicio; token `cashier` → 403 sin invocar servicio; token `admin` → 200 con `{intent, period, text, data, suggestions, tier, confidence}`. | `TestAskAssistant_T12_NoTokenReturns401`, `TestAskAssistant_T13_CashierReturns403WithoutLeakingFigures`, `TestAskAssistant_T14_DebtorsTruncatesAtFiveWithRemainder` |
+| AC-15/AC-16 | Toda consulta (entendida o no) DEBE insertar 1 fila en `assistant_queries` con `user_id` derivado SIEMPRE de `appmw.GetClaims(r).UserID` (nunca del body), texto crudo, intent, `tier` (`""→"none"`) y confianza — sin ninguna cifra ni nombre de cliente/producto. | `TestAssistant_T15_BitacoraLogsUnknownQueryWithoutFigures`, `TestAssistant_T16_TierMapping`, `TestAskAssistant_T21_UserIDAlwaysFromJWTNeverFromBody` |
+| AC-17 | SI el INSERT de bitácora falla, ENTONCES la respuesta al usuario NO DEBE verse afectada. | `TestAssistant_T17_BitacoraFailureNeverBlocksTheAnswer` |
+| AC-18 | El servicio NO DEBE redefinir `Intent`/`Query`. | `grep -n "type Query\|type Intent" internal/service/` sin coincidencias (QA) |
+| AC-19 | `go build ./...`, `go test ./...` y `pnpm build` DEBEN pasar. | Ejecución de QA: todos exit 0 |
+| AC-20 | `buildDateWhere` DEBE construir el límite superior con `<` (semiabierto `[from, to)`), compartido por `SalesSummary` y `TopProducts` — cierre **parcial** de R-06 (`ExpenseRepository.List` en `expense.go:73` sigue `<=`, fuera de alcance de esta US). | `TestReportRepo_T22_BuildDateWhereIsHalfOpen` |
+| AC-21 | `TOP_PRODUCTS` DEBE listar por unidades vendidas (`MetricsRepository.TopSellers`, nuevo), sin alterar `ReportRepository.TopProducts` (que sigue por revenue para `/reports/top-products`). | `TestMetricsRepo_T23_TopSellersOrdersByQuantity`, `TestReportRepo_T23_TopProductsStillOrdersByRevenue`, `TestAssistant_T24_TopProductsOrdersByUnits` |
+| AC-22 | `PAYMENT_MIX` DEBE aclarar que "transferencia" agrupa Nequi/Daviplata/otros medios electrónicos. | `TestAssistant_T25_PaymentMixClarifiesNequi` |
+
+**Hallazgos de QA (2 MENOR, no bloqueantes, disposición):**
+- 4 frases nuevas de entrenamiento T1 agregadas a `IntentSales` (`internal/assistant/engine.go:105-110`), fuera de la tabla "Archivos a tocar" del contrato — verificado como necesarias (sin ellas, 4/7 casos de `Period.Label` caían en `UNKNOWN`), aditivo, no rompe US-060. **Aceptado, sin ítem de roadmap.**
+- `SalesSummary` (`internal/repository/report.go:113-127`) envolvió su `strftime(...)` agrupado en `COALESCE(..., '')` para no romper con `created_at` insertado como `time.Time` literal en fixtures de test (patrón de `CLAUDE.md`/`dashboard_test.go:14`). Sin el cambio, 3 tests de esta misma US fallaban con error de `Scan`. Confirmado bug preexistente (reproducible en `dev`) que no se dispara en producción (`sale.go:46` nunca inserta `created_at` explícito). Con el fix, ventas de días distintos con `created_at` literal colapsan silenciosamente en un solo bucket de `Period=""` en vez de fallar. **No corregido en esta US — pasa a roadmap junto a R-05** (mismo origen: desfase de formato de timestamp).
 
 ---
 

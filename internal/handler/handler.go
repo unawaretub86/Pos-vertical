@@ -33,6 +33,7 @@ type Handler struct {
 	purchases    *service.PurchaseService
 	factelect    *factelect.FacElectService
 	fiscalRepo   factelect.FiscalConfigRepository
+	assistant    *service.AssistantService
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -53,6 +54,7 @@ func New(db *database.DB) *Handler {
 	fiscalRepo := factelect.NewFiscalConfigRepository(db.DB)
 	supplierRepo := repository.NewSupplierRepository(db.DB)
 	purchaseRepo := repository.NewPurchaseRepository(db.DB)
+	assistantQueryRepo := repository.NewAssistantQueryRepository(db.DB)
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
@@ -85,6 +87,7 @@ func New(db *database.DB) *Handler {
 		purchases:    service.NewPurchaseService(purchaseRepo, supplierRepo),
 		factelect:    factelSvc,
 		fiscalRepo:   fiscalRepo,
+		assistant:    service.NewAssistantService(metricsRepo, reportRepo, expenseRepo, assistantQueryRepo),
 	}
 }
 
@@ -190,6 +193,13 @@ func (h *Handler) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Post("/purchases", h.createPurchase)
+		})
+
+		// Local assistant (admin only): exposes sales/profit/portfolio figures
+		// via chat, same access level as dashboard/reports (it shows the same data).
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Post("/ai/ask", h.askAssistant)
 		})
 
 		// Audit log (admin only)

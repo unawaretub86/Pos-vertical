@@ -15,6 +15,16 @@ type MarginItem struct {
 	UnitsSold float64 `json:"units_sold"`
 }
 
+// SellerItem is a product ranked by units sold in a date range (US-061,
+// AC-21/D-2). It backs the assistant's TOP_PRODUCTS body — a ranking by
+// volume, deliberately separate from ReportRepository.TopProducts, which
+// stays ordered by revenue for /reports/top-products.
+type SellerItem struct {
+	Name     string  `json:"name"`
+	Quantity float64 `json:"quantity"`
+	Revenue  float64 `json:"revenue"`
+}
+
 // LowStockItem is an active product whose stock is below its configured minimum.
 type LowStockItem struct {
 	ProductID int64   `json:"product_id"`
@@ -50,6 +60,7 @@ type MetricsRepository interface {
 	CreditFlow(ctx context.Context, from, to time.Time) (newCredit, collected float64, err error)
 	TopByMargin(ctx context.Context, from, to time.Time, limit int) ([]MarginItem, error)
 	TopSeller(ctx context.Context, from, to time.Time) (name string, qty float64, err error)
+	TopSellers(ctx context.Context, from, to time.Time, limit int) ([]SellerItem, error)
 	LowStock(ctx context.Context, limit int) ([]LowStockItem, error)
 	Debtors(ctx context.Context, limit int) ([]Debtor, error)
 	AgingReceivables(ctx context.Context, limit int) ([]AgingReceivable, error)
@@ -225,6 +236,44 @@ func (r *metricsRepo) TopSeller(ctx context.Context, from, to time.Time) (string
 		return "", 0, nil
 	}
 	return name.String, qty.Float64, nil
+}
+
+// TopSellers returns up to limit products sold in [from, to), ordered by
+// quantity descending (US-061 AC-21/D-2) — unlike ReportRepository.TopProducts,
+// which orders by revenue for /reports/top-products and is left unchanged.
+func (r *metricsRepo) TopSellers(ctx context.Context, from, to time.Time, limit int) ([]SellerItem, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			p.name,
+			COALESCE(SUM(si.quantity), 0) AS qty,
+			COALESCE(SUM(si.subtotal), 0) AS revenue
+		FROM sale_items si
+		JOIN products p ON p.id = si.product_id
+		JOIN sales s ON s.id = si.sale_id
+		WHERE s.status = 'completed'
+			AND s.created_at >= ? AND s.created_at < ?
+		GROUP BY p.id, p.name
+		ORDER BY qty DESC
+		LIMIT ?`,
+		from, to, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("metrics top sellers: %w", err)
+	}
+	defer rows.Close()
+
+	items := []SellerItem{}
+	for rows.Next() {
+		var item SellerItem
+		if err := rows.Scan(&item.Name, &item.Quantity, &item.Revenue); err != nil {
+			return nil, fmt.Errorf("metrics top sellers: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("metrics top sellers: %w", err)
+	}
+	return items, nil
 }
 
 // LowStock returns up to limit active products below their minimum stock,

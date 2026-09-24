@@ -1007,3 +1007,77 @@ func TestMetricsRepo_T35_AgingBalanceMatchesDebtorsListAndBalance(t *testing.T) 
 		}
 	}
 }
+
+// ─── T-23 (US-061, AC-21/D-2): TopSellers ranks by units, TopProducts stays by revenue ─
+
+// seedTopSellersT23 seeds A=50 units/$100.000, B=80 units/$40.000, C=10
+// units/$200.000 — units and revenue deliberately disagree so an
+// implementation that reuses ReportRepository.TopProducts' ORDER BY revenue
+// for the assistant would fail this test.
+func seedTopSellersT23(t *testing.T, db *database.DB, hoy0 time.Time) {
+	t.Helper()
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active) VALUES (1, 'A', 'A', 2000, 1000, 'unit', 1)`)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active) VALUES (2, 'B', 'B', 500, 200, 'unit', 1)`)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active) VALUES (3, 'C', 'C', 20000, 15000, 'unit', 1)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 340000, 340000, 'completed', 'cash', ?)`, hoy0.Add(time.Hour))
+	// A: 50 units * 2.000 = 100.000
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 50, 2000, 100000)`)
+	// B: 80 units * 500 = 40.000
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 2, 80, 500, 40000)`)
+	// C: 10 units * 20.000 = 200.000
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 3, 10, 20000, 200000)`)
+}
+
+func TestMetricsRepo_T23_TopSellersOrdersByQuantity(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	hoy0 := metricsToday0()
+	seedTopSellersT23(t, db, hoy0)
+
+	items, err := NewMetricsRepository(db.DB).TopSellers(ctx, hoy0, hoy0.Add(24*time.Hour), 3)
+	if err != nil {
+		t.Fatalf("TopSellers: %v", err)
+	}
+	want := []struct {
+		name string
+		qty  float64
+		rev  float64
+	}{{"B", 80, 40000}, {"A", 50, 100000}, {"C", 10, 200000}}
+	if len(items) != len(want) {
+		t.Fatalf("TopSellers len = %d, want %d: %+v", len(items), len(want), items)
+	}
+	for i, w := range want {
+		if items[i].Name != w.name || items[i].Quantity != w.qty || items[i].Revenue != w.rev {
+			t.Errorf("items[%d] = %+v, want {%s %.0f %.0f}", i, items[i], w.name, w.qty, w.rev)
+		}
+	}
+}
+
+// TestReportRepo_T23_TopProductsStillOrdersByRevenue is the non-regression
+// half of T-23: ReportRepository.TopProducts (used by GET /reports/top-products
+// in production) must keep ordering by revenue, unaffected by the new
+// MetricsRepository.TopSellers method.
+func TestReportRepo_T23_TopProductsStillOrdersByRevenue(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	hoy0 := metricsToday0()
+	seedTopSellersT23(t, db, hoy0)
+
+	from, to := hoy0, hoy0.Add(24*time.Hour)
+	items, err := NewReportRepository(db.DB).TopProducts(ctx, &from, &to, 3)
+	if err != nil {
+		t.Fatalf("TopProducts: %v", err)
+	}
+	want := []struct {
+		name string
+		rev  float64
+	}{{"C", 200000}, {"A", 100000}, {"B", 40000}}
+	if len(items) != len(want) {
+		t.Fatalf("TopProducts len = %d, want %d: %+v", len(items), len(want), items)
+	}
+	for i, w := range want {
+		if items[i].Name != w.name || items[i].Revenue != w.rev {
+			t.Errorf("items[%d] = %+v, want {%s %.0f}", i, items[i], w.name, w.rev)
+		}
+	}
+}

@@ -4,11 +4,16 @@ import "time"
 
 // Period is a semi-open date range [From, To) resolved from a query, or a
 // marker that the user mentioned a time reference the engine could not
-// resolve (Unresolved=true, AC-15/AC-16).
+// resolve (Unresolved=true, AC-15/AC-16). Label is a human-readable Spanish
+// name of the resolved range (US-061 AC-9), one of "Hoy", "Ayer", "Esta
+// semana", "Semana pasada", "Este mes", "Mes pasado" or "Este año". It is
+// the zero value ("") when Unresolved is true, since there is nothing to
+// name.
 type Period struct {
 	From       time.Time
 	To         time.Time
 	Unresolved bool
+	Label      string
 }
 
 // temporalWords is the vocabulary that DOES resolve to a concrete period
@@ -110,27 +115,27 @@ func extractPeriod(tokens []string, now time.Time) Period {
 	switch {
 	case tokensContainWord(tokens, "semana", periodSynonyms) && isPast:
 		monday := startOfWeek(now)
-		return Period{From: monday.AddDate(0, 0, -7), To: monday}
+		return Period{From: monday.AddDate(0, 0, -7), To: monday, Label: "Semana pasada"}
 	case tokensContainWord(tokens, "mes", periodSynonyms) && isPast:
 		month := startOfMonth(now)
-		return Period{From: month.AddDate(0, -1, 0), To: month}
+		return Period{From: month.AddDate(0, -1, 0), To: month, Label: "Mes pasado"}
 	case tokensContainWord(tokens, "semana", periodSynonyms) && tokensContainWord(tokens, "esta", periodSynonyms):
-		return Period{From: startOfWeek(now), To: now}
+		return Period{From: startOfWeek(now), To: now, Label: "Esta semana"}
 	case tokensContainWord(tokens, "mes", periodSynonyms) && tokensContainWord(tokens, "este", periodSynonyms):
-		return Period{From: startOfMonth(now), To: now}
+		return Period{From: startOfMonth(now), To: now, Label: "Este mes"}
 	case (tokensContainWord(tokens, "año", periodSynonyms) || tokensContainWord(tokens, "ano", periodSynonyms)) &&
 		tokensContainWord(tokens, "este", periodSynonyms):
-		return Period{From: startOfYear(now), To: now}
+		return Period{From: startOfYear(now), To: now, Label: "Este año"}
 	case tokensContainWord(tokens, "ayer", periodSynonyms):
 		today := startOfDay(now)
-		return Period{From: today.AddDate(0, 0, -1), To: today}
+		return Period{From: today.AddDate(0, 0, -1), To: today, Label: "Ayer"}
 	case tokensContainWord(tokens, "hoy", periodSynonyms):
 		today := startOfDay(now)
-		return Period{From: today, To: today.AddDate(0, 0, 1)}
+		return Period{From: today, To: today.AddDate(0, 0, 1), Label: "Hoy"}
 	case tokensContainWeekday(tokens):
 		return Period{Unresolved: true}
 	default:
 		today := startOfDay(now)
-		return Period{From: today, To: today.AddDate(0, 0, 1)}
+		return Period{From: today, To: today.AddDate(0, 0, 1), Label: "Hoy"}
 	}
 }

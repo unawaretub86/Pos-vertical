@@ -36,6 +36,7 @@ var dbMigrations = []migration{
 	{version: 12, up: migration12},
 	{version: 13, up: migration13},
 	{version: 14, up: migration14},
+	{version: 15, up: migration15},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -482,4 +483,22 @@ CREATE INDEX IF NOT EXISTS idx_purchase_items_product ON purchase_items(product_
 const migration14 = `
 ALTER TABLE business_config ADD COLUMN owner_email TEXT;
 ALTER TABLE business_config ADD COLUMN owner_email_app_password TEXT;
+`
+
+// migration15 creates assistant_queries: the local assistant's query log
+// (US-061). It is NOT a chat history — it never stores the computed answer
+// nor any business figure, only the raw question and the engine's
+// classification metadata, so the store owner's vocabulary can be reviewed
+// later without duplicating sales/portfolio data.
+const migration15 = `
+CREATE TABLE IF NOT EXISTS assistant_queries (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id INTEGER NOT NULL REFERENCES users(id),
+	query TEXT NOT NULL,
+	intent TEXT NOT NULL,
+	tier TEXT NOT NULL CHECK (tier IN ('regex','fuzzy','none')),
+	confidence REAL NOT NULL DEFAULT 0,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_assistant_queries_intent ON assistant_queries(intent);
 `

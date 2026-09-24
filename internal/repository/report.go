@@ -110,14 +110,19 @@ func (r *reportRepo) SalesSummary(ctx context.Context, p SalesSummaryParams) (*S
 		return nil, err
 	}
 
-	// Grouped by period
+	// Grouped by period. strftime() only parses a handful of well-known
+	// text layouts (https://www.sqlite.org/lang_datefunc.html); rows whose
+	// created_at was bound from a Go time.Time via a driver that doesn't
+	// write ISO-8601 (no `_time_format=sqlite` DSN param, see roadmap R-05)
+	// make strftime return NULL instead of erroring. COALESCE to '' so that
+	// case groups under an empty period label instead of failing the Scan.
 	groupFmt := groupFormat(p.GroupBy)
 	groupRows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT strftime('%s', s.created_at), COALESCE(SUM(s.total), 0), COUNT(*)
+		SELECT COALESCE(strftime('%s', s.created_at), ''), COALESCE(SUM(s.total), 0), COUNT(*)
 		FROM sales s
 		WHERE s.status = 'completed' %s
-		GROUP BY strftime('%s', s.created_at)
-		ORDER BY strftime('%s', s.created_at) ASC`,
+		GROUP BY COALESCE(strftime('%s', s.created_at), '')
+		ORDER BY COALESCE(strftime('%s', s.created_at), '') ASC`,
 		groupFmt, where, groupFmt, groupFmt,
 	), args...)
 	if err != nil {
@@ -174,7 +179,11 @@ func (r *reportRepo) TopProducts(ctx context.Context, from, to *time.Time, limit
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// buildDateWhere builds a WHERE fragment for date filtering.
+// buildDateWhere builds a WHERE fragment for date filtering. The range is
+// half-open [from, to) (R-06, AC-20 of US-061 contract): "to" is exclusive
+// so two contiguous ranges sharing an exact boundary (e.g. "hoy" and
+// "mañana") never double-count nor drop the row created exactly at the
+// boundary instant.
 // tableAlias (optional) qualifies the column to avoid ambiguity in JOINs
 // e.g. buildDateWhere(from, to, "s") → " AND s.created_at >= ?"
 func buildDateWhere(from, to *time.Time, tableAlias ...string) (string, []any) {
@@ -189,7 +198,7 @@ func buildDateWhere(from, to *time.Time, tableAlias ...string) (string, []any) {
 		args = append(args, *from)
 	}
 	if to != nil {
-		where += " AND " + col + " <= ?"
+		where += " AND " + col + " < ?"
 		args = append(args, *to)
 	}
 	return where, args

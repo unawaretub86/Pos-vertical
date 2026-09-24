@@ -102,6 +102,12 @@ func buildIntentRegistry() []intentDef {
 		newIntentDef(IntentSales, []string{
 			"cuánto vendí", "cuánto vendí hoy", "cuánto facturé",
 			"cómo van las ventas", "cuánto he vendido", "cuánto vendí este mes",
+			// The 4 below cover the remaining Period.Label values (US-061
+			// AC-9/T-9: hoy, ayer, este mes ya resolvían via T1/T2; estos
+			// completan esta semana/semana pasada/mes pasado/este año, que
+			// el bench original de US-060 no cubría literalmente).
+			"cuánto vendí esta semana", "cuánto vendí la semana pasada",
+			"cuánto vendí el mes pasado", "cuánto vendí este año",
 			ambiguousSeed,
 		}, []string{"cuánto vendí"}),
 		newIntentDef(IntentProfit, []string{
