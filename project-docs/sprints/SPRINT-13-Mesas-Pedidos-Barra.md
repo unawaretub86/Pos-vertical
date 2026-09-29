@@ -4,7 +4,9 @@
 
 **Fecha inicio:** (por definir)
 
-**Referencias:** `project-docs/DESIGN-Mesas-Pedidos-KDS.md` (diseño aprobado 2026-09-20), `project-docs/SPRINT-12-WhatsApp-Dueno-Acceso-LAN.md`
+**Replanificado:** 2026-09-29, tras cerrar SPRINT-14. Cuatro cambios verificados contra el código: (1) la migración 15 ya está tomada por `assistant_queries` (US-061), el módulo usa la **16**; (2) US-054 depende de R-55, que hoy impide servir el POS a otro dispositivo, y lo absorbe; (3) referencias `archivo:línea` actualizadas; (4) se quitaron las promesas a "SPRINT-14" (Regla 3: el destino de lo recortado es `roadmap.md`).
+
+**Referencias:** `project-docs/design/2026-09-20-mesas-pedidos-kds.md` (diseño aprobado 2026-09-20), `project-docs/sprints/SPRINT-12-WhatsApp-Dueno-Acceso-LAN.md`
 
 **Deuda técnica entrante:**
 - US-034 — Factus: validación en sandbox (abierta desde SPRINT-07, requiere acceso externo) — **sigue abierta**, sin acción en este sprint.
@@ -12,7 +14,8 @@
 - US-042c, US-043, US-044, US-045 (SPRINT-09) — **siguen abiertas**, no relacionadas con el módulo de restaurante.
 - US-053 — Resumen de cierre de caja por correo (SPRINT-12) — **sigue abierta**. Hay trabajo sin commitear en `internal/mailer/`; no entra aquí para no mezclarlo con el módulo nuevo.
 - US-054 — Acceso al POS por WiFi local (SPRINT-12) — **entra en este sprint**. Sin ella el KDS no corre en la tablet del barista y el módulo pierde su razón de ser.
-  **Corrección verificada:** SPRINT-12 decía que `lan_access_enabled` iba en la migración 14. La migración 14 ya está cerrada y solo agrega `owner_email` y `owner_email_app_password` (`internal/database/migrate.go:482-485`). Esa columna pasa a la **migración 15**, dentro de US-055.
+  **Corrección verificada (2026-09-29):** SPRINT-12 decía que `lan_access_enabled` iba en la migración 14, y la primera versión de este sprint la movió a la 15. Ambas están cerradas: la 14 agrega `owner_email` y `owner_email_app_password` (`internal/database/migrate.go:483`) y la 15 crea `assistant_queries` (`migrate.go:493`, US-061). Las tablas del módulo y `lan_access_enabled` van en la **migración 16**, dentro de US-055.
+- **R-55 — el binario no sirve el frontend embebido** — **entra en este sprint, dentro de US-054.** Sin esto el POS no abre en la tablet aunque el bind sea `0.0.0.0` (detalle en US-054). Hay un arreglo parcial sin commitear de `web/static.go` en el checkout principal (quita la barra inicial); no es de este sprint, hay que revisarlo con Andrey antes de tomarlo o reescribirlo.
 
 ---
 
@@ -20,13 +23,13 @@
 
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
-| US-055 | Migración 15, modo restaurante y gestión de mesas | [ ] Pendiente | — |
-| US-054 | Acceso al POS desde el celular/tablet por WiFi local (deuda SPRINT-12) | [ ] Pendiente | — |
+| US-055 | Migración 16, modo restaurante y gestión de mesas | [ ] Pendiente | — |
+| US-054 | Acceso al POS desde el celular/tablet por WiFi local (deuda SPRINT-12) + R-55 servir el frontend desde el binario | [ ] Pendiente | — |
 | US-056 | Pedido por mesa: abrir, agregar ítems con nota, anular, cancelar | [ ] Pendiente | — |
 | US-057 | Cobro del pedido reusando el flujo de venta | [ ] Pendiente | — |
 | US-058 | Pantalla de barra (KDS) con estados, tiempos y alerta sonora | [ ] Pendiente | — |
 
-**Esfuerzo total estimado: 8 días** — por encima del objetivo de ~7. Línea de corte si la fecha aprieta: US-058 se va a SPRINT-14. Advertencia honesta: sin US-058 no hay demo que resuelva el dolor del cliente (los post-its siguen), solo mesas y cuenta abierta. Preferible recortar por otro lado antes que por el KDS.
+**Esfuerzo total estimado: 8.5 días** (US-054 sube de 0.5 a 1 por absorber R-55) — por encima del objetivo de ~7. Línea de corte si la fecha aprieta: US-058 vuelve a `roadmap.md` como ítem nuevo. Advertencia honesta: sin US-058 no hay demo que resuelva el dolor del cliente (los post-its siguen), solo mesas y cuenta abierta. Preferible recortar por otro lado antes que por el KDS.
 
 ---
 
@@ -34,15 +37,15 @@
 
 | Orden | US | Razón |
 |-------|----|-------|
-| **1** | US-055 | Trae la migración 15 completa (incluida la columna de US-054) y el toggle que esconde el módulo. Todo lo demás depende de sus tablas. |
-| **2** | US-054 | Necesita la columna de la migración 15. Toca el bind del servidor (`cmd/pos/main.go`) — el único cambio con radio de impacto real, se hace temprano para probarlo con calma y no al final del sprint. |
+| **1** | US-055 | Trae la migración 16 completa (incluida la columna de US-054) y el toggle que esconde el módulo. Todo lo demás depende de sus tablas. |
+| **2** | US-054 | Necesita la columna de la migración 16. Toca el bind del servidor (`cmd/pos/main.go:41`) y el servidor de estáticos (R-55) — el único cambio con radio de impacto real, se hace temprano para probarlo con calma y no al final del sprint. |
 | **3** | US-056 | El núcleo. Sin pedidos no hay nada que cobrar ni que mostrar en barra. |
 | **4** | US-057 | Depende de que exista un pedido con ítems. Incluye la extracción del panel de pago que US-056 no necesita todavía. |
 | **5** | US-058 | Lee lo que US-056 escribe. Va al final porque es la única US que se puede recortar sin dejar el sprint a medias a nivel de datos. |
 
 ---
 
-## US-055 — Migración 15, modo restaurante y gestión de mesas
+## US-055 — Migración 16, modo restaurante y gestión de mesas
 
 **Como** dueño de la cafetería,
 **quiero** registrar mis mesas y activar el modo restaurante,
@@ -52,13 +55,13 @@
 
 **Estado verificado:**
 - No existe ninguna tabla ni columna del módulo: `grep -rn "dining_tables\|order_items\|restaurant_mode\|lan_access" internal/ frontend/` no devuelve nada.
-- Última migración aplicada: **14** (`internal/database/migrate.go:38`, `const migration14` en la línea 482). La nueva es la **15**.
-- `business_config` es tabla singleton (id = 1), se lee y escribe en `internal/repository/setup.go` con la struct `BusinessConfig` (línea 7). El `UPDATE` de la línea 83 lista columna por columna: hay que agregar las nuevas ahí o no se persisten.
-- El sidebar filtra ítems por `visibleItems` (`frontend/components/Sidebar.tsx:202`); ahí entra la condición de modo restaurante.
+- Última migración aplicada: **15** (`internal/database/migrate.go:39`, `const migration15` en la línea 493, `assistant_queries`). La nueva es la **16**.
+- `business_config` es tabla singleton (id = 1), se lee y escribe en `internal/repository/setup.go` con la struct `BusinessConfig` (línea 7). El `UPSERT` de `Upsert` (`internal/repository/setup.go:83-92`) lista columna por columna: hay que agregar las nuevas ahí o no se persisten.
+- El sidebar filtra ítems por `visibleItems` (`frontend/components/Sidebar.tsx:143`; los ítems viven en `NAV_ITEMS`, línea 16, con la bandera `adminOnly`); ahí entra la condición de modo restaurante.
 - La config del negocio ya llega al frontend por contexto: `frontend/lib/business-config-context.tsx`.
 
 **Contexto técnico:**
-Migración 15 crea `dining_tables`, `orders` y `order_items` (SQL exacto en el DoD) y agrega dos columnas a `business_config`: `restaurant_mode` y `lan_access_enabled` (esta última es de US-054). Nuevo `internal/repository/dining_table.go` + `internal/handler/tables.go`, registrados en el grupo autenticado de `Routes()` con el CRUD bajo el grupo admin, mismo patrón que `suppliers` (`internal/handler/handler.go:177-182`). `BusinessConfig` y su `UPDATE` en `setup.go` suman los dos campos nuevos. Pantalla de administración de mesas dentro de Ajustes (`frontend/app/settings/page.tsx`), no una ruta aparte.
+Migración 16 crea `dining_tables`, `orders` y `order_items` (SQL exacto en el DoD) y agrega dos columnas a `business_config`: `restaurant_mode` y `lan_access_enabled` (esta última es de US-054). Nuevo `internal/repository/dining_table.go` + `internal/handler/tables.go`, registrados en el grupo autenticado de `Routes()` con el CRUD bajo el grupo admin, mismo patrón que `suppliers` (`internal/handler/handler.go:183-188`). `BusinessConfig` y su `UPDATE` en `setup.go` suman los dos campos nuevos. Pantalla de administración de mesas dentro de Ajustes (`frontend/app/settings/page.tsx`), no una ruta aparte.
 
 **Regla de negocio:**
 ```
@@ -96,7 +99,7 @@ Borrado de mesa:
 - [ ] Con modo restaurante activo aparecen "Mesas" y "Barra"; un usuario `cashier` los ve, no solo admin
 
 **DoD:**
-- [ ] Migración 15:
+- [ ] Migración 16 (`migration16` + `{version: 16, up: migration16}` en `migrate.go`; no editar la 15):
 ```sql
 CREATE TABLE IF NOT EXISTS dining_tables (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,10 +148,10 @@ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAU
 - [ ] `POST /api/tables` (admin) → `{ id, name, zone, seats, sort_order, active }`
 - [ ] `PUT /api/tables/{id}` (admin) → mesa actualizada
 - [ ] `DELETE /api/tables/{id}` (admin) → 409 si tiene pedido abierto; si no, `active = 0`
-- [ ] `restaurant_mode` y `lan_access_enabled` se leen en `GET /api/setup` y se escriben en `PUT /api/setup` (agregar al `UPDATE` de `internal/repository/setup.go:83`, que lista columnas explícitamente)
+- [ ] `restaurant_mode` y `lan_access_enabled` se leen en `GET /api/setup` y se escriben en `PUT /api/setup` (agregar al `UPSERT` de `internal/repository/setup.go:83-92` y a `BusinessConfig`, línea 7; el `INSERT` lista columnas explícitamente)
 - [ ] Test: mesa con pedido `open` → `DELETE` responde 409 y la mesa sigue `active = 1`
 - [ ] Test: mesa con 2 ítems `ready` y 0 pendientes → `state = "por_cobrar"`; con 1 ítem `pending` → `state = "ocupada"`; sin pedido → `state = "libre"`
-- [ ] Test: `PUT /api/setup` con `restaurant_mode: true` → `GET /api/setup` lo devuelve `true` (verifica que la columna entró al UPDATE)
+- [ ] Test: `PUT /api/setup` con `restaurant_mode: true` → `GET /api/setup` lo devuelve `true` (verifica que la columna entró al UPSERT)
 - [ ] Build limpio (`go build ./...`, `pnpm build` en `frontend/`)
 
 ---
@@ -159,10 +162,15 @@ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAU
 **quiero** entrar al POS desde el celular o una tablet conectada a mi WiFi,
 **para** que el barista use el KDS en una tablet en la barra y yo vea las ventas sin estar en el computador.
 
-**Esfuerzo estimado:** 0.5 días. **Impacto:** Alto en este sprint — es dependencia dura del KDS (US-058), no una comodidad.
+**Esfuerzo estimado:** 1 día (0.5 del bind + 0.5 de R-55). **Impacto:** Alto en este sprint — es dependencia dura del KDS (US-058), no una comodidad.
 
 **Estado verificado:**
-- La columna `lan_access_enabled` **no existe**: la migración 14 cerró solo con `owner_email` y `owner_email_app_password` (`internal/database/migrate.go:482-485`). La crea la migración 15 en US-055.
+- La columna `lan_access_enabled` **no existe** (verifiqué con `grep` en `internal/`, `cmd/` y `frontend/`: cero coincidencias). La crea la migración 16 en US-055.
+- El bind está fijo en `addr := "localhost:8080"` (`cmd/pos/main.go:41`) y ese mismo `addr` se usa para abrir el navegador (línea 47).
+- **R-55 (hallado el 2026-09-29, QA manual de US-062): el POS no se ve desde otro dispositivo aunque el bind sea `0.0.0.0`.** Tres causas, las tres en el camino de este sprint:
+  1. `web/static.go` abría rutas con barra inicial, `fs.FS` las rechaza y todo caía a `index.html` (`.js` incluidos) → página en blanco. Hay un arreglo sin commitear en el checkout principal (`TrimPrefix`); además hay que servir `<ruta>.html` para las rutas exportadas de Next (`output: "export"`), o `/mesas` y `/barra` darían 404/`index.html` al recargar.
+  2. `frontend/lib/api.ts:3` fija `http://localhost:8080/api` en tiempo de build. En la tablet `localhost` es la tablet: el login pega a ninguna parte. Requiere API relativa `/api` por defecto.
+  3. `internal/middleware/middleware.go:90` solo permite el origen `http://localhost:3000`; con UI y API en el mismo origen no aplica, pero hay que confirmarlo con una petición real desde otro dispositivo.
 - `cmd/pos/main.go` no tiene tests hoy; todo su contenido es orquestación.
 
 **Contexto técnico:**
@@ -193,9 +201,12 @@ socket una sola vez al arrancar.
 - [ ] Responsive: el login y el POS abren usables en un celular de 320px
 
 **DoD:**
-- [ ] Usa la columna `lan_access_enabled` de la migración 15 (US-055); esta US no crea migración
+- [ ] Usa la columna `lan_access_enabled` de la migración 16 (US-055); esta US no crea migración
 - [ ] `listenAddr` exportada y pura en `cmd/pos/`
 - [ ] Test: `listenAddr(false) == "127.0.0.1:8080"` y `listenAddr(true) == "0.0.0.0:8080"`
+- [ ] R-55: `FileServer` quita la barra inicial y sirve `<ruta>.html` para rutas exportadas; `curl` de un chunk `/_next/static/chunks/*.js` devuelve `application/javascript`, no `text/html`
+- [ ] R-55: test de `FileServer` con un FS en memoria: `/`, `/login` (→ `login.html`), un `.js` existente y una ruta inexistente (→ `index.html`)
+- [ ] R-55: `api.ts` usa `/api` relativo por defecto; el dev con `:3000` sigue funcionando vía `NEXT_PUBLIC_API_URL`, documentado en `INSTALL.md`/`CLAUDE.md` si cambia
 - [ ] Test: detección de IP local devuelve una IPv4 privada (10.x / 172.16-31.x / 192.168.x) o cadena vacía, nunca `127.0.0.1` como sugerencia al usuario
 - [ ] Test manual con dos dispositivos reales — **pendiente para Andrey**, no automatizable en este entorno
 - [ ] Build limpio (`go build ./...`, `pnpm build`)
@@ -240,7 +251,7 @@ Toda escritura de ítem toca orders.updated_at (misma transacción).
 ```
 
 **Scope — qué NO entra:**
-- Pedido para llevar con turno (SPRINT-14). En este sprint `type` siempre es `'table'`; la columna ya acepta `'takeaway'`.
+- Pedido para llevar con turno (R-01 en `roadmap.md`). En este sprint `type` siempre es `'table'`; la columna ya acepta `'takeaway'`.
 - Modificadores con precio. La variación va en `note`, texto libre.
 - Mover ítems entre mesas, dividir cuenta, propina.
 
@@ -270,7 +281,7 @@ Toda escritura de ítem toca orders.updated_at (misma transacción).
 - [ ] Con `restaurant_mode` apagado, el POS se comporta exactamente como hoy
 
 **DoD:**
-- [ ] Sin migración nueva (usa las tablas de la migración 15)
+- [ ] Sin migración nueva (usa las tablas de la migración 16)
 - [ ] `POST /api/orders` (autenticado) → `{ id, type, table_id, status, created_at }` · 409 si la mesa ya tiene pedido abierto
 - [ ] `GET /api/orders?status=open` (autenticado) → `[{ id, table_id, table_name, total, items_pending, opened_minutes }]`
 - [ ] `GET /api/orders/{id}` (autenticado) → `{ id, type, table_id, status, total, items: [{ id, product_id, product_name, quantity, unit_price, subtotal, note, status }] }`
@@ -296,7 +307,7 @@ Toda escritura de ítem toca orders.updated_at (misma transacción).
 
 **Estado verificado:**
 - `createSale` (`internal/handler/sale.go:15-48`) calcula subtotales de ítems, arma `model.Sale` y llama `h.sales.Create`; después dispara la facturación electrónica en goroutine (`internal/handler/sale.go:44-46`).
-- `SaleService.Create` (`internal/service/sale.go:39`) es el punto único de negocio; el repositorio (`internal/repository/sale.go:36`) hace en una sola transacción: venta + `sale_payments` + `sale_items` + stock + movimiento de caja.
+- `SaleService.Create` (`internal/service/sale.go:39`) es el punto único de negocio; el repositorio (`internal/repository/sale.go:37`) hace en una sola transacción: venta + `sale_payments` + `sale_items` + stock + movimiento de caja.
 - El panel de pago vive dentro de `POSPage` con su propio estado: `payMethod`, `extraPayments`, `firstAmountInput`, `cashReceived` (`frontend/app/pos/page.tsx:652-658`), y la lógica de pagos mixtos en `paymentLines` / `addPaymentLine` (líneas 899-916). Los cálculos ya están fuera, en `frontend/lib/saleCalc.ts`, con tests.
 
 **Contexto técnico:**
@@ -318,7 +329,7 @@ El stock se descuenta aquí, no al tomar el pedido.
 ```
 
 **Scope — qué NO entra:**
-- Propina y división de cuenta (SPRINT-14).
+- Propina y división de cuenta (R-12 en `roadmap.md`).
 - Descuento global por pedido: se usa el mismo campo de descuento de la venta, sin UI nueva por línea.
 
 **Acceptance Criteria:**
@@ -432,9 +443,9 @@ todo el backlog del día).
 - **US-056 y US-057 comparten el catálogo de productos** con `app/pos/page.tsx`: `ProductCard` (línea 152) y el buscador. Extraer `ProductCard` a `components/` antes de copiarlo; ya va a ser su tercer uso.
 - **La extracción de `SalePaymentPanel` (US-057) es la única refactorización autorizada del sprint.** Hacerla en un commit aparte del checkout, y probar el POS antes de seguir: si se mezcla con la lógica nueva y algo se rompe, no se sabe cuál de las dos fue.
 - `repository.InsertAuditLog` acepta un `execer` (`internal/repository/audit.go:21`), así que la anulación de ítem y la cancelación de pedido escriben la auditoría **dentro** de la misma transacción. Fuera de ella, un rollback deja una auditoría de algo que nunca pasó.
-- `turn_number` no se usa en este sprint pero la columna se crea en la migración 15: SQLite no permite agregar columnas con `UNIQUE` después, y agregarla ahora evita una migración 16 solo para eso.
+- `turn_number` no se usa en este sprint pero la columna se crea en la migración 16: SQLite no permite agregar columnas con `UNIQUE` después, y agregarla ahora evita otra migración solo para eso.
 - Fechas en SQLite: usar `date('now','localtime')` para cualquier lógica de "hoy". `CURRENT_TIMESTAMP` guarda UTC y en Colombia (UTC-5) parte el día a las 7 p.m.
-- El `UPDATE` de `internal/repository/setup.go:83` lista las columnas una por una. Cada columna nueva de `business_config` hay que agregarla ahí o se guarda en silencio sin efecto — es un error fácil de no notar hasta la demo.
+- El `UPSERT` de `internal/repository/setup.go:83-92` lista las columnas una por una. Cada columna nueva de `business_config` hay que agregarla ahí o se guarda en silencio sin efecto — es un error fácil de no notar hasta la demo.
 - `orders.updated_at` no se actualiza solo: tocarlo explícitamente en toda escritura de ítem, o el KDS mostrará datos viejos.
 
 ---

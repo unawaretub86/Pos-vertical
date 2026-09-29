@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 )
 
 //go:embed all:out
@@ -20,7 +21,12 @@ func FileServer() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Try to open the requested path in the embedded FS
-		f, err := frontendFS.Open(r.URL.Path)
+		// io/fs requires unrooted paths (no leading slash) and "." for root.
+		cleanPath := strings.TrimPrefix(r.URL.Path, "/")
+		if cleanPath == "" {
+			cleanPath = "."
+		}
+		f, err := frontendFS.Open(cleanPath)
 		if err == nil {
 			f.Close()
 			fileServer.ServeHTTP(w, r)
