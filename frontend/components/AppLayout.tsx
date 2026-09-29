@@ -6,6 +6,7 @@ import { isAuthenticated, mustChangePassword } from '@/lib/auth';
 import { api } from '@/lib/api';
 import Sidebar from './Sidebar';
 import { BusinessConfigProvider } from '@/lib/business-config-context';
+import AssistantWidget from './AssistantWidget';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -127,6 +128,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {children}
         </div>
       </div>
+      <AssistantWidget />
     </BusinessConfigProvider>
   );
 }

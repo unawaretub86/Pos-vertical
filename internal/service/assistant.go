@@ -282,30 +282,66 @@ var intentExample = map[assistant.Intent]string{
 	assistant.IntentCreditFlow:  "cuánto fiaste",
 }
 
+// intentChip is the tappable chip offered for each AMBIGUOUS candidate. Unlike
+// intentExample (2nd person, only used to word the question), every chip is a
+// complete phrase the engine resolves back to the same intent (US-062 P-1).
+var intentChip = map[assistant.Intent]string{
+	assistant.IntentSales:       "cuánto vendí",
+	assistant.IntentProfit:      "cuánto gané",
+	assistant.IntentMargin:      "cuál es mi margen",
+	assistant.IntentTopProducts: "qué es lo que más vendo",
+	assistant.IntentTopMargin:   "en qué gano más",
+	assistant.IntentLowStock:    "qué se está acabando",
+	assistant.IntentDebtors:     "quién me debe",
+	assistant.IntentExpenses:    "cuánto he gastado",
+	assistant.IntentPaymentMix:  "cuánto me entró por nequi",
+	assistant.IntentCash:        "cuánta plata hay en caja",
+	assistant.IntentCreditFlow:  "cuánto fié hoy",
+}
+
 func ambiguousResult(q assistant.Query, tier string) *AskResult {
 	examples := make([]string, 0, len(q.Candidates))
+	chips := make([]string, 0, len(q.Candidates))
 	for _, c := range q.Candidates {
 		if ex, ok := intentExample[c]; ok {
 			examples = append(examples, ex)
+		}
+		if chip, ok := intentChip[c]; ok {
+			chips = append(chips, chip)
 		}
 	}
 	return &AskResult{
 		Intent:      "ambiguous",
 		Text:        "¿Te referís a " + strings.Join(examples, " o a ") + "?",
-		Suggestions: examples,
+		Suggestions: chips,
 		Tier:        tier,
 		Confidence:  q.Confidence,
 	}
 }
 
-// unresolvedSuggestions are the 4 date chips offered when Period.Unresolved (AC-10).
-var unresolvedSuggestions = []string{"hoy", "ayer", "esta semana", "este mes"}
+// unresolvedChips holds, per intent (lowercase), the complete phrases
+// offered when Period.Unresolved (AC-10, US-062 P-1). Only combinations the
+// engine resolves back to the same intent with that period are listed: there
+// is no universal period suffix, so some intents offer fewer than 4 chips.
+var unresolvedChips = map[string][]string{
+	"sales":        {"cuánto vendí hoy", "cuánto vendí ayer", "cuánto vendí esta semana", "cuánto vendí este mes"},
+	"profit":       {"cuánto gané hoy", "cuánto gané ayer", "cuánto gané esta semana"},
+	"margin":       {"cuál es mi margen hoy", "cuál es mi margen ayer", "cuál es mi margen esta semana", "cuál es mi margen este mes"},
+	"top_products": {"cuál es mi producto estrella hoy", "cuál es mi producto estrella ayer", "cuál es mi producto estrella esta semana", "cuál es mi producto estrella este mes"},
+	"top_margin":   {"en qué gano más hoy", "en qué gano más ayer"},
+	"low_stock":    {"qué se está acabando"},
+	"debtors":      {"quién me debe"},
+	"expenses":     {"cuánto he gastado hoy", "cuánto he gastado ayer", "cuánto he gastado esta semana", "cuánto he gastado este mes"},
+	"payment_mix":  {"cuánto me entró por nequi hoy", "cuánto me entró por nequi ayer", "cuánto me entró por nequi esta semana", "cuánto me entró por nequi este mes"},
+	"cash":         {"cuánto efectivo tengo hoy", "cuánto efectivo tengo ayer", "cuánto efectivo tengo esta semana", "cuánto efectivo tengo este mes"},
+	"credit_flow":  {"cuánto fié hoy", "cuánto fié ayer", "cuánto fié esta semana"},
+}
 
 func unresolvedPeriodResult(intent, tier string, confidence float64) *AskResult {
 	return &AskResult{
 		Intent:      intent,
 		Text:        "¿De qué fecha querés saber? Podés decir hoy, ayer, esta semana o este mes.",
-		Suggestions: append([]string{}, unresolvedSuggestions...),
+		Suggestions: append([]string{}, unresolvedChips[intent]...),
 		Tier:        tier,
 		Confidence:  confidence,
 	}

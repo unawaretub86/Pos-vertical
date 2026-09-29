@@ -42,7 +42,7 @@ Este sprint entrega **T1 (regex) + T2 (fuzzy matching)**, Go puro, cero dependen
 | US-059 | Extraer las métricas del dashboard a un repositorio parametrizable por rango | [x] Completo | 2026-09-23 |
 | US-060 | Motor de intenciones T1 (regex) + T2 (fuzzy) en Go puro | [x] Completo | 2026-09-23 |
 | US-061 | Servicio, endpoint `/ai/ask` y bitácora de consultas | [x] Completo | 2026-09-24 |
-| US-062 | Widget de chat en la app autenticada | [ ] Pendiente | — |
+| US-062 | Widget de chat en la app autenticada | [x] Completo (código y tests; **validación manual M-1..M-9 pendiente del PO**) | 2026-09-29 |
 | US-063 | Corregir el saldo de la cartera envejecida del dashboard (D-4) | [x] Completo | 2026-09-23 |
 | US-064 | Corregir `TotalPortfolioBalance`: no restar los saldos a favor (R-44) | [x] Completo | 2026-09-23 |
 | US-065 | Higiene de la fórmula de saldo: `List` reutiliza `customerBalanceFrom`, desempate estable en `AgingReceivables` (R-45) | [x] Completo | 2026-09-23 |
@@ -574,6 +574,46 @@ SUGERENCIAS
 - [ ] Verificación manual: preguntar "cuánto vendí hoy" y contrastar el número con la tarjeta del dashboard — deben coincidir
 - [ ] Verificación manual: entrar como `cashier` y confirmar que el botón no existe
 - [ ] Build limpio (`go build ./...`, `pnpm build`)
+
+### Criterios verificados
+
+> Cerrada el 2026-09-29 (nivel L; commits RED `4ef5a34`, implementación `378c6d0`; QA vuelta 1: OK, 0 bloqueantes, 3 MENOR). Los checkboxes de arriba son el enunciado original; el GATE 1 (Andrey, 2026-09-29) lo corrigió en cuatro puntos: (P-1) el backend de US-061 ahora emite chips que sí se resuelven; (P-2) el historial vive en un store de módulo y no en `useState`, porque `AppLayout` **no** es un layout compartido (cada página monta el suyo, p. ej. `app/pos/page.tsx:986`) y un `useState` se perdería al navegar; (P-4) el `text` del servidor se pinta tal cual (ya trae `$1.234.567`), sin re-formatear con `formatCOP`; (P-6) saludo aprobado tal cual.
+>
+> **PENDIENTE DE VALIDACIÓN MANUAL DEL PO (no verificado, no es OK):** M-1..M-9 requieren navegador o celular real y no son automatizables (vitest corre en entorno `node`, sin DOM). Cubren AC-1, 3, 5, 9, 10, 19 y 20: (M-1) botón abajo a la derecha como admin; (M-2) cajero sin botón; (M-3) sin botón en `/login`, `/setup`, `/onboarding`, `/change-password`; (M-4) "cuánto vendí hoy" coincide con la tarjeta "vendido" del dashboard; (M-5) legible en tema claro y oscuro; (M-6) 320 px: panel a pantalla completa, botón cerrar visible, sin scroll horizontal; (M-7) celular real con teclado abierto: el input queda visible; (M-8) Enter envía, input/botón/chips deshabilitados con "Pensando…" y el foco vuelve; (M-9) Dashboard → `/pos` → Dashboard conserva el historial, F5 lo vacía, y el Toast (misma esquina) no bloquea el botón.
+>
+> Tests: `frontend/lib/assistant.test.ts` (T-1..T-11, lógica pura y `fetch` simulado; 42 tests en 3 archivos con `pnpm test`), `internal/service/assistant_test.go`. `go build ./...`, `go test ./...`, `pnpm build` y `pnpm test` en verde; `pnpm lint` en 41 problemas, igual al baseline (R-35), ninguno en archivos nuevos. Sin migración, sin endpoint nuevo, sin dependencias npm nuevas (`git diff dev...HEAD -- frontend/package.json frontend/pnpm-lock.yaml` vacío).
+
+| AC | Criterio (EARS) | Tests |
+|---|---|---|
+| AC-1/AC-2 | CUANDO `AppLayout` está `ready` y el rol es `admin`, el sistema DEBE mostrar el botón flotante abajo a la derecha; SI `getUser()` es `null` o no es `admin`, NO DEBE renderizar botón ni panel. | `assistant.test.ts` T-7 (`canSeeAssistant`); render: **M-1, M-2 manual** |
+| AC-3 | El widget NO DEBE montarse en `/login`, `/setup`, `/onboarding` ni `/change-password` (se monta solo en `AppLayout`, no en `app/layout.tsx`). | Por construcción (QA: diff de `AppLayout.tsx` +2 líneas, `layout.tsx` sin cambios); **M-3 manual** |
+| AC-4 | MIENTRAS la ruta sea `/pos`, el sistema DEBE ocultar botón y panel con `display: none`; `/portfolio` y `/purchases` DEBEN mostrarlo. | `assistant.test.ts` T-8 (`isHiddenPath`) |
+| AC-5 | El widget DEBE usar solo variables CSS (excepción: `#000` sobre `--accent`). | **M-5 manual**; QA: grep de colores fijos (solo `boxShadow` rgba, MENOR) |
+| AC-6 | CUANDO se abre con historial vacío, el sistema DEBE mostrar el saludo aprobado y exactamente 3 chips: `cuánto vendí hoy`, `quién me debe`, `qué se está acabando`. | `assistant.test.ts` T-2 |
+| AC-7 | CUANDO se envía un texto no vacío, el sistema DEBE llamar `POST /ai/ask` con `{query: <texto sin espacios en los extremos>}` y mostrar pregunta y respuesta (`data.text`). | `assistant.test.ts` T-1, T-3 |
+| AC-8 | SI el texto está vacío o solo espacios, el sistema NO DEBE llamar al backend. | `assistant.test.ts` T-5 |
+| AC-9 | MIENTRAS haya una petición en curso, el sistema DEBE marcar `loading`, ignorar un segundo envío y rehabilitar todo al terminar. | `assistant.test.ts` T-3, T-5; deshabilitado visual y foco: **M-8 manual** |
+| AC-10 | CUANDO `text` trae líneas `N. …` o `- …`, el sistema DEBE renderizarlas como lista con encabezado antes y "y N más"/contraste/"Ojo: …" después. | `assistant.test.ts` T-6 (`parseAnswerText`); render: **M-4/M-8 manual** |
+| AC-11 | El sistema NO DEBE re-formatear los montos del `text`. | `assistant.test.ts` T-6 (los `$` del texto pasan intactos) |
+| AC-12/AC-13 | CUANDO se toca un chip, el sistema DEBE enviar exactamente su texto; en `unknown` o sin sugerencias DEBE mostrar los 3 chips del saludo; solo los de la última respuesta son pulsables. | `assistant.test.ts` T-11 (`activeChips`) |
+| AC-14 | SI la petición falla (red, 400/401/403/500 o cuerpo no-JSON), el sistema DEBE mostrar "No pude consultar los datos. Intentá de nuevo." sin exponer `forbidden`/`HTTP 500`, y rehabilitar el input. | `assistant.test.ts` T-4 |
+| AC-15a | CUANDO `intent = "ambiguous"`, `suggestions` DEBE ser el chip completo de cada candidato (tabla A del contrato, `intentChip` en `internal/service/assistant.go:288-300`); con "cuanto bendi y gaine": `["cuánto vendí","cuánto gané"]`; el texto `¿Te referís a cuánto vendiste o a cuánto ganaste?` no cambia. | `TestAssistant_T12_AmbiguousChipsRoundTrip`, `TestAssistant_T7_AmbiguousOffersCandidates` (endurecido, aserción exacta) |
+| AC-15b | CUANDO el periodo no se resuelve (`period: {}`), `suggestions` DEBE ser la lista del intent detectado (tabla B, `unresolvedChips` en `assistant.go:322-334`); con "cuanto vendi el juebes": `["cuánto vendí hoy","cuánto vendí ayer","cuánto vendí esta semana","cuánto vendí este mes"]`; "cuanto gane el juebes" → 3 chips; "quien me debe el juebes" → `["quién me debe"]`. | `TestAssistant_T13_UnresolvedChipsRoundTrip`, `TestAssistant_T10_UnresolvedPeriodAsksForDate` (actualizado) |
+| AC-15c | CUANDO se reenvía cada chip de las tablas A y B, el resultado DEBE tener el mismo intent, `period.label` no vacío y texto que no pide fecha; con ventas de $40.000 hoy y $50.000 ayer, `cuánto vendí hoy` → `$40.000` y `cuánto vendí ayer` → `$50.000`. | `TestAssistant_T12_AmbiguousChipsRoundTrip` (11 intents), `TestAssistant_T13_UnresolvedChipsRoundTrip` (11 intents) |
+| AC-15d | Los chips de `unknown` NO DEBEN cambiar. | `TestAssistant_T6_UnknownReturnsThreeSuggestions` (sin cambio) |
+| AC-16/AC-17 | MIENTRAS la SPA no se recargue, el historial DEBE conservarse al navegar; tras F5 DEBE quedar vacío y NO DEBE escribirse en `localStorage`/`sessionStorage`/servidor. | `assistant.test.ts` T-9; navegación real y F5: **M-9 manual** |
+| AC-18 | SI `getUser().id` cambia, el sistema DEBE vaciar el historial; misma id no lo vacía. | `assistant.test.ts` T-10 (`bindUser`) |
+| AC-19 | MIENTRAS el viewport sea ≤ 767 px, el panel DEBE ocupar toda la pantalla (sin desbordar a 320 px) con botón de cerrar; en escritorio, panel acotado en la esquina. | **M-6 manual** (por código: `minWidth: 0`, `overflowWrap: anywhere`, `overflowX: hidden`) |
+| AC-20 | CUANDO el teclado virtual está abierto, el input NO DEBE quedar tapado (`100dvh` + `visualViewport`). | **M-7 manual en celular real** (no verificable en vitest) |
+| AC-21 | Sin migración, sin endpoint nuevo, sin dependencias npm nuevas; `AssistantWidget` importado en `AppLayout.tsx`, no en `app/layout.tsx`. | QA: `git diff dev...HEAD` (package.json, lockfile, `internal/repository`, `internal/database` vacíos) |
+| AC-22 | `go build ./...`, `go test ./...`, `pnpm build` y `pnpm test` DEBEN pasar; `pnpm lint` NO DEBE superar 41 problemas (R-35). | Ejecución de QA: todos verdes; lint = 41 |
+
+**Hallazgos de QA (3 MENOR, no bloqueantes, disposición):**
+- `AssistantWidget.tsx:190, 215`: `boxShadow` con `rgba(0,0,0,…)` fijo. No es color de superficie ni de texto y no rompe el tema oscuro. **Aceptado, sin ítem de roadmap.**
+- `assistant.ts:150`: `catch {}` descarta el error a propósito (AC-14) y no deja log en consola. **Pasa a roadmap (R-54).**
+- `AssistantWidget.tsx:173-179`: `useIsMobile` parte en `false` en el primer render; solo riesgo teórico (el panel se abre por clic). **Aceptado, sin ítem de roadmap.**
+
+**Fuera de alcance que pasó a roadmap:** redirigir a `/login` en 401 (R-49), layout compartido de Next (R-50), herramienta de tests de componentes (R-51), periodos incompletos por intent en las sugerencias (R-52), chips de `ambiguous` que pierden el periodo del usuario (R-53).
 
 ---
 

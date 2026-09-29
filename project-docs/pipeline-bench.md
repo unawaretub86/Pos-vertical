@@ -8,13 +8,13 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 
 > Se actualiza al final de cada sesión de trabajo con el pipeline.
 
-**Última corrida:** 6 (US-061, nivel M, 2026-09-24). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos.
+**Última corrida:** 7 (US-062, nivel L, 2026-09-29). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos. **SPRINT-14 completo en código y tests** (US-059 a US-065); queda pendiente la validación manual del teclado en celular real (M-7 / AC-20) de US-062.
 
-**Aplicado antes de esta corrida:** el ajuste de retoma mecánico seguía vigente, pero esta corrida NO tuvo agentes vivos para retomar en ningún punto — las 3 invocaciones del analyst y las 3 del implementer fueron arranques en frío legítimos (`ListAgents` vacío cada vez), no violaciones del chequeo.
+**Aplicado antes de esta corrida:** el ajuste de la corrida 6 (checklist + bloques de tiempo declarados en `implementer.md`, commit `37e5c10`). En la corrida 7 el implementer terminó en 3,9 min sin colgarse, pero el prompt del orquestador también repitió el aviso de trozar archivos y de reportar cada ~20-25 min, así que no se puede separar qué parte del resultado es del ajuste. Una sola muestra: no concluir aún.
 
-**Nuevo problema, sin ajuste aplicado todavía (propuesto al PO al cierre de esta corrida):** el implementer se colgó DOS veces. La primera (600s sin progreso) la agarró el watchdog automático. La segunda corrió **5 horas reales** sin que el watchdog la cortara — el orquestador la mató a mano con `TaskStop` tras una queja del PO. El ajuste de la corrida 5 ("avisarle que divida archivos grandes") no alcanza para este tipo de cuelgue silencioso.
+**Abierto, sin ajuste aplicado:** (1) el pipeline no tiene forma de verificar UI en navegador: el agente `qa` no tiene herramienta de navegador y el orquestador tampoco intentó una hasta que el PO lo preguntó; la verificación con Edge headless (Playwright) encontró R-55 (ver corrida 7). (2) El clasificador de auto mode falló en Bash y PowerShell durante el cierre y frenó el pipeline en el checkpoint de `close`.
 
-**Próxima US:** US-062 (widget de chat), la última pendiente de SPRINT-14, depende de esta US-061 ya cerrada (endpoint `/ai/ask` funcional).
+**Próxima US:** ninguna en SPRINT-14. Lo que sigue lo define el roadmap (`project-docs/roadmap.md`), que ahora incluye R-49 a R-55 originados en US-062.
 
 **Cómo retomar:** en una sesión nueva, elegir la próxima US y correr `/us US-XXX [M|L]`.
 
@@ -40,6 +40,7 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 | 4 | 2026-09-23 | US-065 | M | ~282k (A 176k = 117k+59k · I 59k · Q 47k) | 113 | ~13.3 | 0 | 1 | 0 | 1 cerrado (R-45) | 1 (retomar) | +217 / −20, 7 archivos |
 | 5 | 2026-09-23 | US-060 | L | ~522k (A 154k · T 109k · I 175k · Q 85k) | 160 | ~83.8 | 1 (implementer cayó por límite de salida) | 1 | 5 | 1 (R-46) | 0 | +1.333 / −2, 9 archivos |
 | 6 | 2026-09-24 | US-061 | M | ~708k (A 372k=149k+109k+115k · I 186k, 2 intentos previos sin telemetría · Q 150k) | 281 (incompleto, 2 intentos de implementer sin `tool_uses` reportado) | ~46.7 agente (+~310 min de pared perdidos en 2 cuelgues, ver abajo) | 2 (implementer colgado dos veces) | 1 | 6 | 2 nuevos (R-47, R-48) + 1 cerrado parcial (R-06) | 0 | +1.867 / −20, 16 archivos |
+| 7 | 2026-09-29 | US-062 | L | ~538k (A 340k=135k+102k+75k+28k · T 65k · I 64k · Q 69k) | 168 | ~27.4 | 0 (más 1 parada por el clasificador de auto mode, ajena al contrato) | 1 | 7 discrepancias de contrato (D-1..D-7) + 1 hallazgo preexistente fuera de alcance | 7 nuevos (R-49 a R-55) | 0 | +1.198 / −8, 9 archivos |
 
 ### Tendencia
 
@@ -351,3 +352,59 @@ Solo los dos gates. La única fricción no fue una parada del contrato sino un e
 
 - ¿El límite de tiempo de pared (si el PO lo aprueba) reduce los cuelgues silenciosos del implementer, o el problema es específico de "vueltas de completar trabajo ajeno" como la de esta corrida?
 - US-062 (widget de chat, frontend) es la primera US de este bloque que toca React/Next.js — buen caso para medir si el patrón de cuelgues es un problema del agente `implementer` en general o algo específico de Go/backend.
+
+## Corrida 7 — US-062 (widget de chat del asistente, nivel L)
+
+**US:** widget flotante de chat en la app autenticada que consume `POST /ai/ask` (US-061): `frontend/lib/assistant.ts` (lógica pura + store de módulo), `AssistantWidget.tsx` (solo render), montaje en `AppLayout.tsx`, más un cambio de backend por decisión del PO en GATE 1 (chips de sugerencia como frases completas, `internal/service/assistant.go`). Primera US frontend del pipeline. **Rama:** `us/US-062` → `4ef5a34` (RED) → `378c6d0` (implementación) → `1b32e38` (cierre) → `740d067` (R-55), fusionados en `dev` por squash.
+
+### Por agente
+
+| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 4 (contrato; ajuste con las decisiones del GATE 1; cierre; registro de R-55) — **las 4 en frío, `ListAgents` nunca mostró una viva** | 135k → 102k → 75k → 28k | 48+26+26+12 = 112 | 652+193+175+50 = 1.070 s |
+| test-author | 1 | 65k | 16 | 135 s |
+| implementer | 1 | 64k | 17 | 236 s |
+| qa | 1 | 69k | 23 | 206 s |
+| **Total** | 7 | ~538k (340+65+64+69) | 168 | 1.646 s ≈ 27,4 min |
+
+### Qué encontró
+
+| Tipo | Hallazgo | Quién |
+|---|---|---|
+| Defecto real 🔴 | Los chips que emitía el backend no funcionaban al reenviarlos (`hoy`, `ayer`, `cuánto vendiste`… devolvían `unknown`). El analyst lo demostró ejecutando el motor; el PO eligió la opción A (cambiar las sugerencias en `assistant.go`, código de US-061 ya cerrada) → T-12 y T-13 de ida y vuelta | analyst (D-2) |
+| Afirmación falsa del sprint | "`AppLayout` sigue montado al navegar": cada una de las 13 páginas monta su propio `AppLayout`; un `useState` perdería el historial → store de módulo (D-1) | analyst |
+| Otras discrepancias de contrato | D-3..D-7: `formatCOP` casi no aplica, las listas hay que parsearlas del `text`, `isMobile` no es reutilizable, `interactiveWidget` ausente (teclado no testeable), `#000` sobre `--accent` | analyst |
+| Hallazgo preexistente, fuera de alcance 🔴 | `web/static.go:23` abre la ruta con barra inicial, `io/fs` la rechaza, y el binario sirve `index.html` para toda URL (incluidos los `.js`): la UI embebida queda en blanco. Además `frontend/lib/api.ts:3` fija `http://localhost:8080/api` y el CORS solo acepta `:3000`. **No lo vio el QA automatizado; lo encontró la verificación manual con navegador** → **R-55** | orquestador, con Edge headless (Playwright) |
+| Menores de QA, aceptados | `boxShadow` con `rgba` fijo; `catch {}` sin log (→ R-54); `useIsMobile` parte en `false` | qa |
+| Deferido a roadmap | R-49 (401 → `/login`), R-50 (layout compartido), R-51 (tests de componentes), R-52 (periodos incompletos por intent), R-53 (chips ambiguos pierden el periodo), R-54 (`catch {}` sin log), R-55 (frontend embebido) | analyst |
+
+### Paradas no planeadas: 0 del contrato
+
+Ninguna parada por algo que el contrato no resolviera, ningún cuelgue del implementer. Sí hubo una interrupción ajena al pipeline: el clasificador de auto mode devolvió errores en Bash y PowerShell durante el cierre (~10 intentos) y el pipeline quedó frenado en el checkpoint de `close` hasta que volvió solo. Con herramientas de solo lectura (Grep/Read) se pudo verificar el contenido de los docs, pero no el `git status`.
+
+### Verificación manual con navegador
+
+El agente `qa` no tiene herramienta de navegador y marcó M-1..M-9 como pendientes (correcto). El orquestador no lo intentó hasta que el PO preguntó por qué no se había hecho. Se hizo entonces con `playwright-core` instalado fuera del repo (en el directorio temporal del job) y el Edge instalado: 23 comprobaciones, 21 OK y 2 falsos fallos por errores del propio script (regex sensible a mayúsculas, semilla de datos incompleta). Cubrió M-1..M-6, M-8, M-9, P-1 opción A, P-3, saludo, carga y foco, historial por navegación SPA y F5, sin storage, tema claro/oscuro, 320 px y rol cajero. Quedó sin verificar el teclado en celular real (AC-20) y el solape con el Toast.
+
+Costo real de armar el entorno: la primera pasada fue vacía sin saberlo (las páginas salían en blanco por R-55 y "0 botones" pasaba trivialmente); hubo que agregar una aserción de "la página renderizó texto" para que la comprobación M-3 valiera algo. Compilar con `-overlay` para cambiar el puerto (8080 estaba ocupado por otro proceso del PO), reconstruir el frontend con `NEXT_PUBLIC_API_URL=/api` y un servidor Node con proxy propio, por R-55 y por el CORS a `:3000`.
+
+### Fricción operativa
+
+- Un solo commit de `implementer.md` (`37e5c10`) más un prompt con aviso de trozar archivos y reportar por bloques coincidieron con la primera corrida sin cuelgues del implementer en tres. No se puede atribuir la mejora a uno de los dos.
+- El analyst se lanzó en frío las 4 veces: `ListAgents` no mostró ninguna instancia viva cada vez que se consultó (los agentes terminados desaparecen de la lista poco después de entregar). El chequeo mecánico se cumplió, pero en la práctica ahora nunca hay retoma posible salvo que el orquestador le escriba al agente antes de que termine.
+- Git Bash reescribe valores como `NEXT_PUBLIC_API_URL=/api` a `C:/Program Files/Git/api` y mangla los acentos de `curl -d` inline; hay que usar `MSYS_NO_PATHCONV=1` y `--data-binary @archivo`.
+- En el checkout principal apareció trabajo ajeno sin commitear durante la sesión (arreglo en curso de `web/static.go`, un borrador `SPRINT-15-Asistente-Continuacion.md`, `web/out/.gitkeep` borrado por una compilación). El merge por squash no los tocó porque no se solapaban con el diff y el commit se hizo sin `-a`.
+
+### Ajustes propuestos (pendientes del "sí" del PO)
+
+| Ajuste | Dónde |
+|---|---|
+| Para US con UI, agregar al paso 4 una verificación con navegador (Playwright + Edge, o la herramienta de navegador integrada si está disponible) hecha por el orquestador o un agente con esa herramienta, y exigir que las comprobaciones "no aparece X" incluyan una aserción de que la página realmente renderizó | `.claude/commands/us.md`, contrato §4 (M-n) |
+| Documentar en `project-docs/` (o como skill de proyecto vía `/run-skill-generator`) cómo levantar el binario con un puerto/DB de prueba y el frontend con API relativa, para no reconstruirlo cada vez; deja de hacer falta cuando R-55 se cierre | `project-docs/` o `.claude/skills/` |
+| Aclarar en `us.md` que, tras entregar, un agente desaparece de `ListAgents`, y que la retoma solo es posible si el orquestador manda `SendMessage` antes; o cambiar el chequeo a "usa el agentId de la invocación anterior" | `.claude/commands/us.md` |
+
+### Qué medir en la corrida 8
+
+- ¿El implementer vuelve a terminar sin cuelgues en una US de tamaño similar (frontend + backend)? Con una muestra más se puede intentar separar el efecto del ajuste de `implementer.md` del efecto del aviso en el prompt.
+- Si el PO aprueba la verificación con navegador, cuánto tiempo y tokens añade por US con UI.
+- Una US que arranque con `ListAgents` mostrando algo vivo, para probar que la ruta de retoma sigue funcionando.

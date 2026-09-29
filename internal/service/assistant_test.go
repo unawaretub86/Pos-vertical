@@ -225,6 +225,19 @@ func TestAssistant_T7_AmbiguousOffersCandidates(t *testing.T) {
 	if len(result.Suggestions) != 2 {
 		t.Errorf("len(Suggestions) = %d, want exactly 2 (SALES/PROFIT): %v", len(result.Suggestions), result.Suggestions)
 	}
+	// US-062 (AC-15a): first-person chips the engine resolves on their own.
+	wantChips := []string{"cuánto vendí", "cuánto gané"}
+	if len(result.Suggestions) == len(wantChips) {
+		for i, w := range wantChips {
+			if result.Suggestions[i] != w {
+				t.Errorf("Suggestions[%d] = %q, want %q", i, result.Suggestions[i], w)
+			}
+		}
+	}
+	// The clarifying text keeps the 2nd-person wording (contract AC-15a).
+	if result.Text != "¿Te referís a cuánto vendiste o a cuánto ganaste?" {
+		t.Errorf("text = %q, want the unchanged clarifying question", result.Text)
+	}
 }
 
 // ─── T-8 (AC-8) ───────────────────────────────────────────────────────────
@@ -316,7 +329,9 @@ func TestAssistant_T10_UnresolvedPeriodAsksForDate(t *testing.T) {
 	if strings.Contains(result.Text, "40.000") || strings.Contains(result.Text, "50.000") {
 		t.Errorf("text = %q, must NOT leak any figure when the period is unresolved", result.Text)
 	}
-	want := []string{"hoy", "ayer", "esta semana", "este mes"}
+	// US-062 (AC-15b): "cuanto vendi el juebes" is a sales query, so the chips
+	// are full sales phrases the engine resolves on their own.
+	want := []string{"cuánto vendí hoy", "cuánto vendí ayer", "cuánto vendí esta semana", "cuánto vendí este mes"}
 	if len(result.Suggestions) != len(want) {
 		t.Fatalf("Suggestions = %v, want %v", result.Suggestions, want)
 	}
@@ -488,5 +503,177 @@ func TestAssistant_T25_PaymentMixClarifiesNequi(t *testing.T) {
 	}
 	if !strings.Contains(result.Text, "Nequi") || !strings.Contains(result.Text, "Daviplata") {
 		t.Errorf("text = %q, want the explicit Nequi/Daviplata clarification", result.Text)
+	}
+}
+
+// ─── T-12 (US-062 AC-15a, AC-15c) ─────────────────────────────────────────
+
+func TestAssistant_T12_AmbiguousChipsRoundTrip(t *testing.T) {
+	env := newAssistantTestEnv(t)
+
+	result, err := env.svc.Ask(context.Background(), testUserID, "cuanto bendi y gaine")
+	if err != nil {
+		t.Fatalf("Ask: %v", err)
+	}
+	if result.Intent != "ambiguous" {
+		t.Fatalf("Intent = %q, want ambiguous", result.Intent)
+	}
+	wantChips := []string{"cuánto vendí", "cuánto gané"}
+	if len(result.Suggestions) != len(wantChips) {
+		t.Fatalf("Suggestions = %v, want exactly %v", result.Suggestions, wantChips)
+	}
+	for i, w := range wantChips {
+		if result.Suggestions[i] != w {
+			t.Errorf("Suggestions[%d] = %q, want %q", i, result.Suggestions[i], w)
+		}
+	}
+
+	// Round trip: each chip resolves to its own intent, tier regex, label Hoy.
+	wantIntents := []string{"sales", "profit"}
+	for i, chip := range result.Suggestions {
+		got, err := env.svc.Ask(context.Background(), testUserID, chip)
+		if err != nil {
+			t.Fatalf("Ask(%q): %v", chip, err)
+		}
+		if got.Intent != wantIntents[i] {
+			t.Errorf("Ask(%q).Intent = %q, want %q", chip, got.Intent, wantIntents[i])
+		}
+		if got.Tier != "regex" {
+			t.Errorf("Ask(%q).Tier = %q, want regex", chip, got.Tier)
+		}
+		if got.Period.Label != "Hoy" {
+			t.Errorf("Ask(%q).Period.Label = %q, want Hoy", chip, got.Period.Label)
+		}
+	}
+
+	// Table A (contract §2.4): all 11 intents, chip -> same intent.
+	tableA := []struct {
+		chip   string
+		intent string
+	}{
+		{"cuánto vendí", "sales"},
+		{"cuánto gané", "profit"},
+		{"cuál es mi margen", "margin"},
+		{"qué es lo que más vendo", "top_products"},
+		{"en qué gano más", "top_margin"},
+		{"qué se está acabando", "low_stock"},
+		{"quién me debe", "debtors"},
+		{"cuánto he gastado", "expenses"},
+		{"cuánto me entró por nequi", "payment_mix"},
+		{"cuánta plata hay en caja", "cash"},
+		{"cuánto fié hoy", "credit_flow"},
+	}
+	for _, c := range tableA {
+		got, err := env.svc.Ask(context.Background(), testUserID, c.chip)
+		if err != nil {
+			t.Fatalf("Ask(%q): %v", c.chip, err)
+		}
+		if got.Intent != c.intent {
+			t.Errorf("Ask(%q).Intent = %q, want %q", c.chip, got.Intent, c.intent)
+		}
+	}
+}
+
+// ─── T-13 (US-062 AC-15b, AC-15c) ─────────────────────────────────────────
+
+func TestAssistant_T13_UnresolvedChipsRoundTrip(t *testing.T) {
+	env := newAssistantTestEnv(t)
+	hoy0 := today0()
+	// Same seed as T10: $40.000 today, $50.000 yesterday.
+	env.exec(t, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 40000, 40000, 'completed', 'cash', ?)`, hoy0.Add(time.Hour))
+	env.exec(t, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 50000, 50000, 'completed', 'cash', ?)`, hoy0.Add(-12*time.Hour))
+
+	assertChips := func(query string, want []string) {
+		t.Helper()
+		got, err := env.svc.Ask(context.Background(), testUserID, query)
+		if err != nil {
+			t.Fatalf("Ask(%q): %v", query, err)
+		}
+		if len(got.Suggestions) != len(want) {
+			t.Fatalf("Ask(%q).Suggestions = %v, want exactly %v", query, got.Suggestions, want)
+		}
+		for i, w := range want {
+			if got.Suggestions[i] != w {
+				t.Errorf("Ask(%q).Suggestions[%d] = %q, want %q", query, i, got.Suggestions[i], w)
+			}
+		}
+	}
+
+	salesChips := []string{"cuánto vendí hoy", "cuánto vendí ayer", "cuánto vendí esta semana", "cuánto vendí este mes"}
+	assertChips("cuanto vendi el juebes", salesChips)
+	assertChips("cuanto gane el juebes", []string{"cuánto gané hoy", "cuánto gané ayer", "cuánto gané esta semana"})
+	assertChips("quien me debe el juebes", []string{"quién me debe"})
+
+	// Round trip of the sales chips with real figures.
+	hoy, err := env.svc.Ask(context.Background(), testUserID, salesChips[0])
+	if err != nil {
+		t.Fatalf("Ask(hoy): %v", err)
+	}
+	if hoy.Period.Label != "Hoy" || !strings.Contains(hoy.Text, "$40.000") {
+		t.Errorf("hoy: label=%q text=%q, want label Hoy and $40.000", hoy.Period.Label, hoy.Text)
+	}
+	ayer, err := env.svc.Ask(context.Background(), testUserID, salesChips[1])
+	if err != nil {
+		t.Fatalf("Ask(ayer): %v", err)
+	}
+	if ayer.Period.Label != "Ayer" || !strings.Contains(ayer.Text, "$50.000") {
+		t.Errorf("ayer: label=%q text=%q, want label Ayer and $50.000", ayer.Period.Label, ayer.Text)
+	}
+	for i, wantLabel := range map[int]string{2: "Esta semana", 3: "Este mes"} {
+		got, err := env.svc.Ask(context.Background(), testUserID, salesChips[i])
+		if err != nil {
+			t.Fatalf("Ask(%q): %v", salesChips[i], err)
+		}
+		if got.Intent != "sales" || got.Period.Label != wantLabel {
+			t.Errorf("Ask(%q): intent=%q label=%q, want sales / %q", salesChips[i], got.Intent, got.Period.Label, wantLabel)
+		}
+	}
+
+	// Table B (contract §2.4): every chip of every intent resolves to the same
+	// intent, with a period label and without asking for a date again.
+	tableB := []struct {
+		intent string
+		chips  []string
+	}{
+		{"sales", salesChips},
+		{"profit", []string{"cuánto gané hoy", "cuánto gané ayer", "cuánto gané esta semana"}},
+		{"margin", []string{"cuál es mi margen hoy", "cuál es mi margen ayer", "cuál es mi margen esta semana", "cuál es mi margen este mes"}},
+		{"top_products", []string{"cuál es mi producto estrella hoy", "cuál es mi producto estrella ayer", "cuál es mi producto estrella esta semana", "cuál es mi producto estrella este mes"}},
+		{"top_margin", []string{"en qué gano más hoy", "en qué gano más ayer"}},
+		{"low_stock", []string{"qué se está acabando"}},
+		{"debtors", []string{"quién me debe"}},
+		{"expenses", []string{"cuánto he gastado hoy", "cuánto he gastado ayer", "cuánto he gastado esta semana", "cuánto he gastado este mes"}},
+		{"payment_mix", []string{"cuánto me entró por nequi hoy", "cuánto me entró por nequi ayer", "cuánto me entró por nequi esta semana", "cuánto me entró por nequi este mes"}},
+		{"cash", []string{"cuánto efectivo tengo hoy", "cuánto efectivo tengo ayer", "cuánto efectivo tengo esta semana", "cuánto efectivo tengo este mes"}},
+		{"credit_flow", []string{"cuánto fié hoy", "cuánto fié ayer", "cuánto fié esta semana"}},
+	}
+	for _, row := range tableB {
+		for _, chip := range row.chips {
+			got, err := env.svc.Ask(context.Background(), testUserID, chip)
+			if err != nil {
+				t.Fatalf("Ask(%q): %v", chip, err)
+			}
+			if got.Intent != row.intent {
+				t.Errorf("Ask(%q).Intent = %q, want %q", chip, got.Intent, row.intent)
+			}
+			if got.Period.Label == "" {
+				t.Errorf("Ask(%q).Period.Label is empty, want a resolved period", chip)
+			}
+			if strings.Contains(got.Text, "De qué fecha") {
+				t.Errorf("Ask(%q).Text = %q, must not ask for a date again", chip, got.Text)
+			}
+		}
+	}
+
+	// Each unresolved-period query of table B must itself emit that intent's
+	// own row (order and content), not just the sales list.
+	for _, q := range []struct {
+		query string
+		want  []string
+	}{
+		{"cuanto gane el juebes", tableB[1].chips},
+		{"quien me debe el juebes", tableB[6].chips},
+	} {
+		assertChips(q.query, q.want)
 	}
 }

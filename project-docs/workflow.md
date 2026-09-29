@@ -62,4 +62,4 @@ Aplica a formas de interactuar que el usuario no ha visto antes. No a features i
 | SPRINT-11 | QA de Cálculos, Proveedores/Compras y Cierre de Caja | ✅ Completo |
 | SPRINT-12 | Resumen WhatsApp al Dueño y Acceso LAN desde Celular | ⬜ Pendiente |
 | SPRINT-13 | Mesas, Pedidos y Pantalla de Barra (módulo restaurante) | ⬜ Pendiente |
-| SPRINT-14 | Asistente Local de Consultas (motor de intenciones offline) | 🔄 En progreso: US-059, US-060, US-061, US-063, US-064 y US-065 completas, US-062 pendiente |
+| SPRINT-14 | Asistente Local de Consultas (motor de intenciones offline) | ✅ Completo en código y tests (US-059 a US-065). **Pendiente: validación manual del PO de US-062 (M-1..M-9: visual, tema, 320 px, teclado en celular real)** |
