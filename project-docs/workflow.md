@@ -61,5 +61,5 @@ Aplica a formas de interactuar que el usuario no ha visto antes. No a features i
 | SPRINT-10 | Cobro Mixto, Auditoría y Gastos | ✅ Completo |
 | SPRINT-11 | QA de Cálculos, Proveedores/Compras y Cierre de Caja | ✅ Completo |
 | SPRINT-12 | Resumen WhatsApp al Dueño y Acceso LAN desde Celular | ⬜ Pendiente |
-| SPRINT-13 | Mesas, Pedidos y Pantalla de Barra (módulo restaurante) | 🔄 En curso: US-055 completa en código y tests (2026-09-29; pendiente verificación manual T-17 de Andrey); US-054, US-056, US-057, US-058 pendientes |
+| SPRINT-13 | Mesas, Pedidos y Pantalla de Barra (módulo restaurante) | 🔄 En curso: US-055 completa en código, tests y navegador (2026-09-29); US-054, US-056, US-057, US-058 pendientes |
 | SPRINT-14 | Asistente Local de Consultas (motor de intenciones offline) | ✅ Completo en código y tests (US-059 a US-065). **Pendiente: validación manual del PO de US-062 (M-1..M-9: visual, tema, 320 px, teclado en celular real)** |

@@ -23,7 +23,7 @@
 
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
-| US-055 | Migración 16, modo restaurante y gestión de mesas | [x] Completa en código y tests (UI pendiente de verificación manual T-17) | 2026-09-29 |
+| US-055 | Migración 16, modo restaurante y gestión de mesas | [x] Completa en código, tests y verificación en navegador (2026-09-29) | 2026-09-29 |
 | US-054 | Acceso al POS desde el celular/tablet por WiFi local (deuda SPRINT-12) + R-55 servir el frontend desde el binario | [ ] Pendiente | — |
 | US-056 | Pedido por mesa: abrir, agregar ítems con nota, anular, cancelar | [ ] Pendiente | — |
 | US-057 | Cobro del pedido reusando el flujo de venta | [ ] Pendiente | — |
@@ -178,13 +178,10 @@ QA: OK, 0 bloqueantes. `go build`, `go test ./...`, `pnpm build`, `pnpm test` (4
 - AC-16 y AC-17 (sidebar): con `restaurant_mode` apagado no hay "Mesas" ni "Barra" para nadie; encendido las ven admin y `cashier` (este último sin `/settings`). `frontend/lib/nav.test.ts`, tres casos de `describe('filterNavItems (T-16)')`.
 - AC-21: build, tests y lint sin problemas nuevos (QA, T-18).
 
-**Pendientes de verificación manual (T-17), a cargo de Andrey.** La QA no pudo hacer smoke: el puerto 8080 está fijo en `cmd/pos/main.go:41` y lo ocupaba el POS de Andrey. Revisado solo por lectura; falta verlo en el navegador:
-- AC-4: guardar el nombre en Ajustes con `lan_access_enabled=1` previo en la DB lo deja en 1.
-- AC-15: el toggle "Modo restaurante" persiste y, tras guardar, aparecen la sección de mesas y "Mesas"/"Barra" en el sidebar.
-- AC-16/AC-17 (sección en Ajustes): con el toggle apagado la sección de mesas no se ve.
-- AC-18: crear "Mesa 1" dos veces, nombre vacío, y desactivar una mesa con pedido abierto muestran el mensaje del servidor y no cambian la lista (el último solo probable con un pedido sembrado por SQL, ya que US-056 aún no existe).
-- AC-19: sin mesas se ve el texto guía y el botón de crear.
-- AC-20: la tabla de mesas no desborda a 320 px.
+**Verificación en navegador (T-17), 2026-09-29.** La QA de la vuelta 1 no pudo hacer smoke (puerto 8080 fijo en `cmd/pos/main.go:41`, ocupado). El orquestador la hizo después con Edge + playwright-core (`e2e.js`), binario del worktree, DB nueva, 320 px. Halló un BLOQUEANTE que la QA no vio: `SettingsPage` consumía `useBusinessConfig()` fuera del provider (`frontend/components/AppLayout.tsx:56`) y recibía `defaultConfig`, así que la sección Mesas no se renderizaba. Arreglado en b861090: `SettingsContent` (`frontend/app/settings/page.tsx:181`) va dentro de `<AppLayout>` (`:580-581`). QA vuelta 2: OK, 1 MENOR (`settings/page.tsx:105-121`: la carga de mesas está duplicada entre `load()` y un `useEffect`; sin efecto funcional).
+- Verificado en navegador: sin modo restaurante no hay sección Mesas (AC-16); el toggle persiste y aparece la sección (AC-15, AC-17); estado vacío con texto guía y botón (AC-19); crear mesa; nombre duplicado y nombre vacío muestran el error del servidor y no cambian la lista (AC-18); desactivar; sin scroll horizontal a 320 px (AC-20); `restaurant_mode` sigue en `true` tras guardar el formulario (AC-4, parte `restaurant_mode`); el sidebar muestra "Mesas" y "Barra" (AC-17).
+- No cubierto en navegador: AC-4 con `lan_access_enabled=1` previo en la DB (queda cubierto por lectura, `settings/page.tsx:235-236`, y por `TestSetup_T3_PersistsAndClearsFlags` a nivel API); desactivar una mesa con pedido abierto (AC-18, requiere pedido sembrado por SQL; sí lo cubre `TestTables_T10_DeleteBlockedByOpenOrder`); revisión de tema claro/oscuro y dispositivo real, a cargo de Andrey si lo desea.
+- Ruido observado, ya cubierto: cargar `/settings` u otras rutas directo devolvía el dashboard; es R-55 (`web/static.go`, planeado en US-054). Patrón repetido en `CustomerDetailClient` registrado como R-61.
 
 ---
 
