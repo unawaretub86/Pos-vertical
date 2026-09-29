@@ -177,7 +177,8 @@ function TablesSection() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
+// Inner component: must render INSIDE AppLayout so useBusinessConfig sees the provider.
+function SettingsContent() {
   const { toast } = useToast();
   const { config: bizConfig, invalidate: invalidateConfig } = useBusinessConfig();
   const router = useRouter();
@@ -285,7 +286,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppLayout>
+    <>
       <Topbar title="Configuración" subtitle="Negocio, tickets y preferencias" />
 
       <div style={{ padding: '24px', maxWidth: '680px' }}>
@@ -570,6 +571,14 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+    </>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <AppLayout>
+      <SettingsContent />
     </AppLayout>
   );
 }
