@@ -5,12 +5,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { clearAuth, getUser } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
 import { useBusinessConfig } from '@/lib/business-config-context';
+import { filterNavItems } from '@/lib/nav';
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
   adminOnly?: boolean;
+  restaurantOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -41,6 +43,26 @@ const NAV_ITEMS: NavItem[] = [
         <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
       </svg>
     ),
+  },
+  {
+    href: '/mesas',
+    label: 'Mesas',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="9" width="18" height="4" rx="1"/><line x1="6" y1="13" x2="6" y2="20"/><line x1="18" y1="13" x2="18" y2="20"/>
+      </svg>
+    ),
+    restaurantOnly: true,
+  },
+  {
+    href: '/barra',
+    label: 'Barra',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+      </svg>
+    ),
+    restaurantOnly: true,
   },
   {
     href: '/customers',
@@ -140,7 +162,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const isAdmin = user?.role === 'admin';
   const { config: bizConfig } = useBusinessConfig();
 
-  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
+  const visibleItems = filterNavItems(NAV_ITEMS, { isAdmin, restaurantMode: bizConfig.restaurant_mode });
 
   const initials = user?.username
     ? user.username.slice(0, 2).toUpperCase()

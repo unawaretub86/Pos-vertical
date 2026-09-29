@@ -37,6 +37,7 @@ var dbMigrations = []migration{
 	{version: 13, up: migration13},
 	{version: 14, up: migration14},
 	{version: 15, up: migration15},
+	{version: 16, up: migration16},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -501,4 +502,49 @@ CREATE TABLE IF NOT EXISTS assistant_queries (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_assistant_queries_intent ON assistant_queries(intent);
+`
+
+const migration16 = `
+CREATE TABLE IF NOT EXISTS dining_tables (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL UNIQUE,
+	zone TEXT NOT NULL DEFAULT '',
+	seats INTEGER NOT NULL DEFAULT 0,
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	active INTEGER NOT NULL DEFAULT 1,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS orders (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	type TEXT NOT NULL CHECK (type IN ('table','takeaway')),
+	table_id INTEGER REFERENCES dining_tables(id),
+	turn_number INTEGER,
+	customer_name TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed','cancelled')),
+	user_id INTEGER NOT NULL REFERENCES users(id),
+	sale_id INTEGER REFERENCES sales(id),
+	note TEXT NOT NULL DEFAULT '',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	closed_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_table ON orders(table_id);
+CREATE INDEX IF NOT EXISTS idx_orders_updated ON orders(updated_at);
+CREATE TABLE IF NOT EXISTS order_items (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	order_id INTEGER NOT NULL REFERENCES orders(id),
+	product_id INTEGER NOT NULL REFERENCES products(id),
+	quantity REAL NOT NULL,
+	unit_price REAL NOT NULL,
+	note TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'pending'
+		CHECK (status IN ('pending','preparing','ready','delivered','void')),
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	ready_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
 `

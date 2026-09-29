@@ -18,6 +18,8 @@ type BusinessConfig struct {
 	AllowGlobalDiscount  bool    `json:"allow_global_discount"`
 	OwnerEmail           string  `json:"owner_email"`
 	OwnerEmailAppPassword string `json:"owner_email_app_password"`
+	RestaurantMode       bool    `json:"restaurant_mode"`
+	LanAccessEnabled     bool    `json:"lan_access_enabled"`
 	Configured           bool    `json:"configured"`
 }
 
@@ -34,12 +36,13 @@ func (r *SetupRepository) Get() (*BusinessConfig, error) {
 		SELECT id, name, COALESCE(logo,''), COALESCE(address,''), COALESCE(nit,''),
 		       COALESCE(ciiu,''), currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
 		       COALESCE(default_opening_amount, 0), COALESCE(allow_global_discount, 0),
-		       COALESCE(owner_email, ''), COALESCE(owner_email_app_password, '')
+		       COALESCE(owner_email, ''), COALESCE(owner_email_app_password, ''),
+			       COALESCE(restaurant_mode, 0), COALESCE(lan_access_enabled, 0)
 		FROM business_config WHERE id = 1`)
 	cfg := &BusinessConfig{}
 	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT,
 		&cfg.CIIU, &cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount,
-		&cfg.OwnerEmail, &cfg.OwnerEmailAppPassword)
+		&cfg.OwnerEmail, &cfg.OwnerEmailAppPassword, &cfg.RestaurantMode, &cfg.LanAccessEnabled)
 	if err == sql.ErrNoRows {
 		cfg.Currency = "COP"
 		cfg.Configured = false
@@ -80,8 +83,8 @@ func (r *SetupRepository) CompleteOnboarding(name, nit string) error {
 
 func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 	_, err := r.db.Exec(`
-		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, restaurant_mode, lan_access_enabled, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, logo=excluded.logo, address=excluded.address,
 			nit=excluded.nit, currency=excluded.currency,
@@ -90,8 +93,11 @@ func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 			allow_global_discount=excluded.allow_global_discount,
 			owner_email=excluded.owner_email,
 			owner_email_app_password=excluded.owner_email_app_password,
+			restaurant_mode=excluded.restaurant_mode,
+			lan_access_enabled=excluded.lan_access_enabled,
 			updated_at=CURRENT_TIMESTAMP
 	`, cfg.Name, cfg.Logo, cfg.Address, cfg.NIT, cfg.Currency,
-		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount, cfg.AllowGlobalDiscount, cfg.OwnerEmail, cfg.OwnerEmailAppPassword)
+		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount, cfg.AllowGlobalDiscount, cfg.OwnerEmail, cfg.OwnerEmailAppPassword,
+		cfg.RestaurantMode, cfg.LanAccessEnabled)
 	return err
 }
