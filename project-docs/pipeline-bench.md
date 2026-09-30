@@ -44,6 +44,7 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 | 6 | 2026-09-24 | US-061 | M | ~708k (A 372k=149k+109k+115k · I 186k, 2 intentos previos sin telemetría · Q 150k) | 281 (incompleto, 2 intentos de implementer sin `tool_uses` reportado) | ~46.7 agente (+~310 min de pared perdidos en 2 cuelgues, ver abajo) | 2 (implementer colgado dos veces) | 1 | 6 | 2 nuevos (R-47, R-48) + 1 cerrado parcial (R-06) | 0 | +1.867 / −20, 16 archivos |
 | 7 | 2026-09-29 | US-062 | L | ~538k (A 340k=135k+102k+75k+28k · T 65k · I 64k · Q 69k) | 168 | ~27.4 | 0 (más 1 parada por el clasificador de auto mode, ajena al contrato) | 1 | 7 discrepancias de contrato (D-1..D-7) + 1 hallazgo preexistente fuera de alcance | 7 nuevos (R-49 a R-55) | 0 | +1.198 / −8, 9 archivos |
 | 8 | 2026-09-30 | US-054 | L | ~191k (A 79k=51k+55k+79k · T 32k · I 45k · Q 36k) | 51 | ~9.9 | 0 (un PASA⚠️ mostrado al PO por regla, no por parada) | 1 | 6 discrepancias de contrato (sprint desfasado, rutas dinámicas, `go build` sin `web/out`…) | 1 nuevo (R-62) + 1 cerrado (R-55) | 0 | +452 / −55, 22 archivos |
+| 9 | 2026-09-30 | US-056 | L | ~514k (A 213k=82k+49k+83k · T 95k=82k+13k · I 114k · Q 92k=63k+29k) | 205 | ~22 | 1 (checkout principal con cambio en `.claude/`; más un PASA⚠️ mostrado al PO por regla) | 1 (+ smoke 1b) | 8 discrepancias de contrato + 1 defecto de tests (seed choca con migración) | 5 nuevos (R-63..R-67) + 1 cerrado (R-59) | 0 | +2.155 / −26, 26 archivos |
 
 ### Tendencia
 
@@ -435,3 +436,28 @@ Costo real de armar el entorno: la primera pasada fue vacía sin saberlo (las p�
 ### Qué medir en la corrida 9
 - Si la verificación con navegador (ajuste pendiente de corridas 7) se aprueba, cuánto añade por US con UI.
 - Si el implementer vuelve a terminar sin cuelgues.
+
+## Corrida 9 — US-056 (pedido por mesa, nivel L)
+
+| Agente | Invocaciones | Tokens (último valor) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 3 (contract, ajuste GATE 1, close; las tres en frío) | 83k (82k + 49k + 83k entre las tres) | 112 | ~7,0 min |
+| test-author | 2 (rojo; corrección de seed) | 13k (82k + 13k) | 16 | ~4,0 min |
+| implementer | 1 | 114k | 44 | ~6,6 min |
+| qa | 2 (revisión; smoke 1b) | 29k (63k + 29k) | 33 | ~4,4 min |
+
+**Qué encontró.** El contrato descubrió ejecutando: el sprint daba por existente el ocultamiento de carritos con `restaurant_mode` (no existe), PATCH no pasaba CORS (`middleware.go:97`), `/mesas/[orderId]` necesitaba `generateStaticParams` y `dynamicRoutes`, y las FK no se aplican, por lo que hizo falta un INSERT atómico (R-59 cerrado sin migración). Siete preguntas del PO se resolvieron en un solo GATE 1 más una repregunta (Q-6, sobre qué era polling) y Q-8. QA: 0 BLOQUEANTE, 4 MENOR en la revisión y 1 MENOR en el smoke; ninguno cambió código.
+
+**Defecto de tests.** El seed `INSERT INTO users (id=1…)` del test-author chocaba con la migración (`migrate.go:252`, `INSERT OR IGNORE`), así que T-3, T-14 y T-15 no podían pasar. Lo detectó el implementer, no el test-author. Costó una invocación extra del test-author y un nuevo commit `RED` (`1bcdd65`).
+
+**Paradas no planeadas:** 1. El checkout principal tenía un gitlink de `.claude/worktrees/` modificado; el PO mandó seguir. Además, un `PASA⚠️` (T-14) se mostró al PO por regla.
+
+**Fricción operativa.**
+- `ListAgents` no mostró ningún agente terminado del mismo rol en ningún paso; todas las invocaciones fueron en frío.
+- El smoke quedó omitido en la primera pasada porque el puerto 8080 es fijo (`cmd/pos/main.go:74-81`) y estaba ocupado por el PO; se repitió como vuelta 1b cuando lo liberó.
+- `go run scripts/copy-frontend.go` borra `web/out/.gitkeep` en el worktree; QA lo restauró con `git checkout`.
+- `TestDashboardToday_T20_Golden` falla por fecha también en `dev` (R-67).
+
+### Qué medir en la corrida 10
+- Si el test-author corre sus tests contra las migraciones reales, cuántas vueltas de tests se evitan.
+- Costo del smoke separado cuando el puerto está ocupado.

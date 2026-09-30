@@ -19,6 +19,8 @@ func testFS() fstest.MapFS {
 		"customers.html":           {Data: []byte("CUST")},
 		"customers/_.html":         {Data: []byte("CUSTID")},
 		"catalogo/_.html":          {Data: []byte("CAT")},
+		"mesas.html":               {Data: []byte("MESAS")},
+		"mesas/_.html":             {Data: []byte("MESAID")},
 		"_next/static/chunks/a.js": {Data: []byte("js")},
 	}
 }
@@ -79,5 +81,15 @@ func TestFileServer_T10_FallbackAndAsset404(t *testing.T) {
 	}
 	if code, _, _ := get(t, "/_next/static/chunks/no-existe.js"); code != 404 {
 		t.Errorf("GET missing chunk = %d, want 404", code)
+	}
+}
+
+// Contrato US-056 T-17 (AC-22): el prefijo mesas es ruta dinamica.
+func TestFileServer_T17_MesasDynamicRoute(t *testing.T) {
+	if code, body, _ := get(t, "/mesas/12"); code != 200 || body != "MESAID" {
+		t.Errorf("GET /mesas/12 = %d %q, want 200 MESAID", code, body)
+	}
+	if code, body, _ := get(t, "/mesas"); code != 200 || body != "MESAS" {
+		t.Errorf("GET /mesas = %d %q, want 200 MESAS", code, body)
 	}
 }

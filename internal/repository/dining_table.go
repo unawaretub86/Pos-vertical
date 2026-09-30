@@ -137,19 +137,23 @@ func (r *diningTableRepo) Update(ctx context.Context, t *model.DiningTable) (*mo
 }
 
 func (r *diningTableRepo) Deactivate(ctx context.Context, id int64) error {
+	// Atomic check-and-set: closes the race with opening an order (R-59).
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE dining_tables SET active = 0
+		WHERE id = ?
+		  AND NOT EXISTS (SELECT 1 FROM orders WHERE table_id = ? AND status = 'open')`, id, id)
+	if err != nil {
+		return fmt.Errorf("dining table deactivate: %w", mapBusy(err))
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("dining table deactivate rows: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
 	if _, err := r.GetByID(ctx, id); err != nil {
 		return err
 	}
-	var open int
-	if err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM orders WHERE table_id = ? AND status = 'open'`, id).Scan(&open); err != nil {
-		return fmt.Errorf("dining table open orders: %w", err)
-	}
-	if open > 0 {
-		return ErrTableHasOpenOrder
-	}
-	if _, err := r.db.ExecContext(ctx, `UPDATE dining_tables SET active = 0 WHERE id = ?`, id); err != nil {
-		return fmt.Errorf("dining table deactivate: %w", err)
-	}
-	return nil
+	return ErrTableHasOpenOrder
 }

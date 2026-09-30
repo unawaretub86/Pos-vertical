@@ -1,7 +1,7 @@
 # Dominio — Servidor y acceso LAN
 
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** bind del servidor, acceso desde otros dispositivos, servicio del frontend embebido
-> **Actualizado:** 2026-09-30 · Verificado contra el código (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
+> **Actualizado:** 2026-09-30 (US-056: ruta `/mesas/*`, CORS `PATCH`) · Verificado contra el código (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
 
 ## Acceso LAN
 
@@ -12,6 +12,6 @@
 
 ## Frontend embebido
 
-Orden de resolución: archivo exacto -> `<ruta>.html` (sin redirigir) -> `customers/_.html` o `catalogo/_.html` para `/customers/*` y `/catalogo/*` -> 404 si empieza por `/_next/` o tiene extensión -> `index.html`.
+Orden de resolución: archivo exacto -> `<ruta>.html` (sin redirigir) -> `customers/_.html`, `catalogo/_.html` o `mesas/_.html` para `/customers/*`, `/catalogo/*` y `/mesas/*` (`dynamicRoutes`, `web/static.go:19`; `/mesas` a secas sigue sirviendo `mesas.html`) -> 404 si empieza por `/_next/` o tiene extensión -> `index.html`.
 
-La UI usa `/api` relativo salvo que `NEXT_PUBLIC_API_URL` esté definido (dev en :3000).
+La UI usa `/api` relativo salvo que `NEXT_PUBLIC_API_URL` esté definido (dev en :3000). El CORS del dev permite `GET, POST, PUT, PATCH, DELETE, OPTIONS` (`internal/middleware/middleware.go:97`; `PATCH` se agregó con US-056) y `api.patch` existe en `frontend/lib/api.ts`.

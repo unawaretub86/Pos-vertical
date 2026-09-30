@@ -9,6 +9,7 @@ import TicketPreview, { type TicketData } from '@/components/TicketPreview';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { getUser } from '@/lib/auth';
+import { useBusinessConfig } from '@/lib/business-config-context';
 import { calcSubtotal, calcTax, calcTotal, paymentsBalanced as linesBalanced, sumPayments, calcChange, exceedsCreditLimit } from '@/lib/saleCalc';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -616,6 +617,9 @@ function PayBtn({ label, value, active, onClick }: { label: string; value: Payme
 
 export default function POSPage() {
   const { toast } = useToast();
+  // Restaurant mode uses table orders instead of parked carts
+  const { config: businessConfig } = useBusinessConfig();
+  const showParked = !businessConfig.restaurant_mode;
   const isAdmin = getUser()?.role === 'admin';
 
   // Mobile detection
@@ -1023,7 +1027,7 @@ export default function POSPage() {
           >
             Carrito {cart.length > 0 && `(${cart.length})`}
           </button>
-          {parkedCarts.length > 0 && (
+          {showParked && parkedCarts.length > 0 && (
             <button
               onClick={() => setParkListOpen(true)}
               style={{
@@ -1134,7 +1138,7 @@ export default function POSPage() {
               Carrito
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {!isMobile && parkedCarts.length > 0 && (
+              {showParked && !isMobile && parkedCarts.length > 0 && (
                 <button
                   onClick={() => setParkListOpen(true)}
                   style={{
@@ -1148,7 +1152,7 @@ export default function POSPage() {
                   En espera ({parkedCarts.length})
                 </button>
               )}
-              {cart.length > 0 && (
+              {showParked && cart.length > 0 && (
                 <button
                   onClick={openParkModal}
                   style={{

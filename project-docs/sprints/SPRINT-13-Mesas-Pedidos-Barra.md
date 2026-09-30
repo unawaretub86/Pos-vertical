@@ -25,7 +25,7 @@
 |----|--------|--------|-------|
 | US-055 | Migración 16, modo restaurante y gestión de mesas | [x] Completa en código, tests y verificación en navegador (2026-09-29) | 2026-09-29 |
 | US-054 | Acceso al POS desde el celular/tablet por WiFi local (deuda SPRINT-12) + R-55 servir el frontend desde el binario | [x] Completa en código y tests; pendiente prueba manual con dos dispositivos (2026-09-30) | 2026-09-30 |
-| US-056 | Pedido por mesa: abrir, agregar ítems con nota, anular, cancelar | [ ] Pendiente | — |
+| US-056 | Pedido por mesa: abrir, agregar ítems con nota, anular, cancelar | [x] Completa en código y tests; pendiente verificación manual T-19 del PO (2026-09-30) | 2026-09-30 |
 | US-057 | Cobro del pedido reusando el flujo de venta | [ ] Pendiente | — |
 | US-058 | Pantalla de barra (KDS) con estados, tiempos y alerta sonora | [ ] Pendiente | — |
 
@@ -333,6 +333,23 @@ Toda escritura de ítem toca orders.updated_at (misma transacción).
 - [ ] Test: cancelar pedido con ítems → `orders.status='cancelled'`, se inserta 1 fila en `audit_log` con el `user_id` correcto, y la mesa vuelve a `state='libre'`
 - [ ] Test: agregar ítem a un pedido `closed` → 409
 - [ ] Build limpio (`go build ./...`, `pnpm build`)
+
+**Estado: [x] completa en código y tests (2026-09-30); verificación manual T-19 pendiente del PO.** Los checkboxes de UI de arriba (`/mesas`, `/mesas/[orderId]`, POS) quedan sin marcar hasta esa prueba; build, tests backend y vitest pasaron en QA.
+
+**Criterios verificados (cierre 2026-09-30, QA vuelta 1 OK: 0 BLOQUEANTE, 4 MENOR):**
+- AC-1/AC-3: CUANDO un autenticado hace `POST /api/orders` con `table_id` de mesa activa sin pedido abierto, el sistema DEBE crear un pedido `type='table'`, `open`, con el `user_id` del token (201); `table_id` inexistente o desactivada → 404, falta/inválido o `type` ≠ `table` → 400, sin crear fila. Tests: `internal/handler/order_test.go` `TestOrder_T11_OpenValidation`, `TestOrder_T2_SecondOpenConflicts`.
+- AC-2: SI la mesa ya tiene pedido `open`, ENTONCES 409, incluso en concurrencia (INSERT condicional atómico, sin migración); `SQLITE_BUSY` → 409 "reintenta", nunca 500. Tests: `internal/repository/order_test.go` `TestOrder_T3_ConcurrentOpenSingleWinner`, `TestOrder_T15_InactiveTableAndOpenThenDeactivate`; `internal/handler/order_test.go` `TestOrder_T22_BusyMapsTo409`.
+- AC-4/AC-5/AC-6/AC-7/AC-7b: agregar ítem con snapshot de precio; `quantity` entero > 0 (0, negativos, `0.5`, `2.0` → 400); solo con pedido `open` (si no 409); `PATCH` de `quantity`/`note`/`status` (`pending|preparing|ready|delivered`, `void` → 400); editable en `ready`/`delivered`. Ej.: café $4.500 x2 → tras `PATCH quantity=3` subtotal $13.500. Tests: `TestOrder_T1_AddItemsTotalAndVoid`, `T6_ClosedOrderRejectsItemChanges`, `T7_ValidationOfQuantityStatusProduct`, `T8_PriceSnapshot`, `T10_PatchQuantityAndNote`, `T20_EditReadyAndDeliveredItems`.
+- AC-7c: `ready_at` se fija al pasar a `ready`, no se sobrescribe al reenviar y vuelve a NULL al salir de `ready`. Tests: `TestOrder_T21_ReadyAtSetAndPreserved`, `T21b_ReadyAtClearedWhenLeavingReady`.
+- AC-8: `DELETE` de ítem → `status='void'` + `audit_log order_item_void` con `details` JSON de 9 claves (`status` = estado previo), toca `updated_at`; ya anulado → 409. Pedido con café x2 ($9.000) y torta $8.000: total $17.000, tras anular la torta $9.000. Tests: `TestOrder_T1_AddItemsTotalAndVoid`, `T1b_VoidDetailsStatusIsPreVoidState`, `T9_TouchesUpdatedAt`.
+- AC-9/AC-10/AC-11: `POST /cancel` con motivo no vacío → `cancelled`, `closed_at`, `audit_log order_cancel`, ítems conservados, mesa `libre`; motivo vacío → 400; no `open` → 409. Tests: `TestOrder_T4_CancelOrder`, `T5_CancelRejections`.
+- AC-12/AC-13: `GET /orders/{id}` con total sin `void` e `items` incluyendo `void`; `GET /orders?status=open` con `items_pending` y `opened_minutes`, `[]` si vacío, `status` inválido → 400. Tests: `TestOrder_T1_AddItemsTotalAndVoid`, `T12_ListOpen`.
+- AC-14: cajero y admin operan pedidos; sin token 401. Test: `TestOrder_T13_CashierAllowedAnonymousRejected`.
+- AC-15 (R-59): `Deactivate` atómico, 409 con pedido abierto. Test: `internal/repository/dining_table_test.go` `TestDiningTable_T14_DeactivateWithOpenOrder`; regresión de US-055 en `internal/handler/tables_test.go`.
+- AC-16/AC-24: CORS con `PATCH` y `api.patch`. Tests: `internal/middleware/middleware_test.go` `TestCORS_T16_AllowsPatch`; `frontend/lib/api.test.ts` (`T-18: sends PATCH with JSON body`).
+- AC-22: `/mesas/12` se sirve con `mesas/_.html`. Test: `web/static_test.go` `TestFileServer_T9_DynamicRoutes`.
+- AC-17..AC-21, AC-23 (UI): verificados solo por `pnpm build` (genera `/mesas` y `/mesas/_`) y lectura de código; `showParked = !restaurant_mode` en `frontend/app/pos/page.tsx:622,1030,1141,1155`. **T-19 (manual a 320px y 1280px) PENDIENTE del PO**: grid por estado, tocar ocupada no duplica, backend apagado sin línea fantasma, anulación tachada, cancelación con motivo, y con `restaurant_mode`=1 sin chips de espera en el POS.
+- Fuera de alcance y registrado: refresco automático (R-63) y 4 MENOR de QA (R-64, R-65, R-66; ver `roadmap.md`). `TestDashboardToday_T20_Golden` falla en `dev` por fecha (preexistente, R-67).
 
 ---
 

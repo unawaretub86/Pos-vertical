@@ -36,6 +36,7 @@ type Handler struct {
 	fiscalRepo   factelect.FiscalConfigRepository
 	assistant    *service.AssistantService
 	tables       *service.DiningTableService
+	orders       *service.OrderService
 	localIP      func() string // injectable for tests; netutil.LocalIPv4 in production
 }
 
@@ -59,6 +60,7 @@ func New(db *database.DB) *Handler {
 	purchaseRepo := repository.NewPurchaseRepository(db.DB)
 	assistantQueryRepo := repository.NewAssistantQueryRepository(db.DB)
 	tableRepo := repository.NewDiningTableRepository(db.DB)
+	orderRepo := repository.NewOrderRepository(db.DB)
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
@@ -93,6 +95,7 @@ func New(db *database.DB) *Handler {
 		fiscalRepo:   fiscalRepo,
 		assistant:    service.NewAssistantService(metricsRepo, reportRepo, expenseRepo, assistantQueryRepo),
 		tables:       service.NewDiningTableService(tableRepo),
+		orders:       service.NewOrderService(orderRepo),
 		localIP:      netutil.LocalIPv4,
 	}
 }
@@ -205,6 +208,15 @@ func (h *Handler) Routes() http.Handler {
 			r.Put("/tables/{id}", h.updateTable)
 			r.Delete("/tables/{id}", h.deleteTable)
 		})
+
+		// Orders by table (all authenticated users: cashier and admin)
+		r.Post("/orders", h.openOrder)
+		r.Get("/orders", h.listOrders)
+		r.Get("/orders/{id}", h.getOrder)
+		r.Post("/orders/{id}/items", h.addOrderItem)
+		r.Patch("/orders/{id}/items/{itemId}", h.updateOrderItem)
+		r.Delete("/orders/{id}/items/{itemId}", h.voidOrderItem)
+		r.Post("/orders/{id}/cancel", h.cancelOrder)
 
 		// Purchases (all authenticated users can read; admin to write)
 		r.Get("/purchases", h.listPurchases)
