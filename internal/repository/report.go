@@ -118,11 +118,11 @@ func (r *reportRepo) SalesSummary(ctx context.Context, p SalesSummaryParams) (*S
 	// case groups under an empty period label instead of failing the Scan.
 	groupFmt := groupFormat(p.GroupBy)
 	groupRows, err := r.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT COALESCE(strftime('%s', s.created_at), ''), COALESCE(SUM(s.total), 0), COUNT(*)
+		SELECT strftime('%s', s.created_at, 'localtime'), COALESCE(SUM(s.total), 0), COUNT(*)
 		FROM sales s
 		WHERE s.status = 'completed' %s
-		GROUP BY COALESCE(strftime('%s', s.created_at), '')
-		ORDER BY COALESCE(strftime('%s', s.created_at), '') ASC`,
+		GROUP BY strftime('%s', s.created_at, 'localtime')
+		ORDER BY strftime('%s', s.created_at, 'localtime') ASC`,
 		groupFmt, where, groupFmt, groupFmt,
 	), args...)
 	if err != nil {

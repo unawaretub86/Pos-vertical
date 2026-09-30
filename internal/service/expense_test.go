@@ -25,7 +25,7 @@ func newExpenseTestEnv(t *testing.T, openRegister bool) *expenseTestEnv {
 
 	regRepo := repository.NewRegisterRepository(db.DB)
 	expenseRepo := repository.NewExpenseRepository(db.DB)
-	registers := NewRegisterService(regRepo)
+	registers := NewRegisterService(regRepo, nil, nil)
 
 	env := &expenseTestEnv{
 		svc:       NewExpenseService(expenseRepo, registers),

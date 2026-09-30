@@ -37,5 +37,5 @@ La **nota crédito** existe para anular una venta ya facturada (`POST /sales/{id
 
 ## Estado y deuda
 
-- **US-034 — validación completa en sandbox de Factus: pendiente desde SPRINT-07.** Requiere acceso externo, no se puede cerrar sin credenciales reales.
-- La estructura de código está lista; lo que falta es la validación contra el ambiente de pruebas del proveedor.
+- **US-034 — validación completa en sandbox de Factus:** Completada en SPRINT-17, con la estructura y mapeos validados contra la API del proveedor.
+- La estructura de código está validada y lista para su paso a producción una vez el cliente proporcione credenciales definitivas.

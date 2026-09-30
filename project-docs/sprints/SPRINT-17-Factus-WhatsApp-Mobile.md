@@ -18,10 +18,10 @@
 
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
-| US-034 | Factus: validación completa en sandbox | [ ] Pendiente | — |
-| US-045 | Catálogo compartible por WhatsApp | [ ] Pendiente | — |
-| US-053 | Resumen de cierre de caja por correo | [ ] Pendiente | — |
-| US-074 | Consolidación Mobile Responsive (320px) | [ ] Pendiente | — |
+| US-034 | Factus: validación completa en sandbox | [x] Hecho | 2026-09-29 |
+| US-045 | Catálogo compartible por WhatsApp | [x] Hecho | 2026-09-29 |
+| US-053 | Resumen de cierre de caja por correo | [x] Hecho | 2026-09-29 |
+| US-074 | Consolidación Mobile Responsive (320px) | [x] Hecho | 2026-09-29 |
 
 **Esfuerzo total estimado: ~5.5 días**
 
@@ -56,11 +56,11 @@
 - El error de envío no debe bloquear el cierre de la caja en la BD.
 
 **DoD:**
-- [ ] Configuración SMTP guardada en DB (`business_config` o nueva `email_settings`).
-- [ ] UI simple en Ajustes para ingresar Gmail y App Password.
-- [ ] `internal/service/register.go` llama a `mailer.Send` asíncronamente (goroutine) al hacer `Close`.
-- [ ] Endpoint de test `/api/settings/email/test` para verificar credenciales.
-- [ ] Pruebas unitarias/integración de que el cierre de caja no falla si el correo falla.
+- [x] Configuración SMTP guardada en DB (`business_config` o nueva `email_settings`).
+- [x] UI simple en Ajustes para ingresar Gmail y App Password.
+- [x] `internal/service/register.go` llama a `mailer.Send` asíncronamente (goroutine) al hacer `Close`.
+- [x] Endpoint de test `/api/settings/email/test` para verificar credenciales.
+- [x] Pruebas unitarias/integración de que el cierre de caja no falla si el correo falla.
 
 ---
 
@@ -78,15 +78,15 @@
 - Falta la validación empírica contra la API `developers.factus.com.co`.
 
 **Acceptance Criteria & Preguntas a resolver:**
-- [ ] Confirmar si `payment_form` es string o int en Factus API y corregir struct si es necesario.
-- [ ] Confirmar URL endpoint (`/api/v1/bills` vs `/v1/bills`).
-- [ ] Confirmar manejo de `is_excluded` y `tribute_id` para impuestos cero.
+- [x] Confirmar si `payment_form` es string o int en Factus API y corregir struct si es necesario. (Es int 1)
+- [x] Confirmar URL endpoint (`/api/v1/bills` vs `/v1/bills`). (Es /v1/bills)
+- [x] Confirmar manejo de `is_excluded` y `tribute_id` para impuestos cero. (is_excluded=1)
 
 **DoD:**
-- [ ] Se puede crear un Documento Soporte/Factura en sandbox con `ambiente: "test"` y config real.
-- [ ] Response de Factus retorna `status: "pending"` o `"accepted"` (no error 4xx).
-- [ ] El poller en background detecta y actualiza el doc en BD a `"accepted"` cuando DIAN valida.
-- [ ] Todos los campos de payload de `client.go` están verificados contra la doc oficial y ajustados.
+- [x] Se puede crear un Documento Soporte/Factura en sandbox con `ambiente: "test"` y config real.
+- [x] Response de Factus retorna `status: "pending"` o `"accepted"` (no error 4xx).
+- [x] El poller en background detecta y actualiza el doc en BD a `"accepted"` cuando DIAN valida.
+- [x] Todos los campos de payload de `client.go` están verificados contra la doc oficial y ajustados.
 
 ---
 
@@ -106,17 +106,17 @@
 - Carrito de compras/pedidos dentro de la página. Es un catálogo estático.
 
 **Acceptance Criteria:**
-- [ ] Toggle en Settings: "Catálogo público" (default apagado).
-- [ ] Al activarlo se genera link único `.../catalogo/[token]`.
-- [ ] Botón "Compartir por WhatsApp" abre `wa.me` con mensaje invitando a ver el catálogo.
-- [ ] Vista `/catalogo/[token]` pública y responsive que lista productos activos con precio > 0.
-- [ ] Precio mayorista oculto.
+- [x] Toggle en Settings: "Catálogo público" (default apagado).
+- [x] Al activarlo se genera link único `.../catalogo/[token]`.
+- [x] Botón "Compartir por WhatsApp" abre `wa.me` con mensaje invitando a ver el catálogo.
+- [x] Vista `/catalogo/[token]` pública y responsive que lista productos activos con precio > 0.
+- [x] Precio mayorista oculto.
 
 **DoD:**
-- [ ] Nueva migración agregando `catalog_token` (TEXT) y `catalog_enabled` (BOOLEAN) a `settings` o `business_config`.
-- [ ] Endpoint `GET /public/catalog/:token` registrado **fuera** del JWT middleware.
-- [ ] Renderizado en UI Next.js desde exportación estática que consume la API.
-- [ ] Pruebas confirmando que sin token o con toggle apagado retorna 404.
+- [x] Nueva migración agregando `catalog_token` (TEXT) y `catalog_enabled` (BOOLEAN) a `settings` o `business_config`.
+- [x] Endpoint `GET /public/catalog/:token` registrado **fuera** del JWT middleware.
+- [x] Renderizado en UI Next.js desde exportación estática que consume la API.
+- [x] Pruebas confirmando que sin token o con toggle apagado retorna 404.
 
 ---
 

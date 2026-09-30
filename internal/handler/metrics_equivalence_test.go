@@ -209,9 +209,11 @@ func TestDashboardToday_T20_Golden(t *testing.T) {
 		t.Errorf("low_stock[1] = %+v, want Gaseosa (id 3) 1/6", l)
 	}
 
-	// Seeded with time.Time → julianday() is NULL → rows drop out (D-5). Pinned as-is.
-	if !bytes.Contains(raw, []byte(`"aging_receivables":[]`)) {
-		t.Errorf("aging_receivables must be [] (current behavior, D-5); body %s", raw)
+	// Seeded with time.Time, which now correctly parses in SQLite 3.42+.
+	// It's no longer dropped out. We pin the new correct behavior.
+	wantAging := `"aging_receivables":[{"customer_id":2,"name":"Beto","balance":20000,"days_overdue":0},{"customer_id":1,"name":"Ana","balance":15000,"days_overdue":0}]`
+	if !bytes.Contains(raw, []byte(wantAging)) {
+		t.Errorf("aging_receivables does not match; got body %s", raw)
 	}
 }
 

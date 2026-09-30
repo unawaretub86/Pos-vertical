@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/andreyo/pos/internal/mailer"
 	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
 )
@@ -28,12 +30,14 @@ type RegisterSummary struct {
 
 // RegisterService handles business logic for cash registers.
 type RegisterService struct {
-	repo repository.RegisterRepository
+	repo      repository.RegisterRepository
+	userRepo  repository.UserRepository
+	setupRepo *repository.SetupRepository
 }
 
 // NewRegisterService creates a new RegisterService.
-func NewRegisterService(repo repository.RegisterRepository) *RegisterService {
-	return &RegisterService{repo: repo}
+func NewRegisterService(repo repository.RegisterRepository, userRepo repository.UserRepository, setupRepo *repository.SetupRepository) *RegisterService {
+	return &RegisterService{repo: repo, userRepo: userRepo, setupRepo: setupRepo}
 }
 
 // Open creates a new register session. Fails if one is already open.
@@ -49,21 +53,13 @@ func (s *RegisterService) Open(ctx context.Context, userID int64, openingAmount 
 	reg, err := s.repo.Create(ctx, &model.Register{
 		UserID:        userID,
 		OpeningAmount: openingAmount,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Record opening movement — if this fails, roll back by marking the register closed
-	// so the system doesn't end up in an inconsistent state.
-	if _, err := s.repo.AddMovement(ctx, &model.RegisterMovement{
-		RegisterID:  reg.ID,
+	}, &model.RegisterMovement{
 		Type:        "opening",
 		Amount:      openingAmount,
 		Description: "Apertura de caja",
-	}); err != nil {
-		_, _ = s.repo.Close(ctx, reg.ID, 0, 0, 0)
-		return nil, fmt.Errorf("registrar movimiento de apertura: %w", err)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("crear caja: %w", err)
 	}
 
 	return reg, nil
@@ -144,7 +140,8 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 	}
 	movements, _ := s.repo.ListMovements(ctx, id)
 	byMethod, _ := s.repo.SumByPaymentMethod(ctx, id)
-	return &RegisterSummary{
+
+	summary := &RegisterSummary{
 		Register:        closed,
 		CashSales:       cashSales,
 		CashIn:          cashIn,
@@ -152,7 +149,51 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 		Expected:        expected,
 		Movements:       movements,
 		ByPaymentMethod: byMethod,
-	}, nil
+	}
+
+	if s.setupRepo != nil {
+		if cfg, err := s.setupRepo.Get(); err == nil && cfg.OwnerEmail != "" && cfg.OwnerEmailAppPassword != "" {
+			cashierName := "Desconocido"
+			if s.userRepo != nil {
+				if user, err := s.userRepo.GetByID(context.Background(), closed.UserID); err == nil {
+					cashierName = user.FullName
+					if cashierName == "" {
+						cashierName = user.Username
+					}
+				}
+			}
+			
+			pmLines := make([]mailer.PaymentLine, len(byMethod))
+			for i, m := range byMethod {
+				pmLines[i] = mailer.PaymentLine{Method: m.Method, Total: m.Total}
+			}
+
+			closedAt := time.Now()
+			if closed.ClosedAt != nil {
+				closedAt = *closed.ClosedAt
+			}
+
+			go func(d mailer.RegisterSummaryData, smtpCfg mailer.SMTPConfig) {
+				subject, body := mailer.BuildRegisterSummaryEmail(d)
+				_ = mailer.Send(smtpCfg, subject, body)
+			}(mailer.RegisterSummaryData{
+				BusinessName:    cfg.Name,
+				Cashier:         cashierName,
+				ClosedAt:        closedAt,
+				ByPaymentMethod: pmLines,
+				CashIn:          cashIn,
+				CashOut:         cashOut,
+				Expected:        expected,
+				ActualClose:     actualClose,
+				Difference:      difference,
+			}, mailer.SMTPConfig{
+				Email:       cfg.OwnerEmail,
+				AppPassword: cfg.OwnerEmailAppPassword,
+			})
+		}
+	}
+
+	return summary, nil
 }
 
 // AddMovement adds a manual cash_in or cash_out movement.

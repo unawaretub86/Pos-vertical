@@ -189,3 +189,46 @@ func (h *Handler) deleteProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, http.StatusOK, map[string]string{"message": "producto eliminado"})
 }
+
+func (h *Handler) getPublicCatalog(w http.ResponseWriter, r *http.Request) {
+	token := chi.URLParam(r, "token")
+	if token == "" {
+		respondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	cfg, err := h.setup.Get()
+	if err != nil || !cfg.CatalogEnabled || cfg.CatalogToken != token {
+		respondError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	products, err := h.products.List(r.Context(), repository.ProductFilter{ActiveOnly: true})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error listando productos")
+		return
+	}
+
+	var catalog []map[string]any
+	for _, p := range products {
+		if p.SalePrice > 0 {
+			catalog = append(catalog, map[string]any{
+				"id":         p.ID,
+				"name":       p.Name,
+				"code":       p.Code,
+				"sale_price": p.SalePrice,
+				"unit":       p.Unit,
+				"type":       p.Type,
+				"category":   "",
+			})
+		}
+	}
+
+	respond(w, http.StatusOK, map[string]any{
+		"business_name": cfg.Name,
+		"logo":          cfg.Logo,
+		"currency":      cfg.Currency,
+		"products":      catalog,
+	})
+}
+

@@ -11,6 +11,8 @@ import (
 
 	"github.com/andreyo/pos/internal/database"
 	"github.com/andreyo/pos/internal/handler"
+	posmw "github.com/andreyo/pos/internal/middleware"
+	"github.com/andreyo/pos/internal/repository"
 	"github.com/andreyo/pos/web"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -23,6 +25,14 @@ func main() {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
 	defer db.Close()
+
+	// Initialize JWT secret (US-070)
+	setupRepo := repository.NewSetupRepository(db.DB)
+	jwtSecret, err := setupRepo.GetOrGenerateJWTSecret()
+	if err != nil {
+		log.Fatalf("failed to initialize JWT secret: %v", err)
+	}
+	posmw.SetJWTSecret(jwtSecret)
 
 	// Start automatic daily backup scheduler
 	db.StartBackupScheduler()

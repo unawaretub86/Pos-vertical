@@ -2,7 +2,6 @@ package database
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"time"
 )
@@ -37,6 +36,8 @@ var dbMigrations = []migration{
 	{version: 13, up: migration13},
 	{version: 14, up: migration14},
 	{version: 15, up: migration15},
+	{version: 16, up: migration16},
+	{version: 17, up: migration17},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -70,7 +71,7 @@ func (db *DB) migrate() error {
 	// Skip backup for in-memory databases (used in tests).
 	if db.path != ":memory:" {
 		_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
-		if err := backupDB(db.path); err != nil {
+		if err := db.backupBeforeMigration(); err != nil {
 			return fmt.Errorf("backup before migration: %w", err)
 		}
 	}
@@ -106,31 +107,16 @@ func (db *DB) runMigration(m migration) error {
 	return nil
 }
 
-// backupDB creates a copy of the SQLite file at <path>.backup-YYYYMMDD.
-// It checkpoints the WAL first so the backup is consistent.
+// backupBeforeMigration creates a transationally safe copy of the SQLite file.
 // If the file does not exist yet (first run) it is a no-op.
-func backupDB(path string) error {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+func (db *DB) backupBeforeMigration() error {
+	if _, err := os.Stat(db.path); os.IsNotExist(err) {
 		return nil
 	}
-
-	dst := path + ".backup-" + time.Now().Format("20060102")
-	src, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, src); err != nil {
-		return err
-	}
-	return out.Sync()
+	dst := db.path + ".backup-" + time.Now().Format("20060102")
+	_ = os.Remove(dst)
+	_, err := db.Exec("VACUUM INTO ?", dst)
+	return err
 }
 
 // ── Migration SQL ─────────────────────────────────────────────────────────────
@@ -501,4 +487,16 @@ CREATE TABLE IF NOT EXISTS assistant_queries (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_assistant_queries_intent ON assistant_queries(intent);
+`
+
+// migration16 adds the auto-generated JWT secret to business_config (US-070).
+// This ensures that sessions cannot be forged using a hardcoded secret.
+const migration16 = `
+ALTER TABLE business_config ADD COLUMN jwt_secret TEXT NOT NULL DEFAULT '';
+`
+
+// migration17 adds the public catalog feature (US-045).
+const migration17 = `
+ALTER TABLE business_config ADD COLUMN catalog_enabled BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE business_config ADD COLUMN catalog_token TEXT;
 `

@@ -134,7 +134,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 func (c *Client) CreateBill(ctx context.Context, req *BillRequest) (*BillResponse, error) {
 	payload := billRequestToFactus(req)
 	var raw map[string]any
-	if err := c.post(ctx, "/api/v1/bills", payload, &raw); err != nil {
+	if err := c.post(ctx, "/v1/bills", payload, &raw); err != nil {
 		return nil, err
 	}
 	return parseFactusBillResponse(raw), nil
@@ -143,7 +143,7 @@ func (c *Client) CreateBill(ctx context.Context, req *BillRequest) (*BillRespons
 // GetBillStatus queries the status of a document by its Factus ID.
 func (c *Client) GetBillStatus(ctx context.Context, providerID string) (*StatusResponse, error) {
 	var raw map[string]any
-	if err := c.get(ctx, "/api/v1/bills/"+providerID, &raw); err != nil {
+	if err := c.get(ctx, "/v1/bills/"+providerID, &raw); err != nil {
 		return nil, err
 	}
 	return parseFactusStatusResponse(raw), nil
@@ -153,7 +153,7 @@ func (c *Client) GetBillStatus(ctx context.Context, providerID string) (*StatusR
 func (c *Client) CreateCreditNote(ctx context.Context, req *CreditNoteRequest) (*BillResponse, error) {
 	payload := creditNoteToFactus(req)
 	var raw map[string]any
-	if err := c.post(ctx, "/api/v1/credit-notes", payload, &raw); err != nil {
+	if err := c.post(ctx, "/v1/credit-notes", payload, &raw); err != nil {
 		return nil, err
 	}
 	return parseFactusBillResponse(raw), nil
@@ -171,6 +171,10 @@ func (c *Client) CreateCreditNote(ctx context.Context, req *CreditNoteRequest) (
 func billRequestToFactus(req *BillRequest) map[string]any {
 	items := make([]map[string]any, 0, len(req.Items))
 	for _, it := range req.Items {
+		isExcluded := 0
+		if it.TaxRate == 0 {
+			isExcluded = 1
+		}
 		items = append(items, map[string]any{
 			"code_reference":  it.ProductCode,
 			"name":            it.Description,
@@ -180,7 +184,7 @@ func billRequestToFactus(req *BillRequest) map[string]any {
 			"tax_rate":        it.TaxRate,
 			"unit_measure_id": it.UnitCodeDIAN,
 			"standard_code":   it.ProductCode,
-			"is_excluded":     it.TaxRate == 0,
+			"is_excluded":     isExcluded,
 			"tribute_id":      tributeID(it.TaxRate),
 		})
 	}

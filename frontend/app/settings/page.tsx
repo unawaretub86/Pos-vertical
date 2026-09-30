@@ -28,6 +28,8 @@ interface BusinessConfig {
   allow_global_discount: boolean;
   owner_email: string;
   owner_email_app_password: string;
+  catalog_enabled: boolean;
+  catalog_token: string;
   configured: boolean;
 }
 
@@ -75,6 +77,8 @@ export default function SettingsPage() {
     allow_global_discount: false,
     owner_email: '',
     owner_email_app_password: '',
+    catalog_enabled: false,
+    catalog_token: '',
   });
   const [fiscal, setFiscal] = useState<FiscalConfig>({
     enabled: false,
@@ -86,6 +90,7 @@ export default function SettingsPage() {
   const [logoPreview, setLogoPreview] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   useEffect(() => {
     api.get<FiscalConfig>('/fiscal-config')
@@ -110,6 +115,8 @@ export default function SettingsPage() {
           allow_global_discount: cfg.allow_global_discount ?? false,
           owner_email: cfg.owner_email ?? '',
           owner_email_app_password: cfg.owner_email_app_password ?? '',
+          catalog_enabled: cfg.catalog_enabled ?? false,
+          catalog_token: cfg.catalog_token ?? '',
         });
         if (cfg.logo) setLogoPreview(cfg.logo);
       })
@@ -157,6 +164,18 @@ export default function SettingsPage() {
       toast(err instanceof Error ? err.message : 'Error al guardar', 'error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleTestEmail() {
+    setTestingEmail(true);
+    try {
+      const res = await api.post<{message: string}>('/settings/email/test', {});
+      toast(res.message || 'Correo enviado con éxito', 'success');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Error al enviar correo de prueba', 'error');
+    } finally {
+      setTestingEmail(false);
     }
   }
 
@@ -338,16 +357,80 @@ export default function SettingsPage() {
                 </ConfigRow>
 
                 <ConfigRow label="Contraseña de aplicación" sublabel="Generada en la cuenta de Gmail de arriba (Cuenta de Google → Seguridad → Contraseñas de aplicaciones), no tu contraseña normal">
-                  <input
-                    className="input"
-                    type="password"
-                    placeholder="•••• •••• •••• ••••"
-                    autoComplete="new-password"
-                    value={form.owner_email_app_password}
-                    onChange={e => setForm(f => ({ ...f, owner_email_app_password: e.target.value }))}
-                    style={{ width: '220px' }}
-                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      className="input"
+                      type="password"
+                      placeholder="•••• •••• •••• ••••"
+                      autoComplete="new-password"
+                      value={form.owner_email_app_password}
+                      onChange={e => setForm(f => ({ ...f, owner_email_app_password: e.target.value }))}
+                      style={{ width: '220px' }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={testingEmail || !form.owner_email || !form.owner_email_app_password}
+                      onClick={handleTestEmail}
+                    >
+                      {testingEmail ? 'Probando...' : 'Probar'}
+                    </button>
+                  </div>
                 </ConfigRow>
+              </div>
+            </div>
+
+            {/* ── Sección: Catálogo Público ────────────────── */}
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+                Catálogo en línea
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <ConfigRow label="Catálogo público" sublabel="Tus clientes podrán ver tus productos desde su celular">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.catalog_enabled}
+                      onChange={e => {
+                        const enabled = e.target.checked;
+                        setForm(f => ({ 
+                          ...f, 
+                          catalog_enabled: enabled,
+                          catalog_token: enabled && !f.catalog_token ? Math.random().toString(36).substring(2, 10) : f.catalog_token
+                        }));
+                      }}
+                    />
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      {form.catalog_enabled ? 'Activado' : 'Desactivado'}
+                    </span>
+                  </label>
+                </ConfigRow>
+
+                {form.catalog_enabled && form.catalog_token && (
+                  <ConfigRow label="Link del catálogo">
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        className="input"
+                        readOnly
+                        value={`${window.location.origin}/catalogo/${form.catalog_token}`}
+                        style={{ width: '260px', color: 'var(--text-secondary)' }}
+                        onClick={e => (e.target as HTMLInputElement).select()}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ background: '#25D366', color: '#fff', borderColor: '#25D366' }}
+                        onClick={() => {
+                          const url = `${window.location.origin}/catalogo/${form.catalog_token}`;
+                          const text = `¡Hola! Mira nuestro catálogo de productos en línea aquí: ${url}`;
+                          window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                        }}
+                      >
+                        Compartir por WhatsApp
+                      </button>
+                    </div>
+                  </ConfigRow>
+                )}
               </div>
             </div>
 

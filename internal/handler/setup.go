@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/andreyo/pos/internal/mailer"
 	"github.com/andreyo/pos/internal/repository"
 )
 
@@ -35,3 +36,29 @@ func (h *Handler) updateSetup(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := h.setup.Get()
 	respond(w, http.StatusOK, cfg)
 }
+
+func (h *Handler) testEmailConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.setup.Get()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Error al obtener configuración")
+		return
+	}
+	if cfg.OwnerEmail == "" || cfg.OwnerEmailAppPassword == "" {
+		respondError(w, http.StatusBadRequest, "Credenciales de correo no configuradas")
+		return
+	}
+
+	smtpCfg := mailer.SMTPConfig{
+		Email:       cfg.OwnerEmail,
+		AppPassword: cfg.OwnerEmailAppPassword,
+	}
+
+	err = mailer.Send(smtpCfg, "Prueba de conexión POS", "Este es un mensaje de prueba para confirmar que el correo está configurado correctamente.")
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Error al enviar correo: "+err.Error())
+		return
+	}
+
+	respond(w, http.StatusOK, map[string]string{"message": "Correo enviado con éxito"})
+}
+

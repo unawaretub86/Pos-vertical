@@ -15,11 +15,17 @@ type contextKey string
 
 const ClaimsKey contextKey = "claims"
 
+var jwtSecret []byte
+
+func SetJWTSecret(secret []byte) {
+	jwtSecret = secret
+}
+
 func getJWTSecret() []byte {
 	if s := os.Getenv("POS_JWT_SECRET"); s != "" {
 		return []byte(s)
 	}
-	return []byte("pos-secret-key-change-in-prod")
+	return jwtSecret
 }
 
 func GenerateToken(claims *model.Claims) (string, error) {

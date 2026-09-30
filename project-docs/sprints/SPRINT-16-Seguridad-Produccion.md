@@ -12,9 +12,9 @@
 
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
-| US-070 | Seguridad: JWT secret auto-generado, no hardcodeado | [ ] Pendiente | — |
-| US-071 | Integridad: Apertura de caja transaccional (Tx) | [ ] Pendiente | — |
-| US-072 | Integridad: Backup SQLite online (`VACUUM INTO`) | [ ] Pendiente | — |
+| US-070 | Seguridad: JWT secret auto-generado, no hardcodeado | [x] Completo | 2026-09-29 |
+| US-071 | Integridad: Apertura de caja transaccional (Tx) | [x] Completo | 2026-09-29 |
+| US-072 | Integridad: Backup SQLite online (`VACUUM INTO`) | [x] Completo | 2026-09-29 |
 | US-073 | UX: Filtro de movimientos de caja por sesión actual | [ ] Pendiente | — |
 
 **Esfuerzo total estimado: 2.5 días** (Sprint crítico de estabilización del core).
@@ -49,9 +49,9 @@
 - Todos los tokens emitidos se firman y validan con ese secreto de la DB, cacheado en memoria para no penalizar el middleware.
 
 **DoD:**
-- [ ] Nueva columna `jwt_secret` en `business_config` (Migración 16).
-- [ ] Lógica de generación automática si el campo está vacío.
-- [ ] Eliminar el string hardcodeado de `middleware.go`.
+- [x] Nueva columna `jwt_secret` en `business_config` (Migración 16).
+- [x] Lógica de generación automática si el campo está vacío.
+- [x] Eliminar el string hardcodeado de `middleware.go`.
 
 ---
 
@@ -71,8 +71,8 @@
 - Si algo falla, el `ROLLBACK` garantiza que la caja nunca se abrió contablemente.
 
 **DoD:**
-- [ ] Modificar `repository.Register.Create` o agregar método que permita inyectar TX, o hacerlo en el propio Service usando un Unit of Work.
-- [ ] Pruebas unitarias que fallen el movimiento forzosamente y verifiquen que la caja no se crea.
+- [x] Modificar `repository.Register.Create` o agregar método que permita inyectar TX, o hacerlo en el propio Service usando un Unit of Work.
+- [x] Pruebas unitarias que fallen el movimiento forzosamente y verifiquen que la caja no se crea.
 
 ---
 
@@ -93,8 +93,8 @@
 - SQLite garantiza que `VACUUM INTO` genera una copia consistente y consolidada (sin necesidad de copiar el WAL) incluso si hay escrituras simultáneas.
 
 **DoD:**
-- [ ] Cambiar `backupDB` para ejecutar `db.Exec("VACUUM INTO ?", dst)`.
-- [ ] Eliminar lógica vieja y probar ejecución manual del backup.
+- [x] Cambiar `backupDB` para ejecutar `db.Exec("VACUUM INTO ?", dst)`.
+- [x] Eliminar lógica vieja y probar ejecución manual del backup.
 
 ---
 

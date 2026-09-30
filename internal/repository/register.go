@@ -10,7 +10,7 @@ import (
 
 // RegisterRepository defines operations for cash registers.
 type RegisterRepository interface {
-	Create(ctx context.Context, r *model.Register) (*model.Register, error)
+	Create(ctx context.Context, r *model.Register, mv *model.RegisterMovement) (*model.Register, error)
 	List(ctx context.Context) ([]*model.Register, error)
 	GetByID(ctx context.Context, id int64) (*model.Register, error)
 	GetOpen(ctx context.Context) (*model.Register, error)
@@ -39,8 +39,14 @@ func NewRegisterRepository(db *sql.DB) RegisterRepository {
 	return &registerRepo{db: db}
 }
 
-func (r *registerRepo) Create(ctx context.Context, reg *model.Register) (*model.Register, error) {
-	res, err := r.db.ExecContext(ctx,
+func (r *registerRepo) Create(ctx context.Context, reg *model.Register, mv *model.RegisterMovement) (*model.Register, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx,
 		`INSERT INTO registers (user_id, opening_amount, status) VALUES (?, ?, 'open')`,
 		reg.UserID, reg.OpeningAmount,
 	)
@@ -48,6 +54,21 @@ func (r *registerRepo) Create(ctx context.Context, reg *model.Register) (*model.
 		return nil, fmt.Errorf("register create: %w", err)
 	}
 	id, _ := res.LastInsertId()
+
+	if mv != nil {
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO register_movements (register_id, type, amount, description) VALUES (?, ?, ?, ?)`,
+			id, mv.Type, mv.Amount, mv.Description,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("register movement insert: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+
 	return r.GetByID(ctx, id)
 }
 

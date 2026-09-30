@@ -2,7 +2,6 @@ package database
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -29,13 +28,15 @@ func (d *DB) runBackup() {
 	date := time.Now().Format("20060102")
 	dest := fmt.Sprintf("%s.backup-%s", d.path, date)
 
+	_ = os.Remove(dest) // VACUUM INTO fails if destination exists
+
 	if err := d.checkpoint(); err != nil {
 		log.Printf("[backup] checkpoint failed: %v", err)
-		// proceed anyway — partial WAL still results in a consistent copy
 	}
 
-	if err := copyFile(d.path, dest); err != nil {
-		log.Printf("[backup] copy failed: %v", err)
+	_, err := d.Exec("VACUUM INTO ?", dest)
+	if err != nil {
+		log.Printf("[backup] VACUUM INTO failed: %v", err)
 		return
 	}
 
@@ -51,22 +52,7 @@ func (d *DB) checkpoint() error {
 	return err
 }
 
-func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
 
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	return err
-}
 
 func pruneBackups(dbPath string) error {
 	pattern := dbPath + ".backup-*"

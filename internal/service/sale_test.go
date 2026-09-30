@@ -70,7 +70,7 @@ type mockRegisterRepo struct {
 	openErr      error
 }
 
-func (m *mockRegisterRepo) Create(_ context.Context, r *model.Register) (*model.Register, error) {
+func (m *mockRegisterRepo) Create(_ context.Context, r *model.Register, mv *model.RegisterMovement) (*model.Register, error) {
 	return r, nil
 }
 func (m *mockRegisterRepo) List(_ context.Context) ([]*model.Register, error) { return nil, nil }

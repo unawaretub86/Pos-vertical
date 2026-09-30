@@ -55,7 +55,7 @@ Aplica a formas de interactuar que el usuario no ha visto antes. No a features i
 | SPRINT-04 | Prod Ready: Binary Integration & Polish | ✅ Completo |
 | SPRINT-05 | Mobile Responsive: Demo-Ready en Celular | ⬜ Pendiente |
 | SPRINT-06 | Facturación Electrónica (Factus) | ✅ Completo |
-| SPRINT-07 | Factus Sandbox + Diferenciadores | ⚠️ Deuda: US-034 pendiente |
+| SPRINT-07 | Factus Sandbox + Diferenciadores | ✅ Completo (US-034 finalizada en SPRINT-17) |
 | SPRINT-08 | Rentabilidad Real y Cartera Envejecida | ✅ Completo |
 | SPRINT-09 | Historial de Cliente, Pedidos y Catálogo | ⬜ Pendiente |
 | SPRINT-10 | Cobro Mixto, Auditoría y Gastos | ✅ Completo |
@@ -63,3 +63,5 @@ Aplica a formas de interactuar que el usuario no ha visto antes. No a features i
 | SPRINT-12 | Resumen WhatsApp al Dueño y Acceso LAN desde Celular | ⬜ Pendiente |
 | SPRINT-13 | Mesas, Pedidos y Pantalla de Barra (módulo restaurante) | ⬜ Pendiente |
 | SPRINT-14 | Asistente Local de Consultas (motor de intenciones offline) | ✅ Completo en código y tests (US-059 a US-065). **Pendiente: validación manual del PO de US-062 (M-1..M-9: visual, tema, 320 px, teclado en celular real)** |
+| SPRINT-16 | Seguridad y Producción (JWT, Tx, Backup) | ✅ Completo |
+| SPRINT-17 | Factus Sandbox, WhatsApp y Responsive | ✅ Completo |

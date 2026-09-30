@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 )
 
 type BusinessConfig struct {
@@ -18,6 +20,8 @@ type BusinessConfig struct {
 	AllowGlobalDiscount  bool    `json:"allow_global_discount"`
 	OwnerEmail           string  `json:"owner_email"`
 	OwnerEmailAppPassword string `json:"owner_email_app_password"`
+	CatalogEnabled       bool    `json:"catalog_enabled"`
+	CatalogToken         string  `json:"catalog_token"`
 	Configured           bool    `json:"configured"`
 }
 
@@ -34,12 +38,13 @@ func (r *SetupRepository) Get() (*BusinessConfig, error) {
 		SELECT id, name, COALESCE(logo,''), COALESCE(address,''), COALESCE(nit,''),
 		       COALESCE(ciiu,''), currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
 		       COALESCE(default_opening_amount, 0), COALESCE(allow_global_discount, 0),
-		       COALESCE(owner_email, ''), COALESCE(owner_email_app_password, '')
+		       COALESCE(owner_email, ''), COALESCE(owner_email_app_password, ''),
+		       COALESCE(catalog_enabled, 0), COALESCE(catalog_token, '')
 		FROM business_config WHERE id = 1`)
 	cfg := &BusinessConfig{}
 	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT,
 		&cfg.CIIU, &cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount,
-		&cfg.OwnerEmail, &cfg.OwnerEmailAppPassword)
+		&cfg.OwnerEmail, &cfg.OwnerEmailAppPassword, &cfg.CatalogEnabled, &cfg.CatalogToken)
 	if err == sql.ErrNoRows {
 		cfg.Currency = "COP"
 		cfg.Configured = false
@@ -80,8 +85,8 @@ func (r *SetupRepository) CompleteOnboarding(name, nit string) error {
 
 func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 	_, err := r.db.Exec(`
-		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, catalog_enabled, catalog_token, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, logo=excluded.logo, address=excluded.address,
 			nit=excluded.nit, currency=excluded.currency,
@@ -90,8 +95,36 @@ func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 			allow_global_discount=excluded.allow_global_discount,
 			owner_email=excluded.owner_email,
 			owner_email_app_password=excluded.owner_email_app_password,
+			catalog_enabled=excluded.catalog_enabled,
+			catalog_token=excluded.catalog_token,
 			updated_at=CURRENT_TIMESTAMP
 	`, cfg.Name, cfg.Logo, cfg.Address, cfg.NIT, cfg.Currency,
-		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount, cfg.AllowGlobalDiscount, cfg.OwnerEmail, cfg.OwnerEmailAppPassword)
+		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount, cfg.AllowGlobalDiscount, cfg.OwnerEmail, cfg.OwnerEmailAppPassword, cfg.CatalogEnabled, cfg.CatalogToken)
 	return err
+}
+
+func (r *SetupRepository) GetOrGenerateJWTSecret() ([]byte, error) {
+	var secret string
+	err := r.db.QueryRow(`SELECT COALESCE(jwt_secret, '') FROM business_config WHERE id = 1`).Scan(&secret)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if secret != "" {
+		return []byte(secret), nil
+	}
+
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	secret = base64.StdEncoding.EncodeToString(b)
+
+	_, err = r.db.Exec(`
+		INSERT INTO business_config (id, jwt_secret) VALUES (1, ?)
+		ON CONFLICT(id) DO UPDATE SET jwt_secret = excluded.jwt_secret
+	`, secret)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(secret), nil
 }

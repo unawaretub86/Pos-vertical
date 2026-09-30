@@ -36,7 +36,7 @@ func newMixedTestEnv(t *testing.T) *mixedTestEnv {
 	}
 	env.svc = NewSaleService(env.sales, env.products, env.registers)
 
-	reg, err := env.registers.Create(context.Background(), &model.Register{UserID: 1, OpeningAmount: 0})
+	reg, err := env.registers.Create(context.Background(), &model.Register{UserID: 1, OpeningAmount: 0}, nil)
 	if err != nil {
 		t.Fatalf("open register: %v", err)
 	}

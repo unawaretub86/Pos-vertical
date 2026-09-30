@@ -58,7 +58,7 @@ func New(db *database.DB) *Handler {
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
-	registerSvc := service.NewRegisterService(regRepo)
+	registerSvc := service.NewRegisterService(regRepo, userRepo, setupRepo)
 
 	var factelSvc *factelect.FacElectService
 	cfg, _ := fiscalRepo.Get(context.Background())
@@ -101,6 +101,7 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/auth/login", h.login)
 	r.Get("/setup/status", h.getSetupStatus)
 	r.Post("/onboarding", h.submitOnboarding)
+	r.Get("/public/catalog/{token}", h.getPublicCatalog)
 
 	// Protected
 	r.Group(func(r chi.Router) {
@@ -115,6 +116,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Put("/setup", h.updateSetup)
+			r.Post("/settings/email/test", h.testEmailConfig)
 		})
 
 		// Categories (all authenticated users can read; admin to write)

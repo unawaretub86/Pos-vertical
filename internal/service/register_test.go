@@ -17,7 +17,7 @@ type stubRegisterRepo struct {
 	cashOut      float64
 }
 
-func (s *stubRegisterRepo) Create(_ context.Context, r *model.Register) (*model.Register, error) {
+func (s *stubRegisterRepo) Create(_ context.Context, r *model.Register, mv *model.RegisterMovement) (*model.Register, error) {
 	r.ID = 1
 	s.created = r
 	return r, nil
@@ -62,7 +62,7 @@ func (s *stubRegisterRepo) SumByPaymentMethod(_ context.Context, _ int64) ([]rep
 func TestRegisterService_Open_AlreadyOpen_ReturnsError(t *testing.T) {
 	// A register is already open — opening a second one must fail.
 	repo := &stubRegisterRepo{openRegister: &model.Register{ID: 1, Status: "open"}}
-	svc := NewRegisterService(repo)
+	svc := NewRegisterService(repo, nil, nil)
 
 	_, err := svc.Open(context.Background(), 42, 100)
 	if err == nil {
@@ -75,7 +75,7 @@ func TestRegisterService_Open_AlreadyOpen_ReturnsError(t *testing.T) {
 
 func TestRegisterService_Open_NoExistingRegister_Succeeds(t *testing.T) {
 	repo := &stubRegisterRepo{} // GetOpen returns ErrNotFound
-	svc := NewRegisterService(repo)
+	svc := NewRegisterService(repo, nil, nil)
 
 	reg, err := svc.Open(context.Background(), 42, 100)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestRegisterService_Summary_IncludesCashIn(t *testing.T) {
 		cashIn:       50,
 		cashOut:      30,
 	}
-	svc := NewRegisterService(repo)
+	svc := NewRegisterService(repo, nil, nil)
 
 	summary, err := svc.Summary(context.Background(), 1)
 	if err != nil {
@@ -114,7 +114,7 @@ func TestRegisterService_Summary_NoCashIn_Unchanged(t *testing.T) {
 		cashSales:    100,
 		cashOut:      50,
 	}
-	svc := NewRegisterService(repo)
+	svc := NewRegisterService(repo, nil, nil)
 
 	summary, err := svc.Summary(context.Background(), 1)
 	if err != nil {
@@ -134,7 +134,7 @@ func TestRegisterService_Close_ExpectedIncludesCashIn(t *testing.T) {
 		cashIn:       50,
 		cashOut:      30,
 	}
-	svc := NewRegisterService(repo)
+	svc := NewRegisterService(repo, nil, nil)
 
 	summary, err := svc.Close(context.Background(), 1, 320)
 	if err != nil {

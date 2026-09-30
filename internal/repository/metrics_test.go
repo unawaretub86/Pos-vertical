@@ -747,13 +747,13 @@ func TestMetricsRepo_T19_ClosedDBWrapsErrors(t *testing.T) {
 func TestMetricsRepo_T30_AgingExcludesNullDaysOverdue(t *testing.T) {
 	db := openMetricsDB(t)
 	ctx := context.Background()
-	hoy0 := metricsToday0()
+
 
 	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Gil', '', '')`)
 	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Beto', '', '')`)
 
-	// Gil: credit $12.000 seeded with time.Time → julianday() is NULL (D-5).
-	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 12000, 12000, 'completed', 'credit', ?)`, hoy0.Add(-48*time.Hour))
+	// Gil: credit $12.000 seeded with unparseable string → julianday() is NULL (D-5).
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 12000, 12000, 'completed', 'credit', 'NOT_A_DATE')`)
 	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 12000)`)
 	// Beto (T-16): credit $30.000 ten days ago, payment $10.000 → 20.000.
 	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 2, 30000, 30000, 'completed', 'credit', datetime('now','-10 days'))`)

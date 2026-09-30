@@ -1,7 +1,7 @@
 # Dominio — Caja (apertura, movimientos, cierre)
 
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** arqueo, cuadre, diferencia de caja
-> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`).
+> **Actualizado:** 2026-09-30 · Verificado contra el código en esa fecha (US-071: apertura transaccional, US-053: email al cierre).
 
 La caja es donde el sistema se gana o pierde la confianza del cajero. Un cuadre que da mal sin explicación hace que la tienda vuelva al cuadernillo.
 
