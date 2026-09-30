@@ -1,7 +1,7 @@
 # Dominio — Restaurante (modo restaurante y mesas)
 
 > **Tipo:** spec · **Vigente:** sí · **Manda sobre:** modo restaurante, mesas y estado de mesa
-> **Actualizado:** 2026-09-29 · Verificado contra el código en esa fecha (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`).
+> **Actualizado:** 2026-09-30 · Verificado contra el código en esa fecha (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`).
 
 Módulo para cafeterías y restaurantes: mesas, pedidos y pantalla de barra (SPRINT-13). Hoy solo existe la gestión de mesas y el interruptor; pedidos, cobro y barra llegan en US-056, US-057 y US-058 y agregarán sus reglas aquí.
 
@@ -12,7 +12,7 @@ Módulo para cafeterías y restaurantes: mesas, pedidos y pantalla de barra (SPR
 - `business_config.restaurant_mode` (0/1, default 0) decide si el negocio usa el módulo. Se activa en Ajustes con el toggle "Modo restaurante" (solo admin, vía `PUT /api/setup`).
 - Apagado: no se muestra la sección de mesas en Ajustes ni "Mesas" (`/mesas`) y "Barra" (`/barra`) en el sidebar.
 - Encendido: la sección de mesas aparece en Ajustes y el sidebar muestra "Mesas" y "Barra" tanto a `admin` como a `cashier`.
-- `business_config.lan_access_enabled` (0/1, default 0) se crea junto a esta migración pero pertenece a US-054 (acceso LAN); su regla de negocio se documenta al cerrar esa US.
+- `business_config.lan_access_enabled` (0/1, default 0) se crea junto a esta migración pero pertenece a US-054 (acceso LAN); ver `servidor.md`.
 - `PUT /api/setup` reemplaza la fila completa. El formulario de Ajustes debe reenviar siempre `restaurant_mode` y `lan_access_enabled` (leídos de `GET /setup`) para que guardar otro campo no los apague.
 
 ## Mesas

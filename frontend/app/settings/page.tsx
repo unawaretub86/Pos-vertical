@@ -214,6 +214,13 @@ function SettingsContent() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
+  const [lanUrl, setLanUrl] = useState('');
+
+  useEffect(() => {
+    api.get<{ ip: string; url: string }>('/setup/lan-info')
+      .then(info => setLanUrl(info.url ?? ''))
+      .catch(() => setLanUrl(''));
+  }, []);
 
   useEffect(() => {
     api.get<FiscalConfig>('/fiscal-config')
@@ -482,6 +489,41 @@ function SettingsContent() {
                     </span>
                   </label>
                 </ConfigRow>
+
+                <ConfigRow label="Permitir acceso desde otros dispositivos de mi red WiFi" sublabel="Para usar el POS desde un celular o tablet conectado a la misma WiFi">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.lan_access_enabled}
+                      onChange={e => setForm(f => ({ ...f, lan_access_enabled: e.target.checked }))}
+                    />
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      {form.lan_access_enabled ? 'Activado' : 'Desactivado'}
+                    </span>
+                  </label>
+                </ConfigRow>
+                {form.lan_access_enabled && (
+                  <div style={{
+                    padding: '10px 16px',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    overflowWrap: 'anywhere',
+                  }}>
+                    {lanUrl ? (
+                      <div>Desde el otro dispositivo abre: <strong style={{ color: 'var(--text-primary)' }}>{lanUrl}</strong></div>
+                    ) : (
+                      <div>No pudimos detectar la dirección de tu red. Conecta el computador a la WiFi y revisa su IP en la configuración de red de Windows; luego abre http://IP:8080 en el otro dispositivo.</div>
+                    )}
+                    <div>El cambio se aplica al cerrar y volver a abrir pos.exe.</div>
+                    <div>Recomendación: cambia la contraseña inicial admin/admin en Usuarios, porque otros dispositivos de la red podrán ver la pantalla de ingreso.</div>
+                  </div>
+                )}
 
                 <ConfigRow label="Correo del dueño" sublabel="Recibe aquí el resumen de cierre de caja automáticamente, sin hacer nada">
                   <input

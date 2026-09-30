@@ -8,13 +8,15 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 
 > Se actualiza al final de cada sesión de trabajo con el pipeline.
 
-**Última corrida:** 7 (US-062, nivel L, 2026-09-29). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos. **SPRINT-14 completo en código y tests** (US-059 a US-065); queda pendiente la validación manual del teclado en celular real (M-7 / AC-20) de US-062.
+**Última corrida:** 8 (US-054, nivel L, 2026-09-30). Antes: 7 (US-062, nivel L, 2026-09-29). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos. **SPRINT-14 completo en código y tests** (US-059 a US-065); queda pendiente la validación manual del teclado en celular real (M-7 / AC-20) de US-062.
 
 **Aplicado antes de esta corrida:** el ajuste de la corrida 6 (checklist + bloques de tiempo declarados en `implementer.md`, commit `37e5c10`). En la corrida 7 el implementer terminó en 3,9 min sin colgarse, pero el prompt del orquestador también repitió el aviso de trozar archivos y de reportar cada ~20-25 min, así que no se puede separar qué parte del resultado es del ajuste. Una sola muestra: no concluir aún.
 
 **Abierto, sin ajuste aplicado:** (1) el pipeline no tiene forma de verificar UI en navegador: el agente `qa` no tiene herramienta de navegador y el orquestador tampoco intentó una hasta que el PO lo preguntó; la verificación con Edge headless (Playwright) encontró R-55 (ver corrida 7). (2) El clasificador de auto mode falló en Bash y PowerShell durante el cierre y frenó el pipeline en el checkpoint de `close`.
 
-**Próxima US:** ninguna en SPRINT-14. Lo que sigue lo define el roadmap (`project-docs/roadmap.md`), que ahora incluye R-49 a R-55 originados en US-062.
+**Próxima US:** siguiente de SPRINT-13 (US-056 en adelante). Pendiente del PO: prueba manual con dos dispositivos de US-054 (AC-16 / T-M).
+
+**(obsoleto, corrida 7)** ninguna en SPRINT-14. Lo que sigue lo define el roadmap (`project-docs/roadmap.md`), que ahora incluye R-49 a R-55 originados en US-062.
 
 **Cómo retomar:** en una sesión nueva, elegir la próxima US y correr `/us US-XXX [M|L]`.
 
@@ -41,6 +43,7 @@ Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de d
 | 5 | 2026-09-23 | US-060 | L | ~522k (A 154k · T 109k · I 175k · Q 85k) | 160 | ~83.8 | 1 (implementer cayó por límite de salida) | 1 | 5 | 1 (R-46) | 0 | +1.333 / −2, 9 archivos |
 | 6 | 2026-09-24 | US-061 | M | ~708k (A 372k=149k+109k+115k · I 186k, 2 intentos previos sin telemetría · Q 150k) | 281 (incompleto, 2 intentos de implementer sin `tool_uses` reportado) | ~46.7 agente (+~310 min de pared perdidos en 2 cuelgues, ver abajo) | 2 (implementer colgado dos veces) | 1 | 6 | 2 nuevos (R-47, R-48) + 1 cerrado parcial (R-06) | 0 | +1.867 / −20, 16 archivos |
 | 7 | 2026-09-29 | US-062 | L | ~538k (A 340k=135k+102k+75k+28k · T 65k · I 64k · Q 69k) | 168 | ~27.4 | 0 (más 1 parada por el clasificador de auto mode, ajena al contrato) | 1 | 7 discrepancias de contrato (D-1..D-7) + 1 hallazgo preexistente fuera de alcance | 7 nuevos (R-49 a R-55) | 0 | +1.198 / −8, 9 archivos |
+| 8 | 2026-09-30 | US-054 | L | ~191k (A 79k=51k+55k+79k · T 32k · I 45k · Q 36k) | 51 | ~9.9 | 0 (un PASA⚠️ mostrado al PO por regla, no por parada) | 1 | 6 discrepancias de contrato (sprint desfasado, rutas dinámicas, `go build` sin `web/out`…) | 1 nuevo (R-62) + 1 cerrado (R-55) | 0 | +452 / −55, 22 archivos |
 
 ### Tendencia
 
@@ -408,3 +411,27 @@ Costo real de armar el entorno: la primera pasada fue vacía sin saberlo (las p�
 - ¿El implementer vuelve a terminar sin cuelgues en una US de tamaño similar (frontend + backend)? Con una muestra más se puede intentar separar el efecto del ajuste de `implementer.md` del efecto del aviso en el prompt.
 - Si el PO aprueba la verificación con navegador, cuánto tiempo y tokens añade por US con UI.
 - Una US que arranque con `ListAgents` mostrando algo vivo, para probar que la ruta de retoma sigue funcionando.
+
+## Corrida 8 — US-054 (acceso LAN + servir el frontend desde el binario, nivel L)
+
+| Agente | Invocaciones | Tokens (último valor) | Tools | Duración |
+|---|---|---|---|---|
+| analyst | 3 (contract, ajuste GATE 1, close; las dos últimas por `SendMessage`) | 79k | 23 | ~4,2 min |
+| test-author | 1 | 32k | 6 | ~1,1 min |
+| implementer | 1 | 45k | 12 | ~2,8 min |
+| qa | 1 | 36k | 10 | ~1,8 min |
+
+**Qué encontró.** El contrato reprodujo con un `fstest.MapFS` el comportamiento real de `FileServer` y detectó lo que el sprint no decía: rutas dinámicas (`customers/[id]`, `catalogo/[token]`) exportadas como un solo `_.html`, `go build` roto en checkout limpio por `//go:embed all:out` sin `.gitkeep` trackeado, y `lan_access_enabled` ya existente. Todas las decisiones (P-1..P-8) se resolvieron en un solo GATE 1. QA: 0 BLOQUEANTE, 3 MENOR; ninguno cambió código.
+
+**Verificación del orquestador.** Antes del merge se armó el binario con `web/out` poblado y se comprobó por `curl`: `/login`, `/customers/5` y `/catalogo/abc` → HTML; chunk JS → `text/javascript`; `/_next/nope.js` → 404; `/api/setup/status` → 200. Esto cierra lo que QA dejó sin probar (su smoke corrió con `web/out` vacío). Sigue sin verificar en navegador real: T-12 y AC-16 / T-M.
+
+**Paradas no planeadas:** 0. Un caso `PASA⚠️` en T-11 (guarda de regresión) se mostró al PO por regla.
+
+**Fricción operativa.**
+- `ListAgents` sí mostró al analyst vivo tras entregar (a diferencia de la corrida 7), y la retoma por `SendMessage` funcionó dos veces. El agente se ve en la lista mientras dura la sesión; desaparecía en la corrida 7 por otra causa no identificada.
+- El implementer escribió `servidor.md` (spec) por su cuenta; el analyst lo verificó en `close`. Es borde del reparto de roles, sin daño.
+- Corrida notablemente más barata que las anteriores (~191k vs 282k–708k): contrato acotado, sin vueltas de QA y sin cuelgues. US más pequeña que US-062/US-061; no concluir todavía.
+
+### Qué medir en la corrida 9
+- Si la verificación con navegador (ajuste pendiente de corridas 7) se aprueba, cuánto añade por US con UI.
+- Si el implementer vuelve a terminar sin cuelgues.

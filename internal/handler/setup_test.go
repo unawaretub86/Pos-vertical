@@ -77,3 +77,41 @@ func TestSetup_T4_AbsentLanFlagDefaultsFalse(t *testing.T) {
 		t.Error("lan_access_enabled = true, want false (absent in PUT)")
 	}
 }
+
+// Contrato US-054 T-5 (AC-6, AC-7, P-7). Se espera el campo no exportado
+// `localIP func() string` en Handler (inyectable desde el test); nil o "" => sin IP.
+func TestSetup_US054_T5_LanInfo(t *testing.T) {
+	db := setupTestDB(t)
+	h := New(db)
+	admin := tokenFor(t, 1, "admin")
+
+	type lanInfo struct {
+		IP  string `json:"ip"`
+		URL string `json:"url"`
+	}
+	fetch := func(tok string) (int, lanInfo) {
+		w := doAuth(h, tok, http.MethodGet, "/setup/lan-info", "")
+		var env struct {
+			Data lanInfo `json:"data"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &env)
+		return w.Code, env.Data
+	}
+
+	h.localIP = func() string { return "192.168.1.15" }
+	code, got := fetch(admin)
+	if code != http.StatusOK || got.IP != "192.168.1.15" || got.URL != "http://192.168.1.15:8080" {
+		t.Errorf("with IP: %d %+v, want 200 {192.168.1.15 http://192.168.1.15:8080}", code, got)
+	}
+
+	h.localIP = func() string { return "" }
+	code, got = fetch(admin)
+	if code != http.StatusOK || got.IP != "" || got.URL != "" {
+		t.Errorf("without IP: %d %+v, want 200 {\"\" \"\"}", code, got)
+	}
+
+	h.localIP = func() string { return "192.168.1.15" }
+	if code, _ := fetch(tokenFor(t, 2, "cashier")); code != http.StatusForbidden {
+		t.Errorf("cashier status = %d, want 403", code)
+	}
+}

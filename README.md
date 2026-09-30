@@ -127,7 +127,7 @@ make dev-frontend    # localhost:3000
 make dev-backend     # localhost:8080
 ```
 
-El frontend en desarrollo apunta al backend en `localhost:8080` vía proxy configurado en Next.js.
+En desarrollo el frontend (:3000) llama al backend (:8080) con `NEXT_PUBLIC_API_URL=http://localhost:8080/api` (ya definido en `make dev-frontend`; el backend permite CORS desde :3000). Sin esa variable la UI usa la ruta relativa `/api`, que es lo que ocurre en producción.
 
 > En producción (`pos.exe`) el backend sirve el frontend estático directamente — no hay dos servidores.
 

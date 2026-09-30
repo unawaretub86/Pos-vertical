@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"github.com/andreyo/pos/internal/netutil"
 	"net/http"
 
 	"github.com/andreyo/pos/internal/database"
@@ -35,6 +36,7 @@ type Handler struct {
 	fiscalRepo   factelect.FiscalConfigRepository
 	assistant    *service.AssistantService
 	tables       *service.DiningTableService
+	localIP      func() string // injectable for tests; netutil.LocalIPv4 in production
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -91,6 +93,7 @@ func New(db *database.DB) *Handler {
 		fiscalRepo:   fiscalRepo,
 		assistant:    service.NewAssistantService(metricsRepo, reportRepo, expenseRepo, assistantQueryRepo),
 		tables:       service.NewDiningTableService(tableRepo),
+		localIP:      netutil.LocalIPv4,
 	}
 }
 
@@ -119,6 +122,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Put("/setup", h.updateSetup)
+			r.Get("/setup/lan-info", h.getLanInfo)
 			r.Post("/settings/email/test", h.testEmailConfig)
 		})
 
@@ -135,7 +139,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Get("/products", h.listProducts)
 		r.Get("/products/low-stock", h.listLowStockProducts)
 		r.Get("/products/barcode/{barcode}", h.getProductByBarcode)
-			r.Get("/products/{id}", h.getProduct)
+		r.Get("/products/{id}", h.getProduct)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Post("/products", h.createProduct)

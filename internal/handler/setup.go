@@ -62,3 +62,16 @@ func (h *Handler) testEmailConfig(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, map[string]string{"message": "Correo enviado con éxito"})
 }
 
+
+// getLanInfo suggests the URL other devices on the WiFi can use (admin only).
+func (h *Handler) getLanInfo(w http.ResponseWriter, r *http.Request) {
+	ip := ""
+	if h.localIP != nil {
+		ip = h.localIP()
+	}
+	url := ""
+	if ip != "" {
+		url = "http://" + ip + ":8080"
+	}
+	respond(w, http.StatusOK, map[string]string{"ip": ip, "url": url})
+}

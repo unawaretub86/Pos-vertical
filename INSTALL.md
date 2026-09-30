@@ -20,6 +20,14 @@
 
 ---
 
+## Acceso desde el celular o tablet (misma WiFi)
+
+1. En Ajustes activa "Permitir acceso desde otros dispositivos de mi red WiFi" y guarda.
+2. Cierra y vuelve a abrir `pos.exe` (el cambio no se aplica en caliente).
+3. Ajustes muestra la dirección, por ejemplo `http://192.168.1.15:8080`. Ábrela en el otro dispositivo.
+4. Si no carga, permite `pos.exe` en el Firewall de Windows (redes privadas).
+5. Cambia la contraseña inicial `admin/admin`.
+
 ## Primer uso
 
 1. Abra su navegador y vaya a la dirección:

@@ -48,18 +48,37 @@ func main() {
 	// Serve frontend static files
 	r.Handle("/*", web.FileServer())
 
-	addr := "localhost:8080"
-	log.Printf("POS server starting at http://%s", addr)
+	lan := false
+	if cfg, err := setupRepo.Get(); err != nil {
+		log.Printf("could not read LAN access config, binding locally: %v", err)
+	} else if cfg != nil {
+		lan = cfg.LanAccessEnabled
+	}
+	addr := listenAddr(lan)
+	log.Printf("POS server starting at %s (LAN access: %v)", browserURL(), lan)
 
 	// Open browser after server starts
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		openBrowser("http://" + addr)
+		openBrowser(browserURL())
 	}()
 
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+}
+
+// listenAddr returns the bind address: all interfaces only when LAN access is on.
+func listenAddr(lan bool) string {
+	if lan {
+		return "0.0.0.0:8080"
+	}
+	return "127.0.0.1:8080"
+}
+
+// browserURL is always localhost, regardless of the bind address.
+func browserURL() string {
+	return "http://localhost:8080"
 }
 
 func openBrowser(url string) {

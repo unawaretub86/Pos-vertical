@@ -28,4 +28,4 @@ dev-backend:
 	go run ./cmd/pos
 
 dev-frontend:
-	cd frontend && pnpm run dev
+	cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8080/api pnpm run dev

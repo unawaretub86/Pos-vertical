@@ -13,9 +13,9 @@
 - SPRINT-05 — Mobile Responsive (⬜ en la tabla de progreso) — **sigue abierta**. Las pantallas nuevas de este sprint sí nacen responsive; el resto de la app no se toca.
 - US-042c, US-043, US-044, US-045 (SPRINT-09) — **siguen abiertas**, no relacionadas con el módulo de restaurante.
 - US-053 — Resumen de cierre de caja por correo (SPRINT-12) — **sigue abierta**. Hay trabajo sin commitear en `internal/mailer/`; no entra aquí para no mezclarlo con el módulo nuevo.
-- US-054 — Acceso al POS por WiFi local (SPRINT-12) — **entra en este sprint**. Sin ella el KDS no corre en la tablet del barista y el módulo pierde su razón de ser.
-  **Corrección verificada (2026-09-29):** SPRINT-12 decía que `lan_access_enabled` iba en la migración 14, y la primera versión de este sprint la movió a la 15. Ambas están cerradas: la 14 agrega `owner_email` y `owner_email_app_password` (`internal/database/migrate.go:483`) y la 15 crea `assistant_queries` (`migrate.go:493`, US-061). Las tablas del módulo y `lan_access_enabled` van en la **migración 18**, dentro de US-055.
-- **R-55 — el binario no sirve el frontend embebido** — **entra en este sprint, dentro de US-054.** Sin esto el POS no abre en la tablet aunque el bind sea `0.0.0.0` (detalle en US-054). Hay un arreglo parcial sin commitear de `web/static.go` en el checkout principal (quita la barra inicial); no es de este sprint, hay que revisarlo con Andrey antes de tomarlo o reescribirlo.
+- US-054 — Acceso al POS por WiFi local (SPRINT-12) — **completa en código y tests (2026-09-30)**, junto con R-55. Falta solo la prueba manual con dos dispositivos reales (AC-16 / T-M), pendiente de Andrey.
+  **Corrección verificada (2026-09-29):** SPRINT-12 decía que `lan_access_enabled` iba en la migración 14; la creó la migración 18 dentro de US-055 (`internal/database/migrate.go:548`).
+- **R-55 — el binario no servía el frontend embebido** — **cerrado por US-054 (2026-09-30).**
 
 ---
 
@@ -24,7 +24,7 @@
 | US | Nombre | Estado | Fecha |
 |----|--------|--------|-------|
 | US-055 | Migración 16, modo restaurante y gestión de mesas | [x] Completa en código, tests y verificación en navegador (2026-09-29) | 2026-09-29 |
-| US-054 | Acceso al POS desde el celular/tablet por WiFi local (deuda SPRINT-12) + R-55 servir el frontend desde el binario | [ ] Pendiente | — |
+| US-054 | Acceso al POS desde el celular/tablet por WiFi local (deuda SPRINT-12) + R-55 servir el frontend desde el binario | [x] Completa en código y tests; pendiente prueba manual con dos dispositivos (2026-09-30) | 2026-09-30 |
 | US-056 | Pedido por mesa: abrir, agregar ítems con nota, anular, cancelar | [ ] Pendiente | — |
 | US-057 | Cobro del pedido reusando el flujo de venta | [ ] Pendiente | — |
 | US-058 | Pantalla de barra (KDS) con estados, tiempos y alerta sonora | [ ] Pendiente | — |
@@ -185,7 +185,7 @@ QA: OK, 0 bloqueantes. `go build`, `go test ./...`, `pnpm build`, `pnpm test` (4
 
 ---
 
-## US-054 — Acceso al POS desde el celular/tablet por WiFi local (K1, deuda SPRINT-12)
+## [x] US-054 — Acceso al POS desde el celular/tablet por WiFi local (K1, deuda SPRINT-12) (2026-09-30)
 
 **Como** dueño,
 **quiero** entrar al POS desde el celular o una tablet conectada a mi WiFi,
@@ -193,14 +193,11 @@ QA: OK, 0 bloqueantes. `go build`, `go test ./...`, `pnpm build`, `pnpm test` (4
 
 **Esfuerzo estimado:** 1 día (0.5 del bind + 0.5 de R-55). **Impacto:** Alto en este sprint — es dependencia dura del KDS (US-058), no una comodidad.
 
-**Estado verificado:**
-- La columna `lan_access_enabled` **no existe** (verifiqué con `grep` en `internal/`, `cmd/` y `frontend/`: cero coincidencias). La crea la migración 18 en US-055.
-- El bind está fijo en `addr := "localhost:8080"` (`cmd/pos/main.go:41`) y ese mismo `addr` se usa para abrir el navegador (línea 47).
-- **R-55 (hallado el 2026-09-29, QA manual de US-062): el POS no se ve desde otro dispositivo aunque el bind sea `0.0.0.0`.** Tres causas, las tres en el camino de este sprint:
-  1. `web/static.go` abría rutas con barra inicial, `fs.FS` las rechaza y todo caía a `index.html` (`.js` incluidos) → página en blanco. Hay un arreglo sin commitear en el checkout principal (`TrimPrefix`); además hay que servir `<ruta>.html` para las rutas exportadas de Next (`output: "export"`), o `/mesas` y `/barra` darían 404/`index.html` al recargar.
-  2. `frontend/lib/api.ts:3` fija `http://localhost:8080/api` en tiempo de build. En la tablet `localhost` es la tablet: el login pega a ninguna parte. Requiere API relativa `/api` por defecto.
-  3. `internal/middleware/middleware.go:90` solo permite el origen `http://localhost:3000`; con UI y API en el mismo origen no aplica, pero hay que confirmarlo con una petición real desde otro dispositivo.
-- `cmd/pos/main.go` no tiene tests hoy; todo su contenido es orquestación.
+**Estado verificado (al cerrar, 2026-09-30):**
+- `lan_access_enabled` lo creó la migración 18 de US-055 (`internal/database/migrate.go:548`); esta US no agregó migración.
+- El bind sale de `listenAddr(lan)` (`cmd/pos/main.go:72`), con `lan` leído de `business_config` al arrancar (`main.go:55-57`); el navegador se abre siempre en `browserURL()` (`main.go:80`).
+- R-55 cerrado: `web/static.go` resuelve archivo -> `<ruta>.html` -> `customers/_.html`/`catalogo/_.html` -> 404 para `/_next/` y assets -> `index.html`; `frontend/lib/api.ts:3` usa `/api` relativo por defecto. CORS `:3000` (`internal/middleware/middleware.go:94-97`) sin cambio: solo aplica al dev.
+- Se agregó `web/out/.gitkeep` para que `go build ./...` compile en un checkout limpio.
 
 **Contexto técnico:**
 `listenAddr(lanEnabled bool) string` como función exportada y pura en `cmd/pos/`, no inline en `main()`, específicamente para poder testearla sin levantar servidor. Devuelve `127.0.0.1:8080` con el toggle apagado y `0.0.0.0:8080` con el toggle encendido. `main()` lee `business_config.lan_access_enabled` al arrancar. En Ajustes, junto al toggle, se muestra la IP local detectada y la URL que hay que escribir en la tablet.
@@ -220,25 +217,38 @@ socket una sola vez al arrancar.
 **Acceptance Criteria:**
 
 **Ajustes:**
-- [ ] Toggle "Permitir acceso desde otros dispositivos de mi red WiFi", persiste en `business_config.lan_access_enabled`
-- [ ] Al activarlo se muestra la URL con la IP local detectada (ej. `http://192.168.1.15:8080`) y el aviso de que hay que reiniciar el programa
-- [ ] Si no se detecta IP local, se muestra un texto de ayuda en vez de una URL rota
+- [x] Toggle "Permitir acceso desde otros dispositivos de mi red WiFi", persiste en `business_config.lan_access_enabled`
+- [x] Al activarlo se muestra la URL con la IP local detectada (ej. `http://192.168.1.15:8080`) y el aviso de que hay que reiniciar el programa
+- [x] Si no se detecta IP local, se muestra un texto de ayuda en vez de una URL rota
 
 **Acceso:**
-- [ ] Con el toggle apagado, `pos.exe` solo responde en `localhost`
-- [ ] Con el toggle encendido y tras reiniciar, un celular en la misma WiFi abre el POS y puede iniciar sesión
-- [ ] Responsive: el login y el POS abren usables en un celular de 320px
+- [x] Con el toggle apagado, `pos.exe` solo responde en `localhost`
+- [ ] Con el toggle encendido y tras reiniciar, un celular en la misma WiFi abre el POS y puede iniciar sesión (AC-16, pendiente de Andrey)
+- [ ] Responsive: el login y el POS abren usables en un celular de 320px (pendiente de verificar en celular real, con la prueba manual)
 
 **DoD:**
-- [ ] Usa la columna `lan_access_enabled` de la migración 18 (US-055); esta US no crea migración
-- [ ] `listenAddr` exportada y pura en `cmd/pos/`
-- [ ] Test: `listenAddr(false) == "127.0.0.1:8080"` y `listenAddr(true) == "0.0.0.0:8080"`
-- [ ] R-55: `FileServer` quita la barra inicial y sirve `<ruta>.html` para rutas exportadas; `curl` de un chunk `/_next/static/chunks/*.js` devuelve `application/javascript`, no `text/html`
-- [ ] R-55: test de `FileServer` con un FS en memoria: `/`, `/login` (→ `login.html`), un `.js` existente y una ruta inexistente (→ `index.html`)
-- [ ] R-55: `api.ts` usa `/api` relativo por defecto; el dev con `:3000` sigue funcionando vía `NEXT_PUBLIC_API_URL`, documentado en `INSTALL.md`/`CLAUDE.md` si cambia
-- [ ] Test: detección de IP local devuelve una IPv4 privada (10.x / 172.16-31.x / 192.168.x) o cadena vacía, nunca `127.0.0.1` como sugerencia al usuario
+- [x] Usa la columna `lan_access_enabled` de la migración 18 (US-055); esta US no crea migración
+- [x] `listenAddr` exportada y pura en `cmd/pos/`
+- [x] Test: `listenAddr(false) == "127.0.0.1:8080"` y `listenAddr(true) == "0.0.0.0:8080"`
+- [x] R-55: `FileServer` quita la barra inicial y sirve `<ruta>.html` para rutas exportadas; `curl` de un chunk `/_next/static/chunks/*.js` devuelve `text/javascript` (el tipo que entrega `net/http`), no `text/html`
+- [x] R-55: test de `FileServer` con un FS en memoria: `/`, `/login` (→ `login.html`), un `.js` existente y una ruta inexistente (→ `index.html`)
+- [x] R-55: `api.ts` usa `/api` relativo por defecto; el dev con `:3000` sigue funcionando vía `NEXT_PUBLIC_API_URL`, documentado en `INSTALL.md`/`CLAUDE.md` si cambia
+- [x] Test: detección de IP local devuelve una IPv4 privada (10.x / 172.16-31.x / 192.168.x) o cadena vacía, nunca `127.0.0.1` como sugerencia al usuario
 - [ ] Test manual con dos dispositivos reales — **pendiente para Andrey**, no automatizable en este entorno
-- [ ] Build limpio (`go build ./...`, `pnpm build`)
+- [x] Build limpio (`go build ./...`, `pnpm build`)
+
+---
+
+**Criterios verificados (cierre 2026-09-30, QA vuelta 1 OK: 0 BLOQUEANTE, 3 MENOR):**
+- AC-1/AC-2: MIENTRAS `lan_access_enabled` = 0 (o la config no se pueda leer) el sistema DEBE escuchar en `127.0.0.1:8080`; con 1, en `0.0.0.0:8080`. Test: `cmd/pos/main_test.go` `TestListenAddr_T1`.
+- AC-3: el navegador se abre siempre en `http://localhost:8080`. Test: `cmd/pos/main_test.go` `TestBrowserURL_T2`.
+- AC-4: el toggle persiste en `business_config.lan_access_enabled` y aplica al reiniciar. Test: `internal/handler/setup_test.go` `TestSetup_T4_AbsentLanFlagDefaultsFalse` (más el PUT/GET de US-055 en el mismo archivo).
+- AC-6/AC-7/AC-8: la IP sugerida es solo IPv4 privada (10/8, 172.16/12, 192.168/16), nunca loopback ni 169.254.x; sin IP, Ajustes muestra ayuda. `GET /api/setup/lan-info` solo admin. Tests: `internal/netutil/lan_test.go` `TestPickPrivateIPv4_T4`; `internal/handler/setup_test.go` `TestSetup_US054_T5_LanInfo`.
+- AC-9..AC-14: `FileServer` sirve `/` -> `index.html`; `/login` -> `login.html` sin redirigir (incluso con directorio homónimo); `/customers/<id>` y `/catalogo/<token>` -> `_.html`; asset inexistente o `/_next/*` -> 404; ruta desconocida -> `index.html`. Tests: `web/static_test.go` `TestFileServer_T6_RootServesIndex`, `_T7_HtmlExtensionWithoutRedirect`, `_T8_AssetContentType`, `_T9_DynamicRoutes`, `_T10_FallbackAndAsset404`.
+- AC-15: sin `NEXT_PUBLIC_API_URL` la UI usa `/api`; con la variable, su valor. Test: `frontend/lib/api.test.ts` (`uses relative /api when NEXT_PUBLIC_API_URL is undefined`, `uses NEXT_PUBLIC_API_URL when defined`).
+- AC-5/AC-17: toggle visible en Ajustes con URL o ayuda, aviso de reinicio y aviso de cambiar `admin/admin`. Solo revisado por lectura de `frontend/app/settings/page.tsx`; T-12 no se verificó en navegador.
+- AC-16 / T-M: un celular real en la misma WiFi abre el POS e inicia sesión (320px). **Pendiente de Andrey**, no automatizable.
+- MENOR aceptados sin ítem: import de `internal/netutil` dentro del grupo stdlib (`internal/handler/handler.go:6`) y doble línea en blanco antes de `getLanInfo` (`internal/handler/setup.go:64-65`); son de estilo. MENOR 3 (lint 42 vs 41): no es regresión de esta US, ver bitácora de `roadmap.md`.
 
 ---
 
