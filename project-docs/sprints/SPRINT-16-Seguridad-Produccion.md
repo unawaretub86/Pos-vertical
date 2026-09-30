@@ -15,7 +15,7 @@
 | US-070 | Seguridad: JWT secret auto-generado, no hardcodeado | [x] Completo | 2026-09-29 |
 | US-071 | Integridad: Apertura de caja transaccional (Tx) | [x] Completo | 2026-09-29 |
 | US-072 | Integridad: Backup SQLite online (`VACUUM INTO`) | [x] Completo | 2026-09-29 |
-| US-073 | UX: Filtro de movimientos de caja por sesión actual | [ ] Pendiente | — |
+| US-073 | UX: Filtro de movimientos de caja por sesión actual | [x] Ya cubierto (verificado 2026-09-30) | 2026-09-30 |
 
 **Esfuerzo total estimado: 2.5 días** (Sprint crítico de estabilización del core).
 
@@ -107,12 +107,12 @@
 **Esfuerzo estimado:** 1 día. **Impacto:** Medio (Usabilidad).
 
 **Estado verificado:**
-- El frontend lista todos los movimientos históricos. No filtra por `register_id` de la caja abierta actualmente.
+- **Corregido 2026-09-30:** esta afirmación era falsa. `GET /registers/{id}/movements` filtra por `register_id` (`internal/handler/register.go:157-168`, `internal/repository/register.go:145-146`) y `frontend/app/register/page.tsx:476,775-783` muestra solo los de la sesión actual y agrupa el historial por sesión (`:461-501`). Sin cambios de código.
 
 **Acceptance Criteria:**
-- [ ] La UI de "Caja" solo lista movimientos donde `register_id` coincide con la sesión actual.
-- [ ] Si se consulta un historial, se puede agrupar o filtrar por sesión pasada.
+- [x] La UI de "Caja" solo lista movimientos donde `register_id` coincide con la sesión actual.
+- [x] Si se consulta un historial, se puede agrupar o filtrar por sesión pasada.
 
 **DoD:**
-- [ ] Endpoint de lista de movimientos soporta filtro por `register_id`.
-- [ ] Interfaz gráfica actualizada.
+- [x] Endpoint de lista de movimientos soporta filtro por `register_id`.
+- [x] Interfaz gráfica actualizada.
