@@ -30,6 +30,8 @@ interface BusinessConfig {
   owner_email_app_password: string;
   catalog_enabled: boolean;
   catalog_token: string;
+  restaurant_mode: boolean;
+  lan_access_enabled: boolean;
   configured: boolean;
 }
 
@@ -57,11 +59,130 @@ function ConfigRow({ label, sublabel, children }: { label: string; sublabel?: st
   );
 }
 
+// ─── Tables section (restaurant mode) ─────────────────────────────────────────
+
+interface DiningTable {
+  id: number;
+  name: string;
+  zone: string;
+  seats: number;
+  sort_order: number;
+}
+
+function TablesSection() {
+  const [tables, setTables] = useState<DiningTable[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newZone, setNewZone] = useState('');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [edit, setEdit] = useState({ name: '', zone: '', sort_order: 0 });
+
+  async function load() {
+    try {
+      setTables(await api.get<DiningTable[]>('/tables'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al cargar mesas');
+    } finally {
+      setLoaded(true);
+    }
+  }
+
+  useEffect(() => {
+    api.get<DiningTable[]>('/tables')
+      .then(setTables)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Error al cargar mesas'))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  async function run(action: () => Promise<unknown>) {
+    setError('');
+    try {
+      await action();
+      await load();
+      return true;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error');
+      return false;
+    }
+  }
+
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    const ok = await run(() => api.post('/tables', { name: newName, zone: newZone }));
+    if (ok) { setNewName(''); setNewZone(''); }
+  }
+
+  function startEdit(t: DiningTable) {
+    setEditId(t.id);
+    setEdit({ name: t.name, zone: t.zone, sort_order: t.sort_order });
+  }
+
+  async function saveEdit(t: DiningTable) {
+    const ok = await run(() => api.put(`/tables/${t.id}`, { ...edit, seats: t.seats }));
+    if (ok) setEditId(null);
+  }
+
+  return (
+    <div style={{ marginTop: '32px' }}>
+      <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+        Mesas
+      </div>
+
+      {error && (
+        <div role="alert" style={{ padding: '8px 12px', marginBottom: '8px', borderRadius: '6px', fontSize: '13px', border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-primary)' }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {loaded && tables.length === 0 && (
+          <div style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-muted)', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px' }}>
+            Aún no hay mesas. Crea la primera con el botón de abajo.
+          </div>
+        )}
+
+        {tables.map(t => (
+          <div key={t.id} style={{ padding: '10px 12px', background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '8px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+            {editId === t.id ? (
+              <>
+                <input className="input" aria-label="Nombre" value={edit.name} onChange={e => setEdit(v => ({ ...v, name: e.target.value }))} style={{ flex: '1 1 120px', minWidth: 0 }} />
+                <input className="input" aria-label="Zona" placeholder="Zona" value={edit.zone} onChange={e => setEdit(v => ({ ...v, zone: e.target.value }))} style={{ flex: '1 1 100px', minWidth: 0 }} />
+                <input className="input" aria-label="Orden" type="number" value={edit.sort_order} onChange={e => setEdit(v => ({ ...v, sort_order: parseInt(e.target.value) || 0 }))} style={{ width: '70px' }} />
+                <button type="button" className="btn btn-sm btn-accent" onClick={() => saveEdit(t)}>Guardar</button>
+                <button type="button" className="btn btn-sm" onClick={() => setEditId(null)}>Cancelar</button>
+              </>
+            ) : (
+              <>
+                <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflowWrap: 'anywhere' }}>{t.name}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {t.zone || 'Sin zona'} · Orden {t.sort_order}
+                  </div>
+                </div>
+                <button type="button" className="btn btn-sm" onClick={() => startEdit(t)}>Editar</button>
+                <button type="button" className="btn btn-sm" onClick={() => run(() => api.delete(`/tables/${t.id}`))}>Desactivar</button>
+              </>
+            )}
+          </div>
+        ))}
+
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          <input className="input" aria-label="Nombre de la mesa" placeholder="Nombre (Ej: Mesa 1)" value={newName} onChange={e => setNewName(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+          <input className="input" aria-label="Zona de la mesa" placeholder="Zona (opcional)" value={newZone} onChange={e => setNewZone(e.target.value)} style={{ flex: '1 1 120px', minWidth: 0 }} />
+          <button type="submit" className="btn btn-sm btn-accent">Crear mesa</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
+// Inner component: must render INSIDE AppLayout so useBusinessConfig sees the provider.
+function SettingsContent() {
   const { toast } = useToast();
-  const { invalidate: invalidateConfig } = useBusinessConfig();
+  const { config: bizConfig, invalidate: invalidateConfig } = useBusinessConfig();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -79,6 +200,8 @@ export default function SettingsPage() {
     owner_email_app_password: '',
     catalog_enabled: false,
     catalog_token: '',
+    restaurant_mode: false,
+    lan_access_enabled: false,
   });
   const [fiscal, setFiscal] = useState<FiscalConfig>({
     enabled: false,
@@ -117,6 +240,8 @@ export default function SettingsPage() {
           owner_email_app_password: cfg.owner_email_app_password ?? '',
           catalog_enabled: cfg.catalog_enabled ?? false,
           catalog_token: cfg.catalog_token ?? '',
+          restaurant_mode: cfg.restaurant_mode ?? false,
+          lan_access_enabled: cfg.lan_access_enabled ?? false,
         });
         if (cfg.logo) setLogoPreview(cfg.logo);
       })
@@ -180,7 +305,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppLayout>
+    <>
       <Topbar title="Configuración" subtitle="Negocio, tickets y preferencias" />
 
       <div style={{ padding: '24px', maxWidth: '680px' }}>
@@ -345,6 +470,19 @@ export default function SettingsPage() {
                   </button>
                 </ConfigRow>
 
+                <ConfigRow label="Modo restaurante" sublabel="Activa Mesas y Barra en el menú y la gestión de mesas">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.restaurant_mode}
+                      onChange={e => setForm(f => ({ ...f, restaurant_mode: e.target.checked }))}
+                    />
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      {form.restaurant_mode ? 'Activado' : 'Desactivado'}
+                    </span>
+                  </label>
+                </ConfigRow>
+
                 <ConfigRow label="Correo del dueño" sublabel="Recibe aquí el resumen de cierre de caja automáticamente, sin hacer nada">
                   <input
                     className="input"
@@ -447,6 +585,8 @@ export default function SettingsPage() {
             </div>
           </form>
 
+          {bizConfig.restaurant_mode && <TablesSection />}
+
           {/* ── Sección: Facturación DIAN ─────────────────── */}
           <form onSubmit={handleFiscalSave} style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '32px' }}>
             <div>
@@ -514,6 +654,14 @@ export default function SettingsPage() {
           </>
         )}
       </div>
+    </>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <AppLayout>
+      <SettingsContent />
     </AppLayout>
   );
 }

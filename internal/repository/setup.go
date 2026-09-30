@@ -22,6 +22,8 @@ type BusinessConfig struct {
 	OwnerEmailAppPassword string `json:"owner_email_app_password"`
 	CatalogEnabled       bool    `json:"catalog_enabled"`
 	CatalogToken         string  `json:"catalog_token"`
+	RestaurantMode       bool    `json:"restaurant_mode"`
+	LanAccessEnabled     bool    `json:"lan_access_enabled"`
 	Configured           bool    `json:"configured"`
 }
 
@@ -39,12 +41,14 @@ func (r *SetupRepository) Get() (*BusinessConfig, error) {
 		       COALESCE(ciiu,''), currency, COALESCE(ticket_header,''), COALESCE(ticket_footer,''),
 		       COALESCE(default_opening_amount, 0), COALESCE(allow_global_discount, 0),
 		       COALESCE(owner_email, ''), COALESCE(owner_email_app_password, ''),
-		       COALESCE(catalog_enabled, 0), COALESCE(catalog_token, '')
+		       COALESCE(catalog_enabled, 0), COALESCE(catalog_token, ''),
+		       COALESCE(restaurant_mode, 0), COALESCE(lan_access_enabled, 0)
 		FROM business_config WHERE id = 1`)
 	cfg := &BusinessConfig{}
 	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT,
 		&cfg.CIIU, &cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount,
-		&cfg.OwnerEmail, &cfg.OwnerEmailAppPassword, &cfg.CatalogEnabled, &cfg.CatalogToken)
+		&cfg.OwnerEmail, &cfg.OwnerEmailAppPassword, &cfg.CatalogEnabled, &cfg.CatalogToken,
+		&cfg.RestaurantMode, &cfg.LanAccessEnabled)
 	if err == sql.ErrNoRows {
 		cfg.Currency = "COP"
 		cfg.Configured = false
@@ -85,8 +89,8 @@ func (r *SetupRepository) CompleteOnboarding(name, nit string) error {
 
 func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 	_, err := r.db.Exec(`
-		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, catalog_enabled, catalog_token, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, catalog_enabled, catalog_token, restaurant_mode, lan_access_enabled, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, logo=excluded.logo, address=excluded.address,
 			nit=excluded.nit, currency=excluded.currency,
@@ -97,9 +101,12 @@ func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 			owner_email_app_password=excluded.owner_email_app_password,
 			catalog_enabled=excluded.catalog_enabled,
 			catalog_token=excluded.catalog_token,
+			restaurant_mode=excluded.restaurant_mode,
+			lan_access_enabled=excluded.lan_access_enabled,
 			updated_at=CURRENT_TIMESTAMP
 	`, cfg.Name, cfg.Logo, cfg.Address, cfg.NIT, cfg.Currency,
-		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount, cfg.AllowGlobalDiscount, cfg.OwnerEmail, cfg.OwnerEmailAppPassword, cfg.CatalogEnabled, cfg.CatalogToken)
+		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount, cfg.AllowGlobalDiscount, cfg.OwnerEmail, cfg.OwnerEmailAppPassword,
+		cfg.CatalogEnabled, cfg.CatalogToken, cfg.RestaurantMode, cfg.LanAccessEnabled)
 	return err
 }
 

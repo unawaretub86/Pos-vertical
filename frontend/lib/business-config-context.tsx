@@ -6,6 +6,7 @@ import { api } from './api';
 interface BusinessConfig {
   name: string;
   logo: string;
+  restaurant_mode: boolean;
 }
 
 interface BusinessConfigCtx {
@@ -13,7 +14,7 @@ interface BusinessConfigCtx {
   invalidate: () => void;
 }
 
-const defaultConfig: BusinessConfig = { name: '', logo: '' };
+const defaultConfig: BusinessConfig = { name: '', logo: '', restaurant_mode: false };
 
 const BusinessConfigContext = createContext<BusinessConfigCtx>({
   config: defaultConfig,
@@ -26,7 +27,7 @@ export function BusinessConfigProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     api.get<BusinessConfig>('/setup')
-      .then(cfg => setConfig({ name: cfg.name ?? '', logo: cfg.logo ?? '' }))
+      .then(cfg => setConfig({ name: cfg.name ?? '', logo: cfg.logo ?? '', restaurant_mode: cfg.restaurant_mode ?? false }))
       .catch(() => {});
   }, [tick]);
 

@@ -1,6 +1,6 @@
 # project-docs — Índice
 
-> **Actualizado:** 2026-09-23
+> **Actualizado:** 2026-09-29
 
 **Lee esto antes de creerle a cualquier documento de esta carpeta.** No todos son vigentes: hay specs que deben ser ciertos siempre, investigación fechada de hace meses, e historia del MVP. Antes estaban todos mezclados y escritos en el mismo presente, y eso produjo planes con afirmaciones falsas sobre el código.
 
@@ -30,6 +30,7 @@ Cada documento abre con un sello de estado que dice cuál es cuál.
 | ¿Cómo se calcula ganancia y margen? | [spec/domain/rentabilidad.md](spec/domain/rentabilidad.md) |
 | ¿Cómo encaja la facturación con el "offline"? | [spec/domain/facturacion-dian.md](spec/domain/facturacion-dian.md) |
 | ¿Cómo se dice esto en colombiano? | [spec/domain/glosario.md](spec/domain/glosario.md) |
+| ¿Qué es el modo restaurante? ¿Cómo se deriva el estado de una mesa? | [spec/domain/restaurante.md](spec/domain/restaurante.md) |
 | **¿Qué construimos después?** | [roadmap.md](roadmap.md) — única fuente |
 | ¿Cómo se trabaja un sprint? | [workflow.md](workflow.md) |
 | ¿Cuál es el stack y las convenciones de código? | [`../CLAUDE.md`](../CLAUDE.md) |

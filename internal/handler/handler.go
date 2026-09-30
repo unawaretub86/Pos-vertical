@@ -34,6 +34,7 @@ type Handler struct {
 	factelect    *factelect.FacElectService
 	fiscalRepo   factelect.FiscalConfigRepository
 	assistant    *service.AssistantService
+	tables       *service.DiningTableService
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -55,6 +56,7 @@ func New(db *database.DB) *Handler {
 	supplierRepo := repository.NewSupplierRepository(db.DB)
 	purchaseRepo := repository.NewPurchaseRepository(db.DB)
 	assistantQueryRepo := repository.NewAssistantQueryRepository(db.DB)
+	tableRepo := repository.NewDiningTableRepository(db.DB)
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
@@ -88,6 +90,7 @@ func New(db *database.DB) *Handler {
 		factelect:    factelSvc,
 		fiscalRepo:   fiscalRepo,
 		assistant:    service.NewAssistantService(metricsRepo, reportRepo, expenseRepo, assistantQueryRepo),
+		tables:       service.NewDiningTableService(tableRepo),
 	}
 }
 
@@ -188,6 +191,15 @@ func (h *Handler) Routes() http.Handler {
 			r.Post("/suppliers", h.createSupplier)
 			r.Put("/suppliers/{id}", h.updateSupplier)
 			r.Delete("/suppliers/{id}", h.deleteSupplier)
+		})
+
+		// Dining tables (all authenticated users can read; admin to write)
+		r.Get("/tables", h.listTables)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Post("/tables", h.createTable)
+			r.Put("/tables/{id}", h.updateTable)
+			r.Delete("/tables/{id}", h.deleteTable)
 		})
 
 		// Purchases (all authenticated users can read; admin to write)
