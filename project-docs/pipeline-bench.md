@@ -1,463 +1,465 @@
-# Benchmark del pipeline agéntico
+# Agentic pipeline benchmark
 
-> **Tipo:** vigente · **Manda sobre:** cómo rinde el pipeline `/us` corrida a corrida · **Actualizado:** 2026-09-23
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-10-01
 
-Cada corrida de `/us` agrega una fila a la tabla de corridas y una sección de detalle. El orquestador lo hace en el paso 6 de `.claude/commands/us.md`, en el mismo commit del merge. Sirve para decidir con datos, no con impresiones, si el pipeline vale lo que cuesta y qué ajustar. El diseño está en [tosdd-plan.md](tosdd-plan.md).
+Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
-## Estado actual — dónde retomar
+> **Language rule (`../CLAUDE.md` → Rule 0):** everything in this file is English. Runs 1–9 were originally written in Spanish and translated on 2026-10-01; number formats were converted (`1.547` → `1,547`, `3,9 min` → `3.9 min`). Quoted Spanish strings are UI text or user phrases.
 
-> Se actualiza al final de cada sesión de trabajo con el pipeline.
+## Current state — where to resume
 
-**Última corrida:** 8 (US-054, nivel L, 2026-09-30). Antes: 7 (US-062, nivel L, 2026-09-29). Corrida en curso: ninguna, no hay worktrees `us/*` abiertos. **SPRINT-14 completo en código y tests** (US-059 a US-065); queda pendiente la validación manual del teclado en celular real (M-7 / AC-20) de US-062.
+> Updated at the end of each work session with the pipeline.
 
-**Aplicado antes de esta corrida:** el ajuste de la corrida 6 (checklist + bloques de tiempo declarados en `implementer.md`, commit `37e5c10`). En la corrida 7 el implementer terminó en 3,9 min sin colgarse, pero el prompt del orquestador también repitió el aviso de trozar archivos y de reportar cada ~20-25 min, así que no se puede separar qué parte del resultado es del ajuste. Una sola muestra: no concluir aún.
+**Last run:** 9 (US-056, level L, 2026-09-30). Before: 8 (US-054, level L, 2026-09-30), 7 (US-062, level L, 2026-09-29). Run in progress: none, no `us/*` worktrees are open. **SPRINT-14 complete in code and tests** (US-059 to US-065); pending is the manual validation of the keyboard on a real phone (M-7 / AC-20) of US-062.
 
-**Abierto, sin ajuste aplicado:** (1) el pipeline no tiene forma de verificar UI en navegador: el agente `qa` no tiene herramienta de navegador y el orquestador tampoco intentó una hasta que el PO lo preguntó; la verificación con Edge headless (Playwright) encontró R-55 (ver corrida 7). (2) El clasificador de auto mode falló en Bash y PowerShell durante el cierre y frenó el pipeline en el checkpoint de `close`.
+**Applied before this run:** the run 6 adjustment (checklist + declared time blocks in `implementer.md`, commit `37e5c10`). In run 7 the implementer finished in 3.9 min without hanging, but the orchestrator prompt also repeated the warning to chunk files and to report every ~20-25 min, so it cannot be separated which part of the result is due to the adjustment. A single sample: do not conclude yet.
 
-**Próxima US:** siguiente de SPRINT-13 (US-056 en adelante). Pendiente del PO: prueba manual con dos dispositivos de US-054 (AC-16 / T-M).
+**Open, no adjustment applied:** (1) the pipeline has no way to verify UI in a browser: the `qa` agent has no browser tool and the orchestrator did not try one until the PO asked; verification with headless Edge (Playwright) found R-55 (see run 7). (2) The auto-mode classifier failed on Bash and PowerShell during close and stalled the pipeline at the `close` checkpoint.
 
-**(obsoleto, corrida 7)** ninguna en SPRINT-14. Lo que sigue lo define el roadmap (`project-docs/roadmap.md`), que ahora incluye R-49 a R-55 originados en US-062.
+**Next US:** next of SPRINT-13 (US-057 onward). Pending from the PO: manual test with two devices of US-054 (AC-16 / T-M).
 
-**Cómo retomar:** en una sesión nueva, elegir la próxima US y correr `/us US-XXX [M|L]`.
+**(obsolete, run 7)** none in SPRINT-14. What follows is defined by the roadmap (`project-docs/roadmap.md`), which now includes R-49 to R-55 originating in US-062.
 
-## Cómo se mide
+**How to resume:** in a new session, pick the next US and run `/us US-XXX [M|L]`.
 
-| Métrica | Fuente | Nota |
+## How it is measured
+
+| Metric | Source | Note |
 |---|---|---|
-| Tokens por agente | `subagent_tokens` de la notificación de cada agente | Se registra el **último valor** de cada agente. Al retomarlo con `SendMessage`, el valor crece con el contexto acumulado, así que no se suman las retomas |
-| Tool uses / duración | `tool_uses` y `duration_ms` de cada notificación | Estos **sí se suman** entre retomas. La duración es tiempo de agente; no incluye la espera del PO en los gates |
-| Paradas no planeadas | El orquestador | Veces que se detuvo fuera de los GATE 1 y 2 por algo que el contrato no resolvía |
-| Vueltas de QA | `qa.md` | 1 = aprobó a la primera |
-| Defectos encontrados | Contrato (DISCREPANCIAS) + hallazgos de test-author y QA | Solo defectos reales del código o de los docs, no preguntas de alcance |
-| Ítems al roadmap | Modo `close` | IDs `R-NN` creados |
-| Violaciones | Chequeos `git` del orquestador | Un agente tocó archivos fuera de lo suyo |
+| Tokens per agent | `subagent_tokens` of each agent's notification | The **last value** of each agent is recorded. When resumed with `SendMessage`, the value grows with the accumulated context, so resumptions are not summed |
+| Tool uses / duration | `tool_uses` and `duration_ms` of each notification | These **are** summed across resumptions. Duration is agent time; it does not include the PO's wait at the gates |
+| Unplanned stops | The orchestrator | Times it stopped outside GATE 1 and 2 over something the contract did not resolve |
+| QA rounds | `qa.md` | 1 = approved on the first try |
+| Defects found | Contract (DISCREPANCIES) + findings from test-author and QA | Only real defects in the code or the docs, not scope questions |
+| Roadmap items | `close` mode | `R-NN` IDs created |
+| Violations | Orchestrator `git` checks | An agent touched files outside its own |
 
-## Corridas
+## Runs
 
-| # | Fecha | US | Nivel | Tokens (último valor por agente) | Tools | Min agente | Paradas no planeadas | Vueltas QA | Defectos | Roadmap | Violaciones | Diff |
+| # | Date | US | Level | Tokens (last value per agent) | Tools | Agent min | Unplanned stops | QA rounds | Defects | Roadmap | Violations | Diff |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 2026-09-23 | US-059 | L | ~440k (A 169k · T 102k · I 71k · Q 101k) | 125 | ~27.5 | 2 | 1 | 5 | 5 | 0 | +1.547 / −224, 13 archivos |
-| 2 | 2026-09-23 | US-063 | L | ~310k (A 138k · T 71k · I 35k · Q 67k) | 111 | ~18.5 | 0 | 1 | 4 | 2 (+1 cerrado) | 0 | +466 / −43, 7 archivos |
-| 3 | 2026-09-23 | US-064 | M | ~308k (A 173k = 117k+57k · I 71k · Q 64k) | 145 | ~18.0 | 0 | 1 | 1 | 0 (+1 cerrado) | 0 | +353 / −12, 7 archivos |
-| 4 | 2026-09-23 | US-065 | M | ~282k (A 176k = 117k+59k · I 59k · Q 47k) | 113 | ~13.3 | 0 | 1 | 0 | 1 cerrado (R-45) | 1 (retomar) | +217 / −20, 7 archivos |
-| 5 | 2026-09-23 | US-060 | L | ~522k (A 154k · T 109k · I 175k · Q 85k) | 160 | ~83.8 | 1 (implementer cayó por límite de salida) | 1 | 5 | 1 (R-46) | 0 | +1.333 / −2, 9 archivos |
-| 6 | 2026-09-24 | US-061 | M | ~708k (A 372k=149k+109k+115k · I 186k, 2 intentos previos sin telemetría · Q 150k) | 281 (incompleto, 2 intentos de implementer sin `tool_uses` reportado) | ~46.7 agente (+~310 min de pared perdidos en 2 cuelgues, ver abajo) | 2 (implementer colgado dos veces) | 1 | 6 | 2 nuevos (R-47, R-48) + 1 cerrado parcial (R-06) | 0 | +1.867 / −20, 16 archivos |
-| 7 | 2026-09-29 | US-062 | L | ~538k (A 340k=135k+102k+75k+28k · T 65k · I 64k · Q 69k) | 168 | ~27.4 | 0 (más 1 parada por el clasificador de auto mode, ajena al contrato) | 1 | 7 discrepancias de contrato (D-1..D-7) + 1 hallazgo preexistente fuera de alcance | 7 nuevos (R-49 a R-55) | 0 | +1.198 / −8, 9 archivos |
-| 8 | 2026-09-30 | US-054 | L | ~191k (A 79k=51k+55k+79k · T 32k · I 45k · Q 36k) | 51 | ~9.9 | 0 (un PASA⚠️ mostrado al PO por regla, no por parada) | 1 | 6 discrepancias de contrato (sprint desfasado, rutas dinámicas, `go build` sin `web/out`…) | 1 nuevo (R-62) + 1 cerrado (R-55) | 0 | +452 / −55, 22 archivos |
-| 9 | 2026-09-30 | US-056 | L | ~514k (A 213k=82k+49k+83k · T 95k=82k+13k · I 114k · Q 92k=63k+29k) | 205 | ~22 | 1 (checkout principal con cambio en `.claude/`; más un PASA⚠️ mostrado al PO por regla) | 1 (+ smoke 1b) | 8 discrepancias de contrato + 1 defecto de tests (seed choca con migración) | 5 nuevos (R-63..R-67) + 1 cerrado (R-59) | 0 | +2.155 / −26, 26 archivos |
+| 1 | 2026-09-23 | US-059 | L | ~440k (A 169k · T 102k · I 71k · Q 101k) | 125 | ~27.5 | 2 | 1 | 5 | 5 | 0 | +1,547 / −224, 13 files |
+| 2 | 2026-09-23 | US-063 | L | ~310k (A 138k · T 71k · I 35k · Q 67k) | 111 | ~18.5 | 0 | 1 | 4 | 2 (+1 closed) | 0 | +466 / −43, 7 files |
+| 3 | 2026-09-23 | US-064 | M | ~308k (A 173k = 117k+57k · I 71k · Q 64k) | 145 | ~18.0 | 0 | 1 | 1 | 0 (+1 closed) | 0 | +353 / −12, 7 files |
+| 4 | 2026-09-23 | US-065 | M | ~282k (A 176k = 117k+59k · I 59k · Q 47k) | 113 | ~13.3 | 0 | 1 | 0 | 1 closed (R-45) | 1 (resume) | +217 / −20, 7 files |
+| 5 | 2026-09-23 | US-060 | L | ~522k (A 154k · T 109k · I 175k · Q 85k) | 160 | ~83.8 | 1 (implementer died from output limit) | 1 | 5 | 1 (R-46) | 0 | +1,333 / −2, 9 files |
+| 6 | 2026-09-24 | US-061 | M | ~708k (A 372k=149k+109k+115k · I 186k, 2 earlier attempts without telemetry · Q 150k) | 281 (incomplete, 2 implementer attempts with no `tool_uses` reported) | ~46.7 agent (+~310 min wall-clock lost in 2 hangs, see below) | 2 (implementer hung twice) | 1 | 6 | 2 new (R-47, R-48) + 1 partially closed (R-06) | 0 | +1,867 / −20, 16 files |
+| 7 | 2026-09-29 | US-062 | L | ~538k (A 340k=135k+102k+75k+28k · T 65k · I 64k · Q 69k) | 168 | ~27.4 | 0 (plus 1 stop from the auto-mode classifier, unrelated to the contract) | 1 | 7 contract discrepancies (D-1..D-7) + 1 pre-existing out-of-scope finding | 7 new (R-49 to R-55) | 0 | +1,198 / −8, 9 files |
+| 8 | 2026-09-30 | US-054 | L | ~191k (A 79k=51k+55k+79k · T 32k · I 45k · Q 36k) | 51 | ~9.9 | 0 (one PASSES⚠️ shown to the PO by rule, not a stop) | 1 | 6 contract discrepancies (outdated sprint, dynamic routes, `go build` without `web/out`…) | 1 new (R-62) + 1 closed (R-55) | 0 | +452 / −55, 22 files |
+| 9 | 2026-09-30 | US-056 | L | ~514k (A 213k=82k+49k+83k · T 95k=82k+13k · I 114k · Q 92k=63k+29k) | 205 | ~22 | 1 (main checkout with a change in `.claude/`; plus one PASSES⚠️ shown to the PO by rule) | 1 (+ smoke 1b) | 8 contract discrepancies + 1 test defect (seed clashes with migration) | 5 new (R-63..R-67) + 1 closed (R-59) | 0 | +2,155 / −26, 26 files |
 
-### Tendencia
+### Trend
 
-| | Corrida 1 | Corrida 2 | Lectura |
+| | Run 1 | Run 2 | Reading |
 |---|---|---|---|
-| Tokens | ~440k | ~310k (−30%) | Baja por el tamaño de la US y porque se retomaron agentes en vez de relanzarlos |
-| Min agente | ~27.5 | ~18.5 | — |
-| Paradas no planeadas | 2 | **0** | El ajuste "el analista verifica ejecutando" funcionó |
-| Vueltas QA | 1 | 1 | — |
-| Violaciones | 0 | 0 | La separación entre tests y código se sostiene |
+| Tokens | ~440k | ~310k (−30%) | Drops due to the size of the US and because agents were resumed instead of relaunched |
+| Agent min | ~27.5 | ~18.5 | — |
+| Unplanned stops | 2 | **0** | The adjustment "the analyst verifies by executing" worked |
+| QA rounds | 1 | 1 | — |
+| Violations | 0 | 0 | The separation between tests and code holds |
 
 ---
 
-## Corrida 1 — US-059 (piloto)
+## Run 1 — US-059 (pilot)
 
-**US:** extraer las métricas del dashboard a un repositorio parametrizable por rango (SPRINT-14). Refactor puro. **Commit:** `cd2e590`.
+**US:** extract the dashboard metrics into a range-parameterizable repository (SPRINT-14). Pure refactor. **Commit:** `cd2e590`.
 
-### Por agente
+### Per agent
 
-| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+| Agent | Invocations | Tokens (last) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 4 (contrato, ajuste por GATE 1, ajuste T-29 / NULL, cierre) | 169k | 24 + 7 + 5 + 10 = 46 | 287 + 109 + 59 + 119 s = 574 s |
-| test-author | 2 (29 tests, luego T-30) | 102k | 16 + 3 = 19 | 328 + 31 s = 359 s |
+| analyst | 4 (contract, GATE 1 adjustment, T-29 / NULL adjustment, close) | 169k | 24 + 7 + 5 + 10 = 46 | 287 + 109 + 59 + 119 s = 574 s |
+| test-author | 2 (29 tests, then T-30) | 102k | 16 + 3 = 19 | 328 + 31 s = 359 s |
 | implementer | 1 | 71k | 22 | 264 s |
 | qa | 1 | 101k | 38 | 454 s |
-| **Total** | 8 | ~440k | 125 | 1.651 s ≈ 27.5 min |
+| **Total** | 8 | ~440k | 125 | 1,651 s ≈ 27.5 min |
 
-### Qué encontró
+### What it found
 
-| Tipo | Hallazgo | Quién |
+| Type | Finding | Who |
 |---|---|---|
-| Defecto 🔴 | D-4: la cartera envejecida multiplica los abonos por la cantidad de fiados del cliente ($30.000 en vez de $40.000) → R-04 | analyst |
-| Defecto 🔴 (por confirmar) | D-5: fechas UTC comparadas como texto en hora local → R-05 | analyst |
-| Defecto | D-6: `to` inclusivo en `buildDateWhere` y en `ExpenseRepository.List` → R-06 | analyst |
-| Defecto | Error de `Scan` ignorado en silencio en aging, top por margen y stock bajo | test-author |
-| Defecto de doc | El sprint decía 8 queries; eran 10. La interfaz del sprint no cubría top seller ni aging | analyst |
-| Test inútil evitado | T-15, tal como estaba en el contrato, pasaba contra un stub vacío | test-author |
-| Error del contrato | T-29 se suponía rojo, pero el código ya respondía 500 | test-author |
-| Doc falso | CLAUDE.md sugería que el CI corre `pnpm lint`; no lo corre, y hay 41 problemas previos | qa |
+| Defect 🔴 | D-4: aging receivables multiply the payments by the number of the customer's credit sales ($30,000 instead of $40,000) → R-04 | analyst |
+| Defect 🔴 (to confirm) | D-5: UTC dates compared as text in local time → R-05 | analyst |
+| Defect | D-6: inclusive `to` in `buildDateWhere` and in `ExpenseRepository.List` → R-06 | analyst |
+| Defect | `Scan` error silently ignored in aging, top by margin and low stock | test-author |
+| Doc defect | The sprint said 8 queries; there were 10. The sprint interface did not cover top seller or aging | analyst |
+| Useless test avoided | T-15, as it stood in the contract, passed against an empty stub | test-author |
+| Contract error | T-29 was supposed to be red, but the code already answered 500 | test-author |
+| False doc | CLAUDE.md suggested CI runs `pnpm lint`; it does not, and there are 41 prior problems | qa |
 
-### Paradas no planeadas (2)
+### Unplanned stops (2)
 
-1. **T-29 ya pasaba:** el contrato suponía un comportamiento que el código no tenía. Se reclasificó como test de no-regresión.
-2. **`days_overdue` NULL:** el contrato no decía cómo tratar esas filas, y propagar el error rompía la equivalencia. El PO eligió la opción A: excluirlas de forma explícita en el SQL.
+1. **T-29 already passed:** the contract assumed a behavior the code did not have. It was reclassified as a non-regression test.
+2. **`days_overdue` NULL:** the contract did not say how to treat those rows, and propagating the error broke the equivalence. The PO chose option A: exclude them explicitly in the SQL.
 
-Las dos vinieron de que el Analista **dedujo** comportamiento en vez de **ejecutarlo**.
+Both came from the Analyst **deducing** behavior instead of **executing** it.
 
-### Fricción operativa
+### Operational friction
 
-- `git worktree remove` falló en Windows por archivos ignorados (`node_modules`, `.next`, 565 MB). Hubo que borrar la carpeta a mano.
-- gopls marca errores falsos dentro del worktree, porque no está en el workspace de Go. Es ruido.
-- El contrato cambió después del rojo (T-30) y `/us` no tenía un paso para eso.
+- `git worktree remove` failed on Windows because of ignored files (`node_modules`, `.next`, 565 MB). The folder had to be deleted by hand.
+- gopls flags false errors inside the worktree, because it is not in the Go workspace. It is noise.
+- The contract changed after red (T-30) and `/us` had no step for that.
 
-### Ajustes aplicados después de esta corrida
+### Adjustments applied after this run
 
-| Ajuste | Dónde |
+| Adjustment | Where |
 |---|---|
-| Borrado forzado del worktree + `rm -rf` de lo que quede | `.claude/commands/us.md` paso 5 |
-| Retomar agentes con `SendMessage` si la sesión sigue viva (el analyst pasó de 136k a 169k tokens en 3 retomas, contra ~100k por arranque en frío) | `us.md` convenciones, `tosdd-plan.md` §2 |
-| Paso 2b: nueva vuelta del test-author si el contrato cambia después del rojo | `us.md` |
-| El analyst verifica **ejecutando** (curl o test rápido) las afirmaciones sobre respuestas HTTP y errores, no solo leyendo | `.claude/agents/analyst.md` |
-| Nota sobre los errores falsos de gopls | `us.md` |
-| Registrar el benchmark en cada corrida | `us.md` paso 6 |
-| CLAUDE.md: el CI no corre lint | `CLAUDE.md:52` |
+| Forced worktree removal + `rm -rf` of whatever remains | `.claude/commands/us.md` step 5 |
+| Resume agents with `SendMessage` if the session is still alive (the analyst went from 136k to 169k tokens in 3 resumptions, against ~100k per cold start) | `us.md` conventions, `tosdd-plan.md` §2 |
+| Step 2b: new test-author round if the contract changes after red | `us.md` |
+| The analyst verifies **by executing** (curl or a quick test) claims about HTTP responses and errors, not only by reading | `.claude/agents/analyst.md` |
+| Note about false gopls errors | `us.md` |
+| Record the benchmark on every run | `us.md` step 6 |
+| CLAUDE.md: CI does not run lint | `CLAUDE.md:52` |
 
-### Qué medir en la corrida 2
+### What to measure in run 2
 
-- ¿Bajan las paradas no planeadas con la verificación ejecutada del Analista?
-- Costo de una US **M** frente a una **L**.
-- R-04 es un fix pequeño: sirve para ver si el pipeline sobra en cambios chicos.
+- Do unplanned stops drop with the Analyst's executed verification?
+- Cost of an **M** US versus an **L**.
+- R-04 is a small fix: it shows whether the pipeline is overkill for small changes.
 
 ---
 
-## Corrida 2 — US-063 (fix del bug D-4, desde el roadmap R-04)
+## Run 2 — US-063 (fix of bug D-4, from roadmap R-04)
 
-**US:** corregir el saldo de la cartera envejecida del dashboard (SPRINT-14). Bug fix que cambia un número visible para el dueño. **Commits de la rama:** `180e201` → `fbccc6b` (RED) → `d999fad` → `0c5b276`, fusionados en un solo commit en `dev`.
+**US:** fix the dashboard aging-receivables balance (SPRINT-14). A bug fix that changes a number visible to the owner. **Branch commits:** `180e201` → `fbccc6b` (RED) → `d999fad` → `0c5b276`, merged into a single commit on `dev`.
 
-### Por agente
+### Per agent
 
-| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+| Agent | Invocations | Tokens (last) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 3 (contrato + registro de la US, decisiones de GATE 1, cierre); retomado con `SendMessage` | 138k | 33 + 8 + 18 = 59 | 333 + 33 + 122 s = 488 s |
+| analyst | 3 (contract + US registration, GATE 1 decisions, close); resumed with `SendMessage` | 138k | 33 + 8 + 18 = 59 | 333 + 33 + 122 s = 488 s |
 | test-author | 1 | 71k | 15 | 222 s |
 | implementer | 1 | 35k | 7 | 113 s |
 | qa | 1 | 67k | 30 | 290 s |
-| **Total** | 6 | ~310k | 111 | 1.112 s ≈ 18.5 min |
+| **Total** | 6 | ~310k | 111 | 1,112 s ≈ 18.5 min |
 
-### Qué encontró
+### What it found
 
-| Tipo | Hallazgo | Quién |
+| Type | Finding | Who |
 |---|---|---|
-| Defecto 🔴 (alcance real mayor) | DISC-1: el bug no solo daba montos equivocados, también **ocultaba deudores**. Eli debía $15.000 y no aparecía porque el cálculo le daba −$15.000 | analyst (ejecutado) |
-| Defecto 🔴 | DISC-3: `TotalPortfolioBalance` resta los saldos a favor ($40.000 vs $55.000) → R-44 | analyst |
-| Defecto (efecto en UI) | DISC-4: el modal de abono mostraba la deuda equivocada y la fila desaparecía tras abonar. Lo resuelve el fix del backend | analyst (leído) |
-| Defecto menor | `ORDER BY days_overdue DESC` sin desempate con `LIMIT` → R-45 | qa |
-| Deuda | `CustomerRepository.List` duplica la fórmula de saldo → R-45 | implementer + qa |
+| Defect 🔴 (real scope larger) | DISC-1: the bug not only gave wrong amounts, it also **hid debtors**. Eli owed $15,000 and did not appear because the calculation gave −$15,000 | analyst (executed) |
+| Defect 🔴 | DISC-3: `TotalPortfolioBalance` subtracts credit balances ($40,000 vs $55,000) → R-44 | analyst |
+| Defect (UI effect) | DISC-4: the payment modal showed the wrong debt and the row disappeared after paying. The backend fix resolves it | analyst (read) |
+| Minor defect | `ORDER BY days_overdue DESC` without a tie-break with `LIMIT` → R-45 | qa |
+| Debt | `CustomerRepository.List` duplicates the balance formula → R-45 | implementer + qa |
 
-Con la búsqueda por grep se confirmó que no hay otros JOIN que multipliquen montos.
+A grep search confirmed there are no other JOINs that multiply amounts.
 
-### Paradas no planeadas: 0
+### Unplanned stops: 0
 
-Solo se pasó por los dos gates. El Analista ejecutó el comportamiento actual con un test temporal antes de escribir el contrato, y ningún test cayó en `PASA⚠️`.
+It only went through the two gates. The Analyst executed the current behavior with a temporary test before writing the contract, and no test fell into `PASSES⚠️`.
 
-### Fricción operativa
+### Operational friction
 
-- La US venía del roadmap y no existía en el sprint. `/us` supone que existe (paso 0.2), así que el Analista la registró en modo `contract`. Eso dejó el sprint modificado en el worktree, y el orquestador lo commiteó aparte (`docs(US-063): register US`) para que el commit `RED` tuviera solo tests.
-- El GATE 1 dejó decisiones que solo tocaban §7 y §8 del contrato. El Analista las registró **en paralelo** con el test-author, sin conflicto.
-- El roadmap no tenía formato para ítems cerrados; el Analista creó la sección "Cerrados".
+- The US came from the roadmap and did not exist in the sprint. `/us` assumes it exists (step 0.2), so the Analyst registered it in `contract` mode. That left the sprint modified in the worktree, and the orchestrator committed it separately (`docs(US-063): register US`) so the `RED` commit had only tests.
+- GATE 1 left decisions that only touched §7 and §8 of the contract. The Analyst recorded them **in parallel** with the test-author, without conflict.
+- The roadmap had no format for closed items; the Analyst created the "Closed" section.
 
-### Ajustes propuestos (pendientes del "sí" del PO)
+### Proposed adjustments (pending the PO's "yes")
 
-| Ajuste | Dónde |
+| Adjustment | Where |
 |---|---|
-| Paso 0.2: si la US viene del roadmap (R-NN), el Analista la registra en el sprint durante el modo `contract` y el orquestador la commitea aparte antes de `RED` | `.claude/commands/us.md` |
-| Si las decisiones del GATE 1 solo tocan §7 y §8, el test-author puede correr en paralelo | `.claude/commands/us.md` |
-| Formato "Cerrados" del roadmap documentado en su encabezado | `project-docs/roadmap.md` |
+| Step 0.2: if the US comes from the roadmap (R-NN), the Analyst registers it in the sprint during `contract` mode and the orchestrator commits it separately before `RED` | `.claude/commands/us.md` |
+| If the GATE 1 decisions only touch §7 and §8, the test-author may run in parallel | `.claude/commands/us.md` |
+| "Closed" roadmap format documented in its header | `project-docs/roadmap.md` |
 
-### Qué medir en la corrida 3
+### What to measure in run 3
 
-- Una US **M** (sin test-author), para comparar el costo contra L.
-- Si R-44 (otro fix chico, de saldo) confirma que ~300k tokens es el piso de una US L, o si baja más.
+- An **M** US (no test-author), to compare cost against L.
+- Whether R-44 (another small balance fix) confirms ~300k tokens as the floor of an L US, or whether it drops further.
 
 ---
 
-## Corrida 3 — US-064 (R-44, nivel M)
+## Run 3 — US-064 (R-44, level M)
 
-**US:** corregir `TotalPortfolioBalance` para que no reste los saldos a favor (bug declarado en el GATE 1 de US-063). Bug fix chico, sin test-author separado (nivel M). **Rama:** `us/US-064` → `78fbdac` (registro) → `71a30a2` (implementación) → `a78a959` (cierre), fusionados en `dev`.
+**US:** fix `TotalPortfolioBalance` so it does not subtract credit balances (bug declared at US-063's GATE 1). Small bug fix, no separate test-author (level M). **Branch:** `us/US-064` → `78fbdac` (registration) → `71a30a2` (implementation) → `a78a959` (close), merged into `dev`.
 
-### Por agente
+### Per agent
 
-| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+| Agent | Invocations | Tokens (last) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 2 (contrato + registro de la US; cierre) — **lanzados en frío, no retomados con SendMessage** | 117k + 57k = 173k | 39 + 22 = 61 | 375 + 161 s = 536 s |
-| test-author | 0 (nivel M lo salta) | — | — | — |
+| analyst | 2 (contract + US registration; close) — **launched cold, not resumed with SendMessage** | 117k + 57k = 173k | 39 + 22 = 61 | 375 + 161 s = 536 s |
+| test-author | 0 (level M skips it) | — | — | — |
 | implementer | 1 | 71k | 35 | 234 s |
 | qa | 1 | 64k | 49 | 310 s |
-| **Total** | 4 | ~308k | 145 | 1.080 s ≈ 18.0 min |
+| **Total** | 4 | ~308k | 145 | 1,080 s ≈ 18.0 min |
 
-### Qué encontró
+### What it found
 
-| Tipo | Hallazgo | Quién |
+| Type | Finding | Who |
 |---|---|---|
-| Defecto de doc | El texto de R-44 en el roadmap citaba cifras del seed de `TestMetricsRepo_T35` ($40.000/$55.000) que no coinciden con lo que ese seed produce al ejecutarlo ($60.000/$75.000) — el texto olvidó a un cliente del seed (Beto, $20.000) | analyst (ejecutado) |
+| Doc defect | The text of R-44 in the roadmap cited figures from the seed of `TestMetricsRepo_T35` ($40,000/$55,000) that do not match what that seed produces when executed ($60,000/$75,000) — the text forgot one customer from the seed (Beto, $20,000) | analyst (executed) |
 
-Sin discrepancias bloqueantes de alcance. El bug en sí ya estaba caracterizado desde el GATE 1 de US-063; esta corrida solo lo confirmó ejecutando con un fixture propio (25.000 con el bug, 45.000 correcto) y lo corrigió.
+No blocking scope discrepancies. The bug itself was already characterized since US-063's GATE 1; this run only confirmed it by executing with its own fixture (25,000 with the bug, 45,000 correct) and fixed it.
 
-### Paradas no planeadas: 0
+### Unplanned stops: 0
 
-Solo los dos gates. La nota de §8 (corregir la cifra de R-44) era informativa, no bloqueante, y Andrey la resolvió en el mismo GATE 1.
+Only the two gates. The §8 note (fix the R-44 figure) was informational, not blocking, and Andrey resolved it at the same GATE 1.
 
-### Fricción operativa
+### Operational friction
 
-- **Violación de la convención "retomar en vez de relanzar":** el orquestador lanzó un `analyst` nuevo para el modo `close` (`a7354c5de9d3b5136`) en vez de retomar con `SendMessage` al `analyst` del contrato (`ac2bf2bf927d46ac4`), que seguía vivo en la sesión. Costó un arranque en frío extra (~57k tokens) en vez de una retoma más barata. Es un error del orquestador, no de un agente — corregir en la próxima corrida.
-- Antes del paso 0 se encontraron gitlinks sucios preexistentes en `.claude/worktrees/*` (residuos de worktrees de Claude Code, no del POS) y un `rewrite_links.py` staged sin relación. La regla del paso 0.1 exige parar; se consultó a Andrey, que autorizó seguir. No se tocó ninguno de los dos.
-- Nivel **M** funcionó sin fricción: el implementer escribió tests e implementación en un solo commit, siguiendo la tabla de tests del contrato igual de detallada que en nivel L; QA no encontró tests debilitados por faltar el test-author.
+- **Violation of the "resume instead of relaunch" convention:** the orchestrator launched a new `analyst` for `close` mode (`a7354c5de9d3b5136`) instead of resuming with `SendMessage` the contract's `analyst` (`ac2bf2bf927d46ac4`), which was still alive in the session. It cost an extra cold start (~57k tokens) instead of a cheaper resumption. It is an orchestrator error, not an agent's — fix in the next run.
+- Before step 0, pre-existing dirty gitlinks were found in `.claude/worktrees/*` (leftovers of Claude Code worktrees, not the POS's) and an unrelated staged `rewrite_links.py`. The step 0.1 rule requires stopping; Andrey was consulted and authorized going on. Neither was touched.
+- Level **M** worked without friction: the implementer wrote tests and implementation in a single commit, following the contract's test table just as detailed as in level L; QA found no tests weakened for lack of the test-author.
 
-### Ajustes propuestos (pendientes del "sí" del PO)
+### Proposed adjustments (pending the PO's "yes")
 
-| Ajuste | Dónde |
+| Adjustment | Where |
 |---|---|
-| Antes de lanzar cualquier agente, el orquestador revisa explícitamente si ya hay un `agentId` vivo en la sesión para ese rol y esa US antes de decidir `Agent` vs `SendMessage` (no solo "recordarlo", sino un chequeo explícito en el paso correspondiente) | `.claude/commands/us.md` pasos 1 y 5 |
+| Before launching any agent, the orchestrator explicitly checks whether there is a live `agentId` in the session for that role and that US before deciding `Agent` vs `SendMessage` (not just "remembering it", but an explicit check in the relevant step) | `.claude/commands/us.md` steps 1 and 5 |
 
-### Qué medir en la corrida 4
+### What to measure in run 4
 
-- Si se corrige la fricción de retomar, ¿baja el costo de analyst en un cierre similar (2 invocaciones → 1 retomada)?
-- Nivel M sigue dando ~300k tokens totales pese a saltar test-author: el ahorro de saltar un agente (~65-100k) se compensa con más costo de analyst por el error de retoma. Repetir nivel M sin ese error para aislar el verdadero piso de costo de una US chica.
+- If the resumption friction is fixed, does the analyst cost drop in a similar close (2 invocations → 1 resumed)?
+- Level M still gives ~300k total tokens despite skipping the test-author: the saving of skipping an agent (~65-100k) is offset by more analyst cost due to the resumption error. Repeat level M without that error to isolate the true cost floor of a small US.
 
 ---
 
-## Corrida 4 — US-065 (R-45, nivel M)
+## Run 4 — US-065 (R-45, level M)
 
-**US:** higiene de la fórmula de saldo detectada en el QA de US-063 — `CustomerRepository.List` deja de duplicar textualmente el `FROM` de saldo (reusa `customerBalanceExpr`/`customerBalanceFrom`) y `AgingReceivables` gana desempate estable (`balance DESC, name ASC`) cuando empata `days_overdue`. Bug fix chico + refactor de higiene, nivel M. **Rama:** `us/R-45` → `ee4f334` (implementación) → `0c3cf4a` (cierre), fusionados en `dev`. El analyst registró la US en el sprint como **US-065** durante el modo `contract` (R-45 venía del roadmap, sin entrada propia en el sprint).
+**US:** hygiene of the balance formula detected in US-063's QA — `CustomerRepository.List` stops textually duplicating the balance `FROM` (reuses `customerBalanceExpr`/`customerBalanceFrom`) and `AgingReceivables` gains a stable tie-break (`balance DESC, name ASC`) when `days_overdue` ties. Small bug fix + hygiene refactor, level M. **Branch:** `us/R-45` → `ee4f334` (implementation) → `0c3cf4a` (close), merged into `dev`. The analyst registered the US in the sprint as **US-065** during `contract` mode (R-45 came from the roadmap, with no entry of its own in the sprint).
 
-### Por agente
+### Per agent
 
-| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+| Agent | Invocations | Tokens (last) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 2 (contrato + registro de la US; cierre) — **de nuevo lanzados en frío, no retomados con SendMessage** | 117k + 59k = 176k | 41 + 19 = 60 | 360 + 123 s = 483 s |
-| test-author | 0 (nivel M lo salta) | — | — | — |
+| analyst | 2 (contract + US registration; close) — **again launched cold, not resumed with SendMessage** | 117k + 59k = 176k | 41 + 19 = 60 | 360 + 123 s = 483 s |
+| test-author | 0 (level M skips it) | — | — | — |
 | implementer | 1 | 59k | 27 | 165 s |
 | qa | 1 | 47k | 26 | 148 s |
 | **Total** | 4 | ~282k | 113 | 796 s ≈ 13.3 min |
 
-### Qué encontró
+### What it found
 
-| Tipo | Hallazgo | Quién |
+| Type | Finding | Who |
 |---|---|---|
-| Defecto menor | Redacción redundante en `spec/domain/fiado.md:38` — la frase nueva del delta repetía "ordena por `days_overdue` descendente" dos veces en la misma oración | qa |
+| Minor defect | Redundant wording in `spec/domain/fiado.md:38` — the new delta sentence repeated "orders by `days_overdue` descending" twice in the same sentence | qa |
 
-Sin discrepancias de alcance: el texto de `roadmap.md:48` describía con precisión ambos puntos (confirmado con grep y, en el caso del desempate, ejecutando un fixture temporal que mostró el bug real — con `LIMIT` menor que los empatados, el cliente con mayor deuda podía quedar fuera del corte por orden de inserción).
+No scope discrepancies: the text of `roadmap.md:48` described both points accurately (confirmed with grep and, in the tie-break case, by executing a temporary fixture that showed the real bug — with a `LIMIT` smaller than the tied rows, the customer with the largest debt could be left out of the cut by insertion order).
 
-### Paradas no planeadas: 0
+### Unplanned stops: 0
 
-Solo los dos gates. La única fricción no fue una parada del contrato sino un error del orquestador (ver abajo).
+Only the two gates. The only friction was not a contract stop but an orchestrator error (see below).
 
-### Fricción operativa
+### Operational friction
 
-- **Se repitió la violación de "retomar en vez de relanzar" de la corrida 3, pese a estar documentada como ajuste pendiente:** el orquestador lanzó un `analyst` nuevo (`ab24d286fefcf0abb`) para el modo `close` en vez de retomar con `SendMessage` al `analyst` del contrato (`ae7f21565663133bd`), que seguía vivo en la sesión. El ajuste propuesto en la corrida 3 ("chequeo explícito de `agentId` vivo antes de `Agent` vs `SendMessage`") nunca se aplicó a `us.md` — quedó como propuesta pendiente del "sí" del PO y nadie volvió a plantearlo antes de la corrida 4. Mismo costo extra de arranque en frío (~59k tokens) que en la corrida 3.
-- Mismo estado sucio preexistente que en la corrida 3 (`rewrite_links.py` staged en el checkout principal, gitlinks modificados en `.claude/worktrees/*`), ya autorizado por Andrey entonces; se dejó intacto de nuevo, sin volver a preguntar porque no cambió desde la corrida anterior.
-- Nivel **M** volvió a funcionar sin fricción de contrato/tests: el implementer escribió los 3 tests nuevos (T-39, T-40, T-41) más los cambios de código en un solo commit, sin que QA encontrara tests débiles por faltar el test-author.
+- **The "resume instead of relaunch" violation of run 3 was repeated, despite being documented as a pending adjustment:** the orchestrator launched a new `analyst` (`ab24d286fefcf0abb`) for `close` mode instead of resuming with `SendMessage` the contract's `analyst` (`ae7f21565663133bd`), which was still alive in the session. The adjustment proposed in run 3 ("explicit live-`agentId` check before `Agent` vs `SendMessage`") was never applied to `us.md` — it stayed as a proposal pending the PO's "yes" and nobody raised it again before run 4. Same extra cold-start cost (~59k tokens) as in run 3.
+- Same pre-existing dirty state as in run 3 (`rewrite_links.py` staged in the main checkout, modified gitlinks in `.claude/worktrees/*`), already authorized by Andrey then; it was left intact again, without asking again because it had not changed since the previous run.
+- Level **M** again worked without contract/test friction: the implementer wrote the 3 new tests (T-39, T-40, T-41) plus the code changes in a single commit, without QA finding weak tests for lack of the test-author.
 
-### Ajustes propuestos (pendientes del "sí" del PO)
+### Proposed adjustments (pending the PO's "yes")
 
-| Ajuste | Dónde |
+| Adjustment | Where |
 |---|---|
-| El de la corrida 3 sigue sin aplicarse y sigue siendo necesario: antes de lanzar cualquier agente, el orquestador debe listar explícitamente (no solo "recordar") los `agentId` vivos de la sesión para esa US antes de decidir `Agent` vs `SendMessage`. Dos corridas seguidas con el mismo error sugiere que hace falta un paso mecánico en `us.md`, no una nota de convención | `.claude/commands/us.md` pasos 1 y 5 |
+| The run 3 one is still not applied and is still needed: before launching any agent, the orchestrator must explicitly list (not just "remember") the live `agentId`s of the session for that US before deciding `Agent` vs `SendMessage`. Two runs in a row with the same error suggest a mechanical step is needed in `us.md`, not a convention note | `.claude/commands/us.md` steps 1 and 5 |
 
-### Qué medir en la corrida 5
+### What to measure in run 5
 
-- Si se aplica el ajuste de arriba antes de correr: ¿el costo total baja de ~280k a algo más cercano a ~220k (analyst en 1 sola invocación retomada)?
-- El piso de una US M sin errores de retoma sigue sin medirse limpio — van 2 corridas seguidas con el mismo defecto de proceso inflando el costo de analyst en +~50-60k tokens.
+- If the adjustment above is applied before running: does total cost drop from ~280k to something closer to ~220k (analyst in a single resumed invocation)?
+- The floor of an M US without resumption errors is still not measured cleanly — 2 runs in a row with the same process defect inflating analyst cost by ~50-60k tokens.
 
 ---
 
-## Corrida 5 — US-060 (Motor de intenciones T1/T2, nivel L)
+## Run 5 — US-060 (T1/T2 intent engine, level L)
 
-**US:** paquete `internal/assistant/` desde cero — normalización, 11 intenciones por regex (T1) y fuzzy matching con Levenshtein (T2), extracción de periodo relativo (hoy/ayer/semana/mes/año + días de la semana con error de dedo). Go puro, sin DB ni HTTP; primera pieza de una cadena de 3 (US-060 → US-061 → US-062). Nivel **L**, primera corrida con el ajuste de retoma mecánico ya aplicado. **Rama:** `us/US-060` → `4f0ba6b` (RED, 31 tests) → `b36f108` (implementación) → `4a20d52` (cierre), fusionados en `dev` por squash.
+**US:** `internal/assistant/` package from scratch — normalization, 11 regex intents (T1) and fuzzy matching with Levenshtein (T2), relative period extraction (today/yesterday/week/month/year + weekdays with typos). Pure Go, no DB or HTTP; first piece of a chain of 3 (US-060 → US-061 → US-062). Level **L**, first run with the mechanical resume adjustment already applied. **Branch:** `us/US-060` → `4f0ba6b` (RED, 31 tests) → `b36f108` (implementation) → `4a20d52` (close), merged into `dev` by squash.
 
-### Por agente
+### Per agent
 
-| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+| Agent | Invocations | Tokens (last) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 4 (contrato inicial; ajuste por 2 decisiones GATE 1; agregar T-30/T-31 al contrato; cierre) — **las 4 retomadas con `SendMessage`, cero arranques en frío tras la primera** | 73k → 110k → 115k → 154k (último: 154k) | 23+34+5+20 = 82 | 303+130+29+155 = 617 s |
-| test-author | 2 (29 tests iniciales; agregar T-30/T-31) — retomado con `SendMessage` | 98k → 109k (último: 109k) | 18+6 = 24 | 634+77 = 711 s |
-| implementer | 2 (arranque; **retomado tras un crash**) | falló sin uso reportado → 175k (último: 175k) | 30 (solo la invocación que terminó) | 3.417 s (incluye el turno cortado, retomado en la misma conversación) |
+| analyst | 4 (initial contract; adjustment for 2 GATE 1 decisions; add T-30/T-31 to the contract; close) — **all 4 resumed with `SendMessage`, zero cold starts after the first** | 73k → 110k → 115k → 154k (last: 154k) | 23+34+5+20 = 82 | 303+130+29+155 = 617 s |
+| test-author | 2 (29 initial tests; add T-30/T-31) — resumed with `SendMessage` | 98k → 109k (last: 109k) | 18+6 = 24 | 634+77 = 711 s |
+| implementer | 2 (start; **resumed after a crash**) | failed with no usage reported → 175k (last: 175k) | 30 (only the invocation that finished) | 3,417 s (includes the cut turn, resumed in the same conversation) |
 | qa | 1 | 85k | 24 | 285 s |
-| **Total** | 9 | ~522k (154+109+175+85) | 160 | 5.029 s ≈ 83.8 min |
+| **Total** | 9 | ~522k (154+109+175+85) | 160 | 5,029 s ≈ 83.8 min |
 
-### Qué encontró
+### What it found
 
-| Tipo | Hallazgo | Quién |
+| Type | Finding | Who |
 |---|---|---|
-| Defecto del sprint 🔴 (verificado ejecutando Levenshtein fuera del repo) | El umbral `levenshtein<=1` que el propio sprint usa como ejemplo no alcanza sus propios casos: `"aller"→"ayer"` y `"kien"→"quien"` dan distancia real 2, no 1 | analyst |
-| Ambigüedad de contrato | "Palabra candidata a tiempo que no resuelve" (→ `Unresolved`) no tenía criterio de candidatura definido; "jueves" no estaba en ningún vocabulario del sistema | analyst |
-| Gap de cobertura | AC-13 ("mes pasado") y AC-14 ("este año") estaban en §3 del contrato pero sin fila propia en la tabla de tests de §4 — nadie los iba a probar | test-author |
-| Menor | `ambiguousSeed` compartida a propósito entre bancos T1 de SALES y PROFIT tensiona la letra de AC-25 (no-solapamiento); no bloquea, es tensión entre dos ACs del propio contrato | qa |
-| Menor | Vocabulario de días de la semana no tiene guard de longitud mínima que sí aplica al fuzzy de intents — sin falso positivo hoy, riesgo si el vocabulario crece → **R-46** | qa |
+| Sprint defect 🔴 (verified by executing Levenshtein outside the repo) | The `levenshtein<=1` threshold that the sprint itself uses as an example does not reach its own cases: `"aller"→"ayer"` and `"kien"→"quien"` have a real distance of 2, not 1 | analyst |
+| Contract ambiguity | "Time-candidate word that does not resolve" (→ `Unresolved`) had no defined candidacy criterion; "jueves" (Thursday) was not in any vocabulary of the system | analyst |
+| Coverage gap | AC-13 ("mes pasado") and AC-14 ("este año") were in §3 of the contract but without their own row in the §4 test table — nobody was going to test them | test-author |
+| Minor | `ambiguousSeed` deliberately shared between the T1 banks of SALES and PROFIT strains the letter of AC-25 (non-overlap); it does not block, it is tension between two ACs of the contract itself | qa |
+| Minor | The weekday vocabulary lacks the minimum-length guard that does apply to the intents fuzzy match — no false positive today, risk if the vocabulary grows → **R-46** | qa |
 
-### Paradas no planeadas (1)
+### Unplanned stops (1)
 
-**El implementer se cortó a mitad de turno:** `API Error: Claude's response exceeded the 64000 output token maximum`, probablemente generando un archivo completo (con banco de frases y mapa de sinónimos) en un solo bloque de texto. Cero código de producción había quedado escrito (`git status` limpio, tests intactos) — no fue necesario revertir nada. Se retomó con `SendMessage` pidiéndole explícitamente dividir el trabajo en archivos/ediciones más chicas, y terminó sin volver a cortarse. Duración total del agente (3.417 s) incluye el turno perdido, así que no es comparable 1:1 con implementers de corridas anteriores sin este incidente.
+**The implementer was cut mid-turn:** `API Error: Claude's response exceeded the 64000 output token maximum`, probably generating a whole file (with phrase bank and synonym map) in a single block of text. Zero production code had been written (`git status` clean, tests intact) — nothing had to be reverted. It was resumed with `SendMessage` explicitly asking it to split the work into smaller files/edits, and it finished without being cut again. The agent's total duration (3,417 s) includes the lost turn, so it is not comparable 1:1 with implementers of earlier runs without this incident.
 
-### Fricción operativa
+### Operational friction
 
-- El ajuste de retoma mecánico (aplicado antes de esta corrida, ver `us.md`) funcionó: los 3 agentes con más de una invocación (analyst ×4, test-author ×2, implementer ×2) se retomaron siempre con `SendMessage`, nunca con `Agent` en frío innecesario — primera corrida sin esa violación desde la 2.
-- Al aplicar el fix a `us.md`, el orquestador cometió sin querer `rewrite_links.py` (archivo ajeno pre-staged desde antes de la sesión) en el mismo commit por usar `git commit -m` sin excluirlo del índice. Se corrigió con un commit separado (`git rm --cached`) antes de tocar el worktree de la US. Lección: revisar `git status` después de `git add <archivo>` puntual, no asumir que el índice solo tiene lo que se acaba de agregar.
-- Nivel **L** con test-author funcionó según lo esperado: encontró un gap real de cobertura (AC-13/AC-14 sin test) que en nivel M probablemente habría pasado desapercibido hasta QA o después.
-- El crash del implementer por límite de salida es nuevo en el historial de corridas — no había pasado en las 4 anteriores, posiblemente por el tamaño del banco de frases/sinónimos de esta US frente a fixes chicos anteriores.
+- The mechanical resume adjustment (applied before this run, see `us.md`) worked: the 3 agents with more than one invocation (analyst ×4, test-author ×2, implementer ×2) were always resumed with `SendMessage`, never with an unnecessary cold `Agent` — first run without that violation since run 2.
+- When applying the fix to `us.md`, the orchestrator accidentally committed `rewrite_links.py` (an unrelated file pre-staged from before the session) in the same commit by using `git commit -m` without excluding it from the index. It was corrected with a separate commit (`git rm --cached`) before touching the US worktree. Lesson: check `git status` after a targeted `git add <file>`, do not assume the index only has what was just added.
+- Level **L** with test-author worked as expected: it found a real coverage gap (AC-13/AC-14 without a test) that at level M would probably have gone unnoticed until QA or later.
+- The implementer's crash from the output limit is new in the run history — it had not happened in the previous 4, possibly because of the size of this US's phrase/synonym bank compared with earlier small fixes.
 
-### Ajustes propuestos (pendientes del "sí" del PO)
+### Proposed adjustments (pending the PO's "yes")
 
-| Ajuste | Dónde |
+| Adjustment | Where |
 |---|---|
-| Cuando el implementer vaya a escribir un archivo grande con tablas/bancos de datos extensos (regex, sinónimos, frases semilla), indicarle de entrada que divida la escritura en varios `Write`/`Edit` en vez de un archivo completo en un solo bloque, para evitar el límite de 64k tokens de salida por turno | `.claude/agents/implementer.md` o `us.md` paso 3 |
-| Antes de cualquier `git commit` en el checkout principal fuera del worktree de la US, revisar `git status` explícitamente para no arrastrar archivos ajenos pre-staged | `us.md`, nota general para el orquestador |
+| When the implementer is about to write a large file with extensive data tables/banks (regex, synonyms, seed phrases), tell it upfront to split the writing into several `Write`/`Edit` calls instead of a whole file in a single block, to avoid the 64k output-token limit per turn | `.claude/agents/implementer.md` or `us.md` step 3 |
+| Before any `git commit` in the main checkout outside the US worktree, explicitly check `git status` so as not to drag along unrelated pre-staged files | `us.md`, general note for the orchestrator |
 
-### Qué medir en la corrida 6
+### What to measure in run 6
 
-- ¿El aviso al implementer sobre dividir archivos grandes evita el crash en la próxima US con volumen de datos similar (US-061 o US-062)?
-- US-061 depende de US-059 (métricas) y US-060 (motor) ya cerradas — buen caso para medir si una US "de integración" (servicio + endpoint + bitácora, con DB y HTTP) cuesta más o menos que el motor puro de esta corrida.
+- Does the warning to the implementer about splitting large files avoid the crash in the next US with a similar data volume (US-061 or US-062)?
+- US-061 depends on US-059 (metrics) and US-060 (engine), both already closed — a good case to measure whether an "integration" US (service + endpoint + log, with DB and HTTP) costs more or less than this run's pure engine.
 
-## Corrida 6 — US-061 (servicio, endpoint `/ai/ask` y bitácora, nivel M)
+## Run 6 — US-061 (service, `/ai/ask` endpoint and log, level M)
 
-**US:** pega US-059 (métricas) con US-060 (motor de intenciones) — servicio nuevo (`internal/service/assistant.go`), repo de bitácora (`internal/repository/assistant_queries.go`), handler+endpoint (`internal/handler/assistant.go`), migración 15. Nivel **M**, sin test-author. **Rama:** `us/US-061` → `1454fd6` (implementación+tests, sin RED separado) → `f793074` (cierre), fusionados en `dev` por squash.
+**US:** glues US-059 (metrics) to US-060 (intent engine) — new service (`internal/service/assistant.go`), log repo (`internal/repository/assistant_queries.go`), handler+endpoint (`internal/handler/assistant.go`), migration 15. Level **M**, no test-author. **Branch:** `us/US-061` → `1454fd6` (implementation+tests, no separate RED) → `f793074` (close), merged into `dev` by squash.
 
-### Por agente
+### Per agent
 
-| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+| Agent | Invocations | Tokens (last) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 3 (contrato inicial; corrección con las 6 decisiones de GATE 1 — el orquestador investigó D-2 por su cuenta antes de relanzar; cierre) — **las 3 en frío, `ListAgents` nunca mostró una viva** | 149k → 109k → 115k (último: 115k) | 41+51+33 = 125 | 374+522+275 = 1.171 s |
-| implementer | 3 (arranque; retomado en frío tras crash por límite de salida a los 600s; retomado en frío otra vez tras un segundo cuelgue de 5h matado a mano) | falló sin uso reportado → falló sin uso reportado → 186k (último: 186k, único con telemetría) | 79 (solo la invocación que terminó) | 846 s reportados (agente) + ~310 min de pared sin telemetría en los 2 intentos fallidos |
+| analyst | 3 (initial contract; correction with the 6 GATE 1 decisions — the orchestrator investigated D-2 on its own before relaunching; close) — **all 3 cold, `ListAgents` never showed one alive** | 149k → 109k → 115k (last: 115k) | 41+51+33 = 125 | 374+522+275 = 1,171 s |
+| implementer | 3 (start; resumed cold after an output-limit crash at 600 s; resumed cold again after a second 5 h hang killed by hand) | failed with no usage reported → failed with no usage reported → 186k (last: 186k, the only one with telemetry) | 79 (only the invocation that finished) | 846 s reported (agent) + ~310 min of wall-clock with no telemetry in the 2 failed attempts |
 | qa | 1 | 150k | 77 | 785 s |
-| **Total** | 7 | ~708k (372+186+150, subestimado — 2 intentos de implementer sin `subagent_tokens`) | 281 (subestimado, mismo motivo) | 2.802 s de telemetría ≈ 46.7 min + ~310 min de pared no medidos |
+| **Total** | 7 | ~708k (372+186+150, underestimated — 2 implementer attempts without `subagent_tokens`) | 281 (underestimated, same reason) | 2,802 s of telemetry ≈ 46.7 min + ~310 min of unmeasured wall-clock |
 
-### Qué encontró
+### What it found
 
-| Tipo | Hallazgo | Quién |
+| Type | Finding | Who |
 |---|---|---|
-| Defecto real 🔴 (bloqueante, roadmap R-06) | `buildDateWhere` (report.go:192) inclusivo en `to` — el PO exigió corregirlo global en vez de aceptar el riesgo; el fix también destapó el mismo bug latente en `dashboard.go:142-159` | analyst, decisión GATE 1 |
-| Gap real | `ReportRepository.TopProducts` ordena por ingresos, pero el spec de TOP_PRODUCTS exige el contraste "#1 por unidades" — investigado por el orquestador (no por el analyst) tras la instrucción del PO "averigualo, buscá"; resuelto con un método nuevo (`TopSellers`) para no romper el endpoint de reportes existente que sí depende del orden por ingresos | orquestador + analyst |
-| Riesgo real, atrapado antes de producción | El motor nunca devuelve `Tier="none"`; la migración exige `CHECK tier IN (...,'none')`. Sin mapear `""→"none"` antes del INSERT, el 100% de las consultas `UNKNOWN` —justo las que la bitácora existe para capturar— habrían roto el INSERT | analyst, en el contrato inicial (AC-15) |
-| Defecto preexistente en `dev`, no de esta US | `SalesSummary` agrupado colapsa en un solo bucket cuando `created_at` es un `time.Time` literal insertado a mano (patrón de fixture del proyecto); no se dispara hoy porque `sale.go` siempre usa `DEFAULT CURRENT_TIMESTAMP`. QA lo reprodujo contra `dev` sin el diff de esta US → **R-48** | qa |
-| Menor, aceptado | 4 frases de entrenamiento nuevas en `engine.go` no listadas en el contrato original — QA verificó que revertirlas rompe 4/7 casos de `Period.Label` y que no rompen nada de US-060 | qa |
-| Deferido a roadmap | R-06 solo cubre `report.go`; `ExpenseRepository.List` (expense.go:73) sigue con `to` inclusivo, sin US que lo dispare todavía → cierre parcial de R-06 | analyst, modo close |
-| Deferido a roadmap | `frontend/app/reports/page.tsx:98` arma `to` como 23:59:59 en vez de inicio del día siguiente; tras el fix de `buildDateWhere` queda una ventana de 1 segundo sin cubrir → **R-47** | analyst, contrato |
+| Real defect 🔴 (blocking, roadmap R-06) | `buildDateWhere` (report.go:192) inclusive on `to` — the PO demanded fixing it globally instead of accepting the risk; the fix also uncovered the same latent bug in `dashboard.go:142-159` | analyst, GATE 1 decision |
+| Real gap | `ReportRepository.TopProducts` orders by revenue, but the TOP_PRODUCTS spec requires the "#1 by units" contrast — investigated by the orchestrator (not the analyst) after the PO's instruction "find out, look it up"; resolved with a new method (`TopSellers`) so as not to break the existing reports endpoint, which does depend on the revenue ordering | orchestrator + analyst |
+| Real risk, caught before production | The engine never returns `Tier="none"`; the migration requires `CHECK tier IN (...,'none')`. Without mapping `""→"none"` before the INSERT, 100% of `UNKNOWN` queries —exactly the ones the log exists to capture— would have broken the INSERT | analyst, in the initial contract (AC-15) |
+| Pre-existing defect in `dev`, not this US's | Grouped `SalesSummary` collapses into a single bucket when `created_at` is a hand-inserted literal `time.Time` (the project's fixture pattern); it does not trigger today because `sale.go` always uses `DEFAULT CURRENT_TIMESTAMP`. QA reproduced it against `dev` without this US's diff → **R-48** | qa |
+| Minor, accepted | 4 new training phrases in `engine.go` not listed in the original contract — QA verified that reverting them breaks 4/7 `Period.Label` cases and that they break nothing in US-060 | qa |
+| Deferred to roadmap | R-06 only covers `report.go`; `ExpenseRepository.List` (expense.go:73) still has an inclusive `to`, no US triggers it yet → partial close of R-06 | analyst, close mode |
+| Deferred to roadmap | `frontend/app/reports/page.tsx:98` builds `to` as 23:59:59 instead of start of the next day; after the `buildDateWhere` fix a 1-second window is left uncovered → **R-47** | analyst, contract |
 
-### Paradas no planeadas (2)
+### Unplanned stops (2)
 
-**Intento 1 del implementer:** cortado por el mismo límite de salida que ya había pasado en la corrida 5 (archivo grande en un solo bloque), esta vez detectado por el watchdog automático a los 600s sin progreso. El orquestador verificó `git status`/`go build` antes de relanzar: nada roto, se retomó en frío con instrucción explícita de trabajar en bloques chicos.
+**Implementer attempt 1:** cut by the same output limit that had already occurred in run 5 (large file in a single block), this time detected by the automatic watchdog at 600 s without progress. The orchestrator verified `git status`/`go build` before relaunching: nothing broken, it was resumed cold with an explicit instruction to work in small blocks.
 
-**Intento 2 del implementer, el hallazgo nuevo de esta corrida:** el mismo aviso de "dividí el trabajo en bloques chicos" hizo que el agente avanzara MUY lento en vez de cortarse — corrió **5 horas reales** (el PO preguntó "¿cómo carajo lleva 5 horas?") sin que el watchdog de 600s lo detectara como colgado, porque técnicamente seguía haciendo tool calls, solo que a un ritmo altísimo de lentitud (diff final de esa vuelta: +15 líneas sobre el intento anterior). El orquestador comparó el progreso real (`git diff --stat` entre el estado post-crash-1 y el estado a las 5h) para confirmar que no era percepción, mató el proceso con `TaskStop`, verificó que el archivo a medio editar (`engine.go`) no había quedado roto (`go build` pasó igual), y relanzó una tercera vez con alcance deliberadamente acotado (solo los 2 archivos de test que faltaban, con la instrucción de correr `go test` de esos paquetes después de cada bloque en vez de al final). Esa tercera vuelta sí terminó, en 846s.
+**Implementer attempt 2, the new finding of this run:** the same "split the work into small blocks" warning made the agent progress VERY slowly instead of being cut — it ran **5 real hours** (the PO asked "how the hell has it been 5 hours?") without the 600 s watchdog detecting it as hung, because technically it kept making tool calls, only at an extremely slow pace (final diff of that round: +15 lines over the previous attempt). The orchestrator compared real progress (`git diff --stat` between the post-crash-1 state and the 5 h state) to confirm it was not perception, killed the process with `TaskStop`, verified that the half-edited file (`engine.go`) had not been left broken (`go build` passed anyway), and relaunched a third time with deliberately narrowed scope (only the 2 missing test files, with the instruction to run `go test` of those packages after each block instead of at the end). That third round did finish, in 846 s.
 
-### Fricción operativa
+### Operational friction
 
-- El ajuste de la corrida 5 ("avisar que divida archivos grandes") **no es suficiente por sí solo** contra los cuelgues del implementer — puede evitar el crash de salida (lo hizo) y al mismo tiempo producir un colgado silencioso mucho peor (lentitud extrema no detectada por el watchdog de tiempo-sin-progreso).
-- Los 2 intentos fallidos del implementer no generaron notificación con `subagent_tokens`/`tool_uses` — el benchmark de esta corrida subestima el costo real en tokens y herramientas de esos 2 intentos, solo tiene el de la vuelta que terminó.
-- El orquestador no tiene un mecanismo propio de vigilancia activa fuera de las notificaciones — probó `ScheduleWakeup` para chequear en 20 min y lo canceló de inmediato al notar que esa herramienta es específica de `/loop` y no aplica a esta sesión. El chequeo del intento 2 (a las 5h) fue reactivo, disparado por la queja del PO, no por vigilancia propia del orquestador.
-- Investigar D-2 (orquestador en vez de analyst) funcionó bien: la instrucción del PO fue "buscá vos", y verificar código real (`grep` de `TopProducts`/`TopByMargin`, quién más llama a `TopProducts`) antes de relanzar al analyst evitó una vuelta extra de preguntas.
+- The run 5 adjustment ("warn it to split large files") **is not enough on its own** against implementer hangs — it may avoid the output crash (it did) while at the same time producing a much worse silent hang (extreme slowness undetected by the no-progress time watchdog).
+- The implementer's 2 failed attempts did not generate a notification with `subagent_tokens`/`tool_uses` — this run's benchmark underestimates the real token and tool cost of those 2 attempts, it only has that of the round that finished.
+- The orchestrator has no own mechanism for active monitoring outside notifications — it tried `ScheduleWakeup` to check in 20 min and canceled it immediately on noticing that tool is specific to `/loop` and does not apply to this session. The attempt-2 check (at 5 h) was reactive, triggered by the PO's complaint, not by the orchestrator's own monitoring.
+- Investigating D-2 (orchestrator instead of analyst) worked well: the PO's instruction was "look it up yourself", and verifying real code (`grep` of `TopProducts`/`TopByMargin`, who else calls `TopProducts`) before relaunching the analyst avoided an extra round of questions.
 
-### Ajustes propuestos (pendientes del "sí" del PO)
+### Proposed adjustments (pending the PO's "yes")
 
-| Ajuste | Dónde |
+| Adjustment | Where |
 |---|---|
-| Darle al implementer un límite de tiempo de pared explícito (ej. 20-25 min) para completar un bloque de trabajo declarado, no solo watchdog de progreso; si lo excede, el orquestador chequea `git diff --stat` contra el último checkpoint conocido y decide matar/continuar con datos, no a ciegas | `.claude/agents/implementer.md`, `us.md` paso 3 |
-| Cuando el implementer arranca una vuelta de "completá lo que falta" (no un contrato completo desde cero), pedirle una lista explícita de los tests/archivos pendientes ANTES de escribir código, para que el orquestador pueda medir avance real contra un checklist en vez de solo `git diff --stat` | `.claude/agents/implementer.md` |
-| No usar `ScheduleWakeup` fuera de una sesión `/loop` — confirmado en esta corrida que es específico de esa skill y hay que cancelarlo si se llama por error | nota operativa para el orquestador, no requiere cambio de archivo |
+| Give the implementer an explicit wall-clock limit (e.g. 20-25 min) to complete a declared block of work, not only a progress watchdog; if exceeded, the orchestrator checks `git diff --stat` against the last known checkpoint and decides to kill/continue with data, not blindly | `.claude/agents/implementer.md`, `us.md` step 3 |
+| When the implementer starts a "complete what is missing" round (not a full contract from scratch), ask it for an explicit list of the pending tests/files BEFORE writing code, so the orchestrator can measure real progress against a checklist instead of only `git diff --stat` | `.claude/agents/implementer.md` |
+| Do not use `ScheduleWakeup` outside a `/loop` session — confirmed in this run that it is specific to that skill and must be canceled if called by mistake | operational note for the orchestrator, no file change required |
 
-### Qué medir en la corrida 7
+### What to measure in run 7
 
-- ¿El límite de tiempo de pared (si el PO lo aprueba) reduce los cuelgues silenciosos del implementer, o el problema es específico de "vueltas de completar trabajo ajeno" como la de esta corrida?
-- US-062 (widget de chat, frontend) es la primera US de este bloque que toca React/Next.js — buen caso para medir si el patrón de cuelgues es un problema del agente `implementer` en general o algo específico de Go/backend.
+- Does the wall-clock limit (if the PO approves it) reduce the implementer's silent hangs, or is the problem specific to "complete someone else's work" rounds like this run's?
+- US-062 (chat widget, frontend) is the first US of this block that touches React/Next.js — a good case to measure whether the hang pattern is a problem of the `implementer` agent in general or something specific to Go/backend.
 
-## Corrida 7 — US-062 (widget de chat del asistente, nivel L)
+## Run 7 — US-062 (assistant chat widget, level L)
 
-**US:** widget flotante de chat en la app autenticada que consume `POST /ai/ask` (US-061): `frontend/lib/assistant.ts` (lógica pura + store de módulo), `AssistantWidget.tsx` (solo render), montaje en `AppLayout.tsx`, más un cambio de backend por decisión del PO en GATE 1 (chips de sugerencia como frases completas, `internal/service/assistant.go`). Primera US frontend del pipeline. **Rama:** `us/US-062` → `4ef5a34` (RED) → `378c6d0` (implementación) → `1b32e38` (cierre) → `740d067` (R-55), fusionados en `dev` por squash.
+**US:** floating chat widget in the authenticated app that consumes `POST /ai/ask` (US-061): `frontend/lib/assistant.ts` (pure logic + module store), `AssistantWidget.tsx` (render only), mounting in `AppLayout.tsx`, plus a backend change by PO decision at GATE 1 (suggestion chips as full phrases, `internal/service/assistant.go`). First frontend US of the pipeline. **Branch:** `us/US-062` → `4ef5a34` (RED) → `378c6d0` (implementation) → `1b32e38` (close) → `740d067` (R-55), merged into `dev` by squash.
 
-### Por agente
+### Per agent
 
-| Agente | Invocaciones | Tokens (último) | Tools | Duración |
+| Agent | Invocations | Tokens (last) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 4 (contrato; ajuste con las decisiones del GATE 1; cierre; registro de R-55) — **las 4 en frío, `ListAgents` nunca mostró una viva** | 135k → 102k → 75k → 28k | 48+26+26+12 = 112 | 652+193+175+50 = 1.070 s |
+| analyst | 4 (contract; adjustment with the GATE 1 decisions; close; R-55 registration) — **all 4 cold, `ListAgents` never showed one alive** | 135k → 102k → 75k → 28k | 48+26+26+12 = 112 | 652+193+175+50 = 1,070 s |
 | test-author | 1 | 65k | 16 | 135 s |
 | implementer | 1 | 64k | 17 | 236 s |
 | qa | 1 | 69k | 23 | 206 s |
-| **Total** | 7 | ~538k (340+65+64+69) | 168 | 1.646 s ≈ 27,4 min |
+| **Total** | 7 | ~538k (340+65+64+69) | 168 | 1,646 s ≈ 27.4 min |
 
-### Qué encontró
+### What it found
 
-| Tipo | Hallazgo | Quién |
+| Type | Finding | Who |
 |---|---|---|
-| Defecto real 🔴 | Los chips que emitía el backend no funcionaban al reenviarlos (`hoy`, `ayer`, `cuánto vendiste`… devolvían `unknown`). El analyst lo demostró ejecutando el motor; el PO eligió la opción A (cambiar las sugerencias en `assistant.go`, código de US-061 ya cerrada) → T-12 y T-13 de ida y vuelta | analyst (D-2) |
-| Afirmación falsa del sprint | "`AppLayout` sigue montado al navegar": cada una de las 13 páginas monta su propio `AppLayout`; un `useState` perdería el historial → store de módulo (D-1) | analyst |
-| Otras discrepancias de contrato | D-3..D-7: `formatCOP` casi no aplica, las listas hay que parsearlas del `text`, `isMobile` no es reutilizable, `interactiveWidget` ausente (teclado no testeable), `#000` sobre `--accent` | analyst |
-| Hallazgo preexistente, fuera de alcance 🔴 | `web/static.go:23` abre la ruta con barra inicial, `io/fs` la rechaza, y el binario sirve `index.html` para toda URL (incluidos los `.js`): la UI embebida queda en blanco. Además `frontend/lib/api.ts:3` fija `http://localhost:8080/api` y el CORS solo acepta `:3000`. **No lo vio el QA automatizado; lo encontró la verificación manual con navegador** → **R-55** | orquestador, con Edge headless (Playwright) |
-| Menores de QA, aceptados | `boxShadow` con `rgba` fijo; `catch {}` sin log (→ R-54); `useIsMobile` parte en `false` | qa |
-| Deferido a roadmap | R-49 (401 → `/login`), R-50 (layout compartido), R-51 (tests de componentes), R-52 (periodos incompletos por intent), R-53 (chips ambiguos pierden el periodo), R-54 (`catch {}` sin log), R-55 (frontend embebido) | analyst |
+| Real defect 🔴 | The chips the backend emitted did not work when resent (`hoy`, `ayer`, `cuánto vendiste`… returned `unknown`). The analyst proved it by executing the engine; the PO chose option A (change the suggestions in `assistant.go`, code of an already-closed US-061) → round-trip T-12 and T-13 | analyst (D-2) |
+| False sprint claim | "`AppLayout` stays mounted on navigation": each of the 13 pages mounts its own `AppLayout`; a `useState` would lose the history → module store (D-1) | analyst |
+| Other contract discrepancies | D-3..D-7: `formatCOP` barely applies, the lists must be parsed from the `text`, `isMobile` is not reusable, `interactiveWidget` absent (keyboard not testable), `#000` over `--accent` | analyst |
+| Pre-existing finding, out of scope 🔴 | `web/static.go:23` opens the path with a leading slash, `io/fs` rejects it, and the binary serves `index.html` for every URL (including the `.js` files): the embedded UI is left blank. Also `frontend/lib/api.ts:3` fixes `http://localhost:8080/api` and CORS only accepts `:3000`. **Automated QA did not see it; manual verification with a browser found it** → **R-55** | orchestrator, with headless Edge (Playwright) |
+| QA minors, accepted | `boxShadow` with fixed `rgba`; `catch {}` without log (→ R-54); `useIsMobile` starts at `false` | qa |
+| Deferred to roadmap | R-49 (401 → `/login`), R-50 (shared layout), R-51 (component tests), R-52 (incomplete periods per intent), R-53 (ambiguous chips lose the period), R-54 (`catch {}` without log), R-55 (embedded frontend) | analyst |
 
-### Paradas no planeadas: 0 del contrato
+### Unplanned stops: 0 from the contract
 
-Ninguna parada por algo que el contrato no resolviera, ningún cuelgue del implementer. Sí hubo una interrupción ajena al pipeline: el clasificador de auto mode devolvió errores en Bash y PowerShell durante el cierre (~10 intentos) y el pipeline quedó frenado en el checkpoint de `close` hasta que volvió solo. Con herramientas de solo lectura (Grep/Read) se pudo verificar el contenido de los docs, pero no el `git status`.
+No stop over something the contract did not resolve, no implementer hang. There was an interruption external to the pipeline: the auto-mode classifier returned errors on Bash and PowerShell during close (~10 attempts) and the pipeline stalled at the `close` checkpoint until it came back on its own. With read-only tools (Grep/Read) the content of the docs could be verified, but not `git status`.
 
-### Verificación manual con navegador
+### Manual verification with a browser
 
-El agente `qa` no tiene herramienta de navegador y marcó M-1..M-9 como pendientes (correcto). El orquestador no lo intentó hasta que el PO preguntó por qué no se había hecho. Se hizo entonces con `playwright-core` instalado fuera del repo (en el directorio temporal del job) y el Edge instalado: 23 comprobaciones, 21 OK y 2 falsos fallos por errores del propio script (regex sensible a mayúsculas, semilla de datos incompleta). Cubrió M-1..M-6, M-8, M-9, P-1 opción A, P-3, saludo, carga y foco, historial por navegación SPA y F5, sin storage, tema claro/oscuro, 320 px y rol cajero. Quedó sin verificar el teclado en celular real (AC-20) y el solape con el Toast.
+The `qa` agent has no browser tool and marked M-1..M-9 as pending (correct). The orchestrator did not try until the PO asked why it had not been done. It was then done with `playwright-core` installed outside the repo (in the job's temp directory) and the installed Edge: 23 checks, 21 OK and 2 false failures from the script's own errors (case-sensitive regex, incomplete data seed). It covered M-1..M-6, M-8, M-9, P-1 option A, P-3, greeting, load and focus, history on SPA navigation and F5, no storage, light/dark theme, 320 px and cashier role. Left unverified: the keyboard on a real phone (AC-20) and the overlap with the Toast.
 
-Costo real de armar el entorno: la primera pasada fue vacía sin saberlo (las páginas salían en blanco por R-55 y "0 botones" pasaba trivialmente); hubo que agregar una aserción de "la página renderizó texto" para que la comprobación M-3 valiera algo. Compilar con `-overlay` para cambiar el puerto (8080 estaba ocupado por otro proceso del PO), reconstruir el frontend con `NEXT_PUBLIC_API_URL=/api` y un servidor Node con proxy propio, por R-55 y por el CORS a `:3000`.
+Real cost of setting up the environment: the first pass was empty without knowing it (pages came out blank because of R-55 and "0 buttons" passed trivially); an assertion that "the page rendered text" had to be added for the M-3 check to be worth anything. Compiling with `-overlay` to change the port (8080 was taken by another PO process), rebuilding the frontend with `NEXT_PUBLIC_API_URL=/api` and a Node server with its own proxy, because of R-55 and the CORS to `:3000`.
 
-### Fricción operativa
+### Operational friction
 
-- Un solo commit de `implementer.md` (`37e5c10`) más un prompt con aviso de trozar archivos y reportar por bloques coincidieron con la primera corrida sin cuelgues del implementer en tres. No se puede atribuir la mejora a uno de los dos.
-- El analyst se lanzó en frío las 4 veces: `ListAgents` no mostró ninguna instancia viva cada vez que se consultó (los agentes terminados desaparecen de la lista poco después de entregar). El chequeo mecánico se cumplió, pero en la práctica ahora nunca hay retoma posible salvo que el orquestador le escriba al agente antes de que termine.
-- Git Bash reescribe valores como `NEXT_PUBLIC_API_URL=/api` a `C:/Program Files/Git/api` y mangla los acentos de `curl -d` inline; hay que usar `MSYS_NO_PATHCONV=1` y `--data-binary @archivo`.
-- En el checkout principal apareció trabajo ajeno sin commitear durante la sesión (arreglo en curso de `web/static.go`, un borrador `SPRINT-15-Asistente-Continuacion.md`, `web/out/.gitkeep` borrado por una compilación). El merge por squash no los tocó porque no se solapaban con el diff y el commit se hizo sin `-a`.
+- A single `implementer.md` commit (`37e5c10`) plus a prompt with a warning to chunk files and report by blocks coincided with the first run without implementer hangs in three. The improvement cannot be attributed to either one.
+- The analyst was launched cold all 4 times: `ListAgents` showed no live instance each time it was queried (finished agents disappear from the list shortly after delivering). The mechanical check was complied with, but in practice there is now never a possible resumption unless the orchestrator writes to the agent before it finishes.
+- Git Bash rewrites values like `NEXT_PUBLIC_API_URL=/api` into `C:/Program Files/Git/api` and mangles accents in inline `curl -d`; use `MSYS_NO_PATHCONV=1` and `--data-binary @file`.
+- Unrelated uncommitted work appeared in the main checkout during the session (an in-progress fix of `web/static.go`, a draft `SPRINT-15-Asistente-Continuacion.md`, `web/out/.gitkeep` deleted by a build). The squash merge did not touch them because they did not overlap with the diff and the commit was made without `-a`.
 
-### Ajustes propuestos (pendientes del "sí" del PO)
+### Proposed adjustments (pending the PO's "yes")
 
-| Ajuste | Dónde |
+| Adjustment | Where |
 |---|---|
-| Para US con UI, agregar al paso 4 una verificación con navegador (Playwright + Edge, o la herramienta de navegador integrada si está disponible) hecha por el orquestador o un agente con esa herramienta, y exigir que las comprobaciones "no aparece X" incluyan una aserción de que la página realmente renderizó | `.claude/commands/us.md`, contrato §4 (M-n) |
-| Documentar en `project-docs/` (o como skill de proyecto vía `/run-skill-generator`) cómo levantar el binario con un puerto/DB de prueba y el frontend con API relativa, para no reconstruirlo cada vez; deja de hacer falta cuando R-55 se cierre | `project-docs/` o `.claude/skills/` |
-| Aclarar en `us.md` que, tras entregar, un agente desaparece de `ListAgents`, y que la retoma solo es posible si el orquestador manda `SendMessage` antes; o cambiar el chequeo a "usa el agentId de la invocación anterior" | `.claude/commands/us.md` |
+| For USs with UI, add to step 4 a browser verification (Playwright + Edge, or the built-in browser tool if available) done by the orchestrator or an agent with that tool, and require that "X does not appear" checks include an assertion that the page actually rendered | `.claude/commands/us.md`, contract §4 (M-n) |
+| Document in `project-docs/` (or as a project skill via `/run-skill-generator`) how to start the binary with a test port/DB and the frontend with a relative API, so as not to rebuild it each time; no longer needed once R-55 is closed | `project-docs/` or `.claude/skills/` |
+| Clarify in `us.md` that, after delivering, an agent disappears from `ListAgents`, and that resumption is only possible if the orchestrator sends `SendMessage` before that; or change the check to "use the agentId of the previous invocation" | `.claude/commands/us.md` |
 
-### Qué medir en la corrida 8
+### What to measure in run 8
 
-- ¿El implementer vuelve a terminar sin cuelgues en una US de tamaño similar (frontend + backend)? Con una muestra más se puede intentar separar el efecto del ajuste de `implementer.md` del efecto del aviso en el prompt.
-- Si el PO aprueba la verificación con navegador, cuánto tiempo y tokens añade por US con UI.
-- Una US que arranque con `ListAgents` mostrando algo vivo, para probar que la ruta de retoma sigue funcionando.
+- Does the implementer finish again without hangs in a US of similar size (frontend + backend)? With one more sample the effect of the `implementer.md` adjustment can be tried to be separated from the effect of the warning in the prompt.
+- If the PO approves browser verification, how much time and tokens it adds per US with UI.
+- A US that starts with `ListAgents` showing something alive, to test that the resumption path still works.
 
-## Corrida 8 — US-054 (acceso LAN + servir el frontend desde el binario, nivel L)
+## Run 8 — US-054 (LAN access + serving the frontend from the binary, level L)
 
-| Agente | Invocaciones | Tokens (último valor) | Tools | Duración |
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 3 (contract, ajuste GATE 1, close; las dos últimas por `SendMessage`) | 79k | 23 | ~4,2 min |
-| test-author | 1 | 32k | 6 | ~1,1 min |
-| implementer | 1 | 45k | 12 | ~2,8 min |
-| qa | 1 | 36k | 10 | ~1,8 min |
+| analyst | 3 (contract, GATE 1 adjustment, close; the last two via `SendMessage`) | 79k | 23 | ~4.2 min |
+| test-author | 1 | 32k | 6 | ~1.1 min |
+| implementer | 1 | 45k | 12 | ~2.8 min |
+| qa | 1 | 36k | 10 | ~1.8 min |
 
-**Qué encontró.** El contrato reprodujo con un `fstest.MapFS` el comportamiento real de `FileServer` y detectó lo que el sprint no decía: rutas dinámicas (`customers/[id]`, `catalogo/[token]`) exportadas como un solo `_.html`, `go build` roto en checkout limpio por `//go:embed all:out` sin `.gitkeep` trackeado, y `lan_access_enabled` ya existente. Todas las decisiones (P-1..P-8) se resolvieron en un solo GATE 1. QA: 0 BLOQUEANTE, 3 MENOR; ninguno cambió código.
+**What it found.** The contract reproduced with an `fstest.MapFS` the real behavior of `FileServer` and detected what the sprint did not say: dynamic routes (`customers/[id]`, `catalogo/[token]`) exported as a single `_.html`, `go build` broken on a clean checkout because of `//go:embed all:out` without a tracked `.gitkeep`, and `lan_access_enabled` already existing. All decisions (P-1..P-8) were resolved at a single GATE 1. QA: 0 BLOCKER, 3 MINOR; none changed code.
 
-**Verificación del orquestador.** Antes del merge se armó el binario con `web/out` poblado y se comprobó por `curl`: `/login`, `/customers/5` y `/catalogo/abc` → HTML; chunk JS → `text/javascript`; `/_next/nope.js` → 404; `/api/setup/status` → 200. Esto cierra lo que QA dejó sin probar (su smoke corrió con `web/out` vacío). Sigue sin verificar en navegador real: T-12 y AC-16 / T-M.
+**Orchestrator verification.** Before the merge the binary was built with `web/out` populated and checked by `curl`: `/login`, `/customers/5` and `/catalogo/abc` → HTML; JS chunk → `text/javascript`; `/_next/nope.js` → 404; `/api/setup/status` → 200. This closes what QA left untested (its smoke ran with `web/out` empty). Still unverified in a real browser: T-12 and AC-16 / T-M.
 
-**Paradas no planeadas:** 0. Un caso `PASA⚠️` en T-11 (guarda de regresión) se mostró al PO por regla.
+**Unplanned stops:** 0. A `PASSES⚠️` case in T-11 (regression guard) was shown to the PO by rule.
 
-**Fricción operativa.**
-- `ListAgents` sí mostró al analyst vivo tras entregar (a diferencia de la corrida 7), y la retoma por `SendMessage` funcionó dos veces. El agente se ve en la lista mientras dura la sesión; desaparecía en la corrida 7 por otra causa no identificada.
-- El implementer escribió `servidor.md` (spec) por su cuenta; el analyst lo verificó en `close`. Es borde del reparto de roles, sin daño.
-- Corrida notablemente más barata que las anteriores (~191k vs 282k–708k): contrato acotado, sin vueltas de QA y sin cuelgues. US más pequeña que US-062/US-061; no concluir todavía.
+**Operational friction.**
+- `ListAgents` did show the analyst alive after delivering (unlike run 7), and resumption by `SendMessage` worked twice. The agent shows in the list for the duration of the session; it disappeared in run 7 for another, unidentified cause.
+- The implementer wrote `servidor.md` (spec) on its own; the analyst verified it in `close`. It is an edge of the role split, no harm.
+- Notably cheaper run than the previous ones (~191k vs 282k–708k): narrow contract, no QA rounds and no hangs. A smaller US than US-062/US-061; do not conclude yet.
 
-### Qué medir en la corrida 9
-- Si la verificación con navegador (ajuste pendiente de corridas 7) se aprueba, cuánto añade por US con UI.
-- Si el implementer vuelve a terminar sin cuelgues.
+### What to measure in run 9
+- If browser verification (pending adjustment from run 7) is approved, how much it adds per US with UI.
+- Whether the implementer again finishes without hangs.
 
-## Corrida 9 — US-056 (pedido por mesa, nivel L)
+## Run 9 — US-056 (order per table, level L)
 
-| Agente | Invocaciones | Tokens (último valor) | Tools | Duración |
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
 |---|---|---|---|---|
-| analyst | 3 (contract, ajuste GATE 1, close; las tres en frío) | 83k (82k + 49k + 83k entre las tres) | 112 | ~7,0 min |
-| test-author | 2 (rojo; corrección de seed) | 13k (82k + 13k) | 16 | ~4,0 min |
-| implementer | 1 | 114k | 44 | ~6,6 min |
-| qa | 2 (revisión; smoke 1b) | 29k (63k + 29k) | 33 | ~4,4 min |
+| analyst | 3 (contract, GATE 1 adjustment, close; all three cold) | 83k (82k + 49k + 83k across the three) | 112 | ~7.0 min |
+| test-author | 2 (red; seed correction) | 13k (82k + 13k) | 16 | ~4.0 min |
+| implementer | 1 | 114k | 44 | ~6.6 min |
+| qa | 2 (review; smoke 1b) | 29k (63k + 29k) | 33 | ~4.4 min |
 
-**Qué encontró.** El contrato descubrió ejecutando: el sprint daba por existente el ocultamiento de carritos con `restaurant_mode` (no existe), PATCH no pasaba CORS (`middleware.go:97`), `/mesas/[orderId]` necesitaba `generateStaticParams` y `dynamicRoutes`, y las FK no se aplican, por lo que hizo falta un INSERT atómico (R-59 cerrado sin migración). Siete preguntas del PO se resolvieron en un solo GATE 1 más una repregunta (Q-6, sobre qué era polling) y Q-8. QA: 0 BLOQUEANTE, 4 MENOR en la revisión y 1 MENOR en el smoke; ninguno cambió código.
+**What it found.** The contract discovered by executing: the sprint took for granted the existence of hiding carts with `restaurant_mode` (it does not exist), PATCH did not pass CORS (`middleware.go:97`), `/mesas/[orderId]` needed `generateStaticParams` and `dynamicRoutes`, and the FKs are not enforced, so an atomic INSERT was needed (R-59 closed without a migration). Seven PO questions were resolved at a single GATE 1 plus one re-ask (Q-6, about what polling was) and Q-8. QA: 0 BLOCKER, 4 MINOR in the review and 1 MINOR in the smoke; none changed code.
 
-**Defecto de tests.** El seed `INSERT INTO users (id=1…)` del test-author chocaba con la migración (`migrate.go:252`, `INSERT OR IGNORE`), así que T-3, T-14 y T-15 no podían pasar. Lo detectó el implementer, no el test-author. Costó una invocación extra del test-author y un nuevo commit `RED` (`1bcdd65`).
+**Test defect.** The test-author's seed `INSERT INTO users (id=1…)` clashed with the migration (`migrate.go:252`, `INSERT OR IGNORE`), so T-3, T-14 and T-15 could not pass. The implementer detected it, not the test-author. It cost an extra test-author invocation and a new `RED` commit (`1bcdd65`).
 
-**Paradas no planeadas:** 1. El checkout principal tenía un gitlink de `.claude/worktrees/` modificado; el PO mandó seguir. Además, un `PASA⚠️` (T-14) se mostró al PO por regla.
+**Unplanned stops:** 1. The main checkout had a modified gitlink under `.claude/worktrees/`; the PO said to go on. Also, a `PASSES⚠️` (T-14) was shown to the PO by rule.
 
-**Fricción operativa.**
-- `ListAgents` no mostró ningún agente terminado del mismo rol en ningún paso; todas las invocaciones fueron en frío.
-- El smoke quedó omitido en la primera pasada porque el puerto 8080 es fijo (`cmd/pos/main.go:74-81`) y estaba ocupado por el PO; se repitió como vuelta 1b cuando lo liberó.
-- `go run scripts/copy-frontend.go` borra `web/out/.gitkeep` en el worktree; QA lo restauró con `git checkout`.
-- `TestDashboardToday_T20_Golden` falla por fecha también en `dev` (R-67).
+**Operational friction.**
+- `ListAgents` showed no finished agent of the same role at any step; all invocations were cold.
+- The smoke was skipped on the first pass because port 8080 is fixed (`cmd/pos/main.go:74-81`) and was taken by the PO; it was repeated as round 1b when they freed it.
+- `go run scripts/copy-frontend.go` deletes `web/out/.gitkeep` in the worktree; QA restored it with `git checkout`.
+- `TestDashboardToday_T20_Golden` fails by date in `dev` too (R-67).
 
-### Qué medir en la corrida 10
-- Si el test-author corre sus tests contra las migraciones reales, cuántas vueltas de tests se evitan.
-- Costo del smoke separado cuando el puerto está ocupado.
+### What to measure in run 10
+- If the test-author runs its tests against the real migrations, how many test rounds are avoided.
+- Cost of the separate smoke when the port is taken.

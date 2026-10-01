@@ -1,25 +1,25 @@
-> **Tipo:** vigente · **Manda sobre:** qué falta para producción · **Actualizado:** 2026-09-21
+> **Type:** current · **Rules over:** what is missing for production · **Updated:** 2026-10-01
 
-Este documento lista limitaciones y deuda **verificadas** del producto actual; lo que se va a construir a futuro vive en [roadmap.md](roadmap.md), que es otra cosa.
+This document lists **verified** limitations and debt of the current product; what will be built in the future lives in [roadmap.md](roadmap.md), which is a different thing.
 
-## Deuda abierta (no es roadmap, es lo que quedó a medias)
+## Open debt (not roadmap, it is what was left half-done)
 
-| US / Sprint | Qué | Desde |
+| US / Sprint | What | Since |
 |---|---|---|
-| US-034 | Factus: validación completa en sandbox | SPRINT-07 — requiere acceso externo |
-| SPRINT-05 | Mobile Responsive, marcado pendiente aunque la base de estilos ya se usa | SPRINT-05 |
-| US-042c, US-043, US-045 | Velocidad de venta, historial del cliente en POS, catálogo por WhatsApp | SPRINT-09 |
-| US-053 | Resumen de cierre de caja por correo — hay trabajo sin commitear en `internal/mailer/` | SPRINT-12 |
-| US-054 | Acceso al POS por WiFi local | SPRINT-12, reasignada a SPRINT-13 |
-| US-055 a US-058 | Módulo restaurante completo | SPRINT-13 |
-| US-059 a US-062 | Asistente local | SPRINT-14 |
+| US-034 | Factus: full sandbox validation | SPRINT-07 — requires external access |
+| SPRINT-05 | Mobile Responsive, marked pending although the style base is already in use | SPRINT-05 |
+| US-042c, US-043, US-045 | Sales speed, customer history in the POS, WhatsApp catalog | SPRINT-09 |
+| US-053 | Register-close summary by email — there is uncommitted work in `internal/mailer/` | SPRINT-12 |
+| US-054 | POS access over local WiFi | SPRINT-12, reassigned to SPRINT-13 |
+| US-055 to US-058 | Full restaurant module | SPRINT-13 |
+| US-059 to US-062 | Local assistant | SPRINT-14 |
 
-## Documentos con información desactualizada
+## Documents with outdated information
 
-| Gap | Evidencia | Estado |
+| Gap | Evidence | Status |
 |---|---|---|
-| `archive/2026-05-plan-mvp.md` reporta un bug de `cash_in` en el cierre de caja | `archive/2026-05-plan-mvp.md:1134` vs `internal/service/register.go:113` | **Ya arreglado**, el doc es el que está desactualizado |
+| `archive/2026-05-plan-mvp.md` reports a `cash_in` bug in the register close | `archive/2026-05-plan-mvp.md:1134` vs `internal/service/register.go:113` | **Already fixed**, the doc is what is outdated |
 
-## Por verificar
+## To verify
 
-Aquí van los gaps sospechados pero no confirmados contra el código. Cada uno se confirma con `archivo:línea` antes de subir a la tabla principal.
+Gaps that are suspected but not confirmed against the code go here. Each one is confirmed with `file:line` before moving up to the main table.
