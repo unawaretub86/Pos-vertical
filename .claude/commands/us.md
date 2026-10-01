@@ -1,107 +1,109 @@
 ---
-description: Ejecuta una US con el pipeline SDD de 4 agentes (analyst → test-author → implementer → qa → analyst) y dos gates del PO
+description: Runs a US through the 4-agent SDD pipeline (analyst → test-author → implementer → qa → analyst) with two PO gates
 argument-hint: US-XXX [M|L]
 ---
 
-Orquesta la US **$ARGUMENTS** según `project-docs/tosdd-plan.md`. Tú eres el orquestador: lanzas los subagentes, verificas lo que hacen y paras en los gates. **No escribes código, tests ni docs tú mismo.**
+Orchestrate US **$ARGUMENTS** per `project-docs/tosdd-plan.md`. You are the orchestrator: you launch the subagents, verify what they do and stop at the gates. **You do not write code, tests or docs yourself.**
 
-Si no se indica nivel, usa **L**. En nivel **M** se salta el paso 2 (test-author).
+**Language:** everything written during this pipeline (contracts, QA reports, sprint updates, spec deltas, roadmap entries, gate summaries, commit messages, benchmark entries) is in **English**, never Spanish (CLAUDE.md Rule 0). Tell every subagent this in its prompt. Only end-user UI strings and verbatim user phrases used as test data may be Spanish.
 
-Convenciones de este comando:
-- `WT` = ruta absoluta del worktree de la US.
-- `ID` = el identificador de la US (`US-XXX`).
-- Todo comando git va con `git -C "$WT"`.
-- A cada subagente le pasas en el prompt: el `ID`, la ruta absoluta de `WT`, el sprint y el modo (si aplica).
-- **Retomar en vez de relanzar (chequeo obligatorio, no opcional):** antes de cada `Agent` de este pipeline, corre primero `ListAgents` y busca en la lista un agente vivo del mismo rol (`analyst`, `test-author`, `implementer`, `qa`) para esta misma `$ID`. Si aparece, usa `SendMessage` a su nombre/ID en vez de `Agent`. Solo lanza `Agent` (arranque en frío) si `ListAgents` no muestra ninguno vivo para ese rol+US. Este chequeo se hizo mal dos corridas seguidas (3 y 4, ver `project-docs/pipeline-bench.md`) por saltárselo al llegar al paso 5 (`close`) — no te lo saltes ahí tampoco.
-- **Benchmark:** anota, de cada notificación de agente, `subagent_tokens`, `tool_uses` y `duration_ms`, y lleva la cuenta de las paradas no planeadas (fuera de los GATE 1 y 2). Se registran en el paso 6.
-- Los errores de gopls dentro del worktree ("not included in your workspace", símbolos `undefined`) son ruido del IDE; lo que cuenta es `go build` y `go test`.
+If no level is given, use **L**. At level **M**, skip step 2 (test-author).
 
-## 0. Preparar el worktree
+Conventions of this command:
+- `WT` = absolute path of the US worktree.
+- `ID` = the US identifier (`US-XXX`).
+- Every git command runs with `git -C "$WT"`.
+- To each subagent you pass in the prompt: the `ID`, the absolute path of `WT`, the sprint and the mode (if applicable).
+- **Resume instead of relaunching (mandatory check, not optional):** before each `Agent` call in this pipeline, first run `ListAgents` and look for a live agent of the same role (`analyst`, `test-author`, `implementer`, `qa`) for this same `$ID`. If one shows up, use `SendMessage` to its name/ID instead of `Agent`. Only launch `Agent` (cold start) if `ListAgents` shows none alive for that role+US. This check was botched two runs in a row (3 and 4, see `project-docs/pipeline-bench.md`) by skipping it on reaching step 5 (`close`) — do not skip it there either.
+- **Benchmark:** from each agent notification, record `subagent_tokens`, `tool_uses` and `duration_ms`, and keep count of unplanned stops (outside GATE 1 and 2). They are logged in step 6.
+- gopls errors inside the worktree ("not included in your workspace", `undefined` symbols) are IDE noise; what counts is `go build` and `go test`.
 
-1. En el checkout principal, `git status --porcelain`. Si hay cambios sin commitear en `CLAUDE.md`, `project-docs/`, `.claude/` o en el código, **detente y avisa a Andrey**: el worktree sale del último commit de `dev` y los agentes no verían esos cambios.
-2. Ubica la US con Grep en `project-docs/sprints/`. Si no existe pero `$ID` corresponde a un ítem `R-NN` del roadmap (`project-docs/roadmap.md`), es una US que viene del roadmap: no la registres aquí, el `analyst` la registra en el paso 1 (modo `contract`) y el orquestador la commitea aparte antes de `RED` (ver paso 1). Si existe, confirma que sigue `[ ]`.
-3. Crea el worktree: `git worktree add "../Pos-vertical-wt/$ID" -b "us/$ID" dev`. Si la rama ya existe, pregunta a Andrey si se retoma o se descarta.
+## 0. Prepare the worktree
+
+1. In the main checkout, run `git status --porcelain`. If there are uncommitted changes in `CLAUDE.md`, `project-docs/`, `.claude/` or the code, **stop and tell Andrey**: the worktree is cut from the last commit of `dev` and the agents would not see those changes.
+2. Locate the US with Grep in `project-docs/sprints/`. If it does not exist but `$ID` matches an `R-NN` item of the roadmap (`project-docs/roadmap.md`), it is a US coming from the roadmap: do not register it here; the `analyst` registers it in step 1 (mode `contract`) and the orchestrator commits it separately before `RED` (see step 1). If it exists, confirm it is still `[ ]`.
+3. Create the worktree: `git worktree add "../Pos-vertical-wt/$ID" -b "us/$ID" dev`. If the branch already exists, ask Andrey whether to resume or discard it.
 4. `mkdir -p "$WT/changes/$ID"`.
 
-## 1. Contrato — agente `analyst`, modo `contract`
+## 1. Contract — agent `analyst`, mode `contract`
 
-Lanza `analyst`. Si `$ID` viene del roadmap (paso 0.2), pásale también que registre la US en el sprint correspondiente durante este mismo modo `contract`. Luego verifica que existe `$WT/changes/$ID/contract.md` y que tiene las 8 secciones de la plantilla.
+Launch `analyst`. If `$ID` comes from the roadmap (step 0.2), also tell it to register the US in the matching sprint during this same `contract` mode. Then verify that `$WT/changes/$ID/contract.md` exists and has the 8 sections of the template.
 
-Si el analyst tocó el sprint (registro de US desde roadmap), haz ese checkpoint aparte, **antes** de `RED`: `git -C "$WT" commit -am "docs($ID): register US"`.
+If the analyst touched the sprint (US registration from the roadmap), make that checkpoint separately, **before** `RED`: `git -C "$WT" commit -am "docs($ID): register US"`.
 
-### ◆ GATE 1 — Andrey aprueba el contrato
+### ◆ GATE 1 — Andrey approves the contract
 
-Muestra el resumen del analyst, las DISCREPANCIAS y las preguntas para el PO, con la ruta del contrato. **Detente y espera.** Si Andrey pide cambios, vuelve a lanzar `analyst` con sus correcciones.
+Show the analyst's summary, the DISCREPANCIES and the questions for the PO, with the path to the contract. **Stop and wait.** If Andrey asks for changes, relaunch `analyst` with his corrections.
 
-Si las correcciones de Andrey solo tocan §7 (Fuera de alcance) y §8 (Preguntas para el PO) del contrato — es decir, no cambian criterios de aceptación ni casos de prueba — puedes lanzar el `test-author` del paso 2 **en paralelo** con el ajuste del analyst, en vez de esperar a que el analyst termine. No avances al paso 3 sin un "sí" explícito de Andrey al contrato.
+If Andrey's corrections only touch §7 (Out of scope) and §8 (Questions for the PO) of the contract — that is, they do not change acceptance criteria or test cases — you may launch the step 2 `test-author` **in parallel** with the analyst's adjustment, instead of waiting for the analyst to finish. Do not advance to step 3 without an explicit "yes" from Andrey on the contract.
 
-## 2. Tests en rojo — agente `test-author` (solo nivel L)
+## 2. Red tests — agent `test-author` (level L only)
 
-Lanza `test-author`. Luego verifica:
-- `git -C "$WT" status --porcelain` solo muestra `*_test.go`, `*.test.ts` o `*.test.tsx` (y `changes/`, que está ignorado). Si hay otro archivo, revierte con `git -C "$WT" checkout -- <archivo>` (o bórralo si es nuevo) y relanza al agente indicando la violación.
-- Su tabla no tiene tests `PASA⚠️`. Si los hay, muéstralos a Andrey antes de seguir.
+Launch `test-author`. Then verify:
+- `git -C "$WT" status --porcelain` shows only `*_test.go`, `*.test.ts` or `*.test.tsx` (and `changes/`, which is ignored). If there is any other file, revert with `git -C "$WT" checkout -- <file>` (or delete it if new) and relaunch the agent stating the violation.
+- Its table has no `PASSES⚠️` tests. If there are any, show them to Andrey before continuing.
 
-Checkpoint: `git -C "$WT" add -A && git -C "$WT" commit -m "test($ID): red tests from contract"`. Guarda el hash como `RED`.
+Checkpoint: `git -C "$WT" add -A && git -C "$WT" commit -m "test($ID): red tests from contract"`. Save the hash as `RED`.
 
-### 2b. Si el contrato cambia después del rojo
+### 2b. If the contract changes after red
 
-Si una parada (un `PASA⚠️`, algo que el contrato no resuelve) lleva al PO a decidir y el analyst cambia el contrato **antes** del checkpoint `RED`, retoma al `test-author` para que ajuste o agregue solo los tests afectados. Repite las verificaciones del paso 2 y recién entonces haz el checkpoint. Si el cambio llega **después** de `RED`, haz un segundo commit `test($ID): contract update` y usa ese hash como `RED`.
+If a stop (a `PASSES⚠️`, something the contract does not resolve) leads the PO to decide and the analyst changes the contract **before** the `RED` checkpoint, resume the `test-author` so it adjusts or adds only the affected tests. Repeat the step 2 verifications and only then make the checkpoint. If the change arrives **after** `RED`, make a second commit `test($ID): contract update` and use that hash as `RED`.
 
-## 3. Implementación — agente `implementer`
+## 3. Implementation — agent `implementer`
 
-Lanza `implementer`. Luego verifica:
-- `git -C "$WT" diff RED -- '*_test.go' '*.test.ts' '*.test.tsx'` está vacío (en nivel M, compara contra el commit base de la rama). Si no lo está, revierte esos archivos y trátalo como BLOQUEANTE de la vuelta.
+Launch `implementer`. Then verify:
+- `git -C "$WT" diff RED -- '*_test.go' '*.test.ts' '*.test.tsx'` is empty (at level M, compare against the branch base commit). If it is not, revert those files and treat it as a BLOCKER of the round.
 
-Checkpoint: `git -C "$WT" commit -am "feat($ID): implementation"` (agrega los archivos nuevos con `add -A` antes).
+Checkpoint: `git -C "$WT" commit -am "feat($ID): implementation"` (add new files with `add -A` first).
 
-## 4. QA — agente `qa`
+## 4. QA — agent `qa`
 
-1. Snapshot: `git -C "$WT" status --porcelain` y `git -C "$WT" rev-parse HEAD`.
-2. Lanza `qa` e indícale el número de vuelta y el hash `RED`.
-3. Snapshot de nuevo. Si QA cambió algo fuera de `changes/`, revierte con `git -C "$WT" checkout -- .` (y `git -C "$WT" clean -fd -e changes/` para archivos nuevos) y anota en `qa.md` la violación.
-4. Lee el veredicto:
-   - **BLOQUEANTE** y es la vuelta 1 o 2 → vuelve al paso 3 pasándole al implementer solo los BLOQUEANTE de esa vuelta.
-   - **BLOQUEANTE** en la vuelta 3 → **detente y escala a Andrey**. Dos vueltas sin converger indican que el problema está en el contrato.
-   - **OK** → paso 5.
+1. Snapshot: `git -C "$WT" status --porcelain` and `git -C "$WT" rev-parse HEAD`.
+2. Launch `qa` and give it the round number and the `RED` hash.
+3. Snapshot again. If QA changed anything outside `changes/`, revert with `git -C "$WT" checkout -- .` (and `git -C "$WT" clean -fd -e changes/` for new files) and note the violation in `qa.md`.
+4. Read the verdict:
+   - **BLOCKER** and it is round 1 or 2 → go back to step 3, passing the implementer only that round's BLOCKERs.
+   - **BLOCKER** in round 3 → **stop and escalate to Andrey**. Two rounds without converging indicate the problem is in the contract.
+   - **OK** → step 5.
 
-## 5. Cierre — agente `analyst`, modo `close`
+## 5. Close — agent `analyst`, mode `close`
 
-Antes de lanzar nada: `ListAgents` y busca el `analyst` del paso 1 de esta `$ID`. Si sigue vivo, `SendMessage` con el modo `close`; si no, recién ahí `Agent` en frío. Luego verifica con `git -C "$WT" status` que solo cambió `project-docs/` y haz el checkpoint: `git -C "$WT" commit -am "docs($ID): spec delta and sprint closure"`.
+Before launching anything: `ListAgents` and look for the step 1 `analyst` of this `$ID`. If still alive, `SendMessage` with mode `close`; if not, only then a cold `Agent`. Then verify with `git -C "$WT" status` that only `project-docs/` changed and make the checkpoint: `git -C "$WT" commit -am "docs($ID): spec delta and sprint closure"`.
 
-### ◆ GATE 2 — Andrey aprueba
+### ◆ GATE 2 — Andrey approves
 
-Muestra:
+Show:
 - `git -C "$WT" diff dev...HEAD --stat`;
-- el veredicto final de QA con los MENOR pendientes;
-- los cambios de spec, sprint y roadmap.
+- the final QA verdict with pending MINORs;
+- the spec, sprint and roadmap changes.
 
-**Detente y espera.** Con un "sí" explícito:
+**Stop and wait.** With an explicit "yes":
 
 ```
 git checkout dev
 git merge --squash "us/$ID"
-git commit        # mensaje: feat($ID): <nombre de la US>, más el trailer Co-Authored-By
+git commit        # message: feat($ID): <US name>, plus the Co-Authored-By trailer
 git worktree remove --force "../Pos-vertical-wt/$ID"
-rm -rf "../Pos-vertical-wt/$ID"   # en Windows quedan ignorados (node_modules, .next)
+rm -rf "../Pos-vertical-wt/$ID"   # on Windows ignored files remain (node_modules, .next)
 git worktree prune
 git branch -D "us/$ID"
 ```
 
-Antes del `merge --squash`, si el checkout principal tiene archivos staged ajenos a la US, sácalos del índice (`git restore --staged`) y vuelve a agregarlos después del commit, para no mezclarlos.
+Before `merge --squash`, if the main checkout has staged files unrelated to the US, remove them from the index (`git restore --staged`) and re-add them after the commit, so they are not mixed in.
 
-`changes/$ID/` desaparece con el worktree; es lo esperado. **No hagas push** a menos que Andrey lo pida.
+`changes/$ID/` disappears with the worktree; that is expected. **Do not push** unless Andrey asks.
 
 ## 6. Benchmark
 
-Antes del commit del merge, agrega a `project-docs/pipeline-bench.md`:
-- una fila en la tabla "Corridas";
-- una sección "Corrida N — $ID" con: tabla por agente (invocaciones, tokens del último valor, suma de tools y de duración), qué encontró, paradas no planeadas y por qué, fricción operativa y qué medir en la siguiente.
+Before the merge commit, add to `project-docs/pipeline-bench.md`:
+- a row in the "Runs" table;
+- a "Run N — $ID" section with: per-agent table (invocations, last-value tokens, sum of tools and duration), what it found, unplanned stops and why, operational friction and what to measure next.
 
-Inclúyelo en el mismo commit del merge. Si detectas un ajuste al pipeline, **propónselo a Andrey**; no lo apliques sin su "sí".
+Include it in the same merge commit. If you spot an adjustment to the pipeline, **propose it to Andrey**; do not apply it without his "yes".
 
-## Reglas del orquestador
+## Orchestrator rules
 
-- Nunca saltes un gate. Nunca hagas merge sin el "sí" del GATE 2.
-- No corrijas el trabajo de un agente con tus propias manos: relánzalo con el motivo.
-- Si un agente reporta algo que el contrato no resuelve, pregúntale a Andrey; no decidas alcance.
-- Reporta fielmente: si un paso se omitió o falló, dilo.
+- Never skip a gate. Never merge without the GATE 2 "yes".
+- Do not fix an agent's work with your own hands: relaunch it with the reason.
+- If an agent reports something the contract does not resolve, ask Andrey; do not decide scope.
+- Report faithfully: if a step was skipped or failed, say so.

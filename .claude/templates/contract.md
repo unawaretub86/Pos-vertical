@@ -1,59 +1,60 @@
-# Contrato — US-XXX: <nombre>
+# Contract — US-XXX: <name>
 
-> **Sprint:** `project-docs/sprints/SPRINT-XX-*.md` · **Nivel:** M | L
-> **Worktree:** <ruta absoluta> · **Rama:** us/US-XXX · **Fecha:** YYYY-MM-DD
+> **Sprint:** `project-docs/sprints/SPRINT-XX-*.md` · **Level:** M | L
+> **Worktree:** <absolute path> · **Branch:** us/US-XXX · **Date:** YYYY-MM-DD
+> **Language:** English only (CLAUDE.md Rule 0).
 
-## 1. Objetivo
+## 1. Goal
 
-Una o dos frases: qué cambia para el usuario (o para el dev, si es refactor) y por qué.
+One or two sentences: what changes for the user (or for the dev, if it is a refactor) and why.
 
-## 2. Estado verificado
+## 2. Verified state
 
-Lo que existe HOY, con `archivo:línea`. Nada de "según el doc".
+What exists TODAY, with `file:line`. No "according to the doc".
 
-| Afirmación | Evidencia |
+| Claim | Evidence |
 |---|---|
-| El dashboard calcula ventas del día con SQL inline | `internal/handler/dashboard.go:NN` |
+| The dashboard computes daily sales with inline SQL | `internal/handler/dashboard.go:NN` |
 
-Si el sprint afirma algo que el código contradice, anotarlo aquí como **DISCREPANCIA** y levantarlo en el GATE 1.
+If the sprint claims something the code contradicts, record it here as a **DISCREPANCY** and raise it at GATE 1.
 
-## 3. Criterios de aceptación (EARS)
+## 3. Acceptance criteria (EARS)
 
-Formato: `CUANDO <disparador>, el sistema DEBE <respuesta>` · `MIENTRAS <estado>, el sistema DEBE …` · `SI <condición no deseada>, ENTONCES el sistema DEBE …`
+Format: `WHEN <trigger>, the system SHALL <response>` · `WHILE <state>, the system SHALL …` · `IF <unwanted condition>, THEN the system SHALL …`
 
-- **AC-1** CUANDO … , el sistema DEBE … .
-- **AC-2** SI … , ENTONCES el sistema DEBE … .
+- **AC-1** WHEN … , the system SHALL … .
+- **AC-2** IF … , THEN the system SHALL … .
 
-## 4. Tests requeridos
+## 4. Required tests
 
-Cada AC tiene al menos un test. Números concretos, nunca aserciones vagas (CLAUDE.md, Tests).
+Every AC has at least one test. Concrete numbers, never vague assertions (CLAUDE.md, Tests).
 
-| ID | Cubre | Archivo | Caso (entrada → salida esperada) |
+| ID | Covers | File | Case (input → expected output) |
 |---|---|---|---|
-| T-1 | AC-1 | `internal/service/x_test.go` | 3 abonos de $30.000 + $20.000 + $10.000 → saldo 60.000 |
-| T-2 | AC-2 | `internal/handler/x_test.go` | venta a las 23:59:59 y otra a las 00:00:00 → rango `[from, to)` cuenta solo la primera |
+| T-1 | AC-1 | `internal/service/x_test.go` | 3 payments of $30,000 + $20,000 + $10,000 → balance 60,000 |
+| T-2 | AC-2 | `internal/handler/x_test.go` | one sale at 23:59:59 and another at 00:00:00 → `[from, to)` range counts only the first |
 
-Fixture: `setupTestDB(t)` con `database.New(":memory:")` y seed por `INSERT` (`internal/handler/dashboard_test.go:14`).
+Fixture: `setupTestDB(t)` with `database.New(":memory:")` and seeding via `INSERT` (`internal/handler/dashboard_test.go:14`).
 
-## 5. Archivos a tocar
+## 5. Files to touch
 
-| Archivo | Cambio | Quién |
+| File | Change | Who |
 |---|---|---|
-| `internal/repository/x.go` | nuevo método `Y` | implementer |
+| `internal/repository/x.go` | new method `Y` | implementer |
 | `internal/repository/x_test.go` | T-1 | test-author |
 
-**Migración:** ninguna | migración N (verificar el último número en `internal/database/migrate.go` antes de escribirla).
+**Migration:** none | migration N (check the last number in `internal/database/migrate.go` before writing it).
 
-## 6. Delta de spec
+## 6. Spec delta
 
-Qué regla de `project-docs/spec/` cambia. Si no cambia ninguna, escribir **"Sin cambio de spec"** y por qué.
+Which rule in `project-docs/spec/` changes. If none changes, write **"No spec change"** and why.
 
-- `spec/domain/<archivo>.md` § <sección>: antes «…» → después «…».
+- `spec/domain/<file>.md` § <section>: before «…» → after «…».
 
-## 7. Fuera de alcance
+## 7. Out of scope
 
-Lo que parece relacionado pero NO entra. Lo que merezca hacerse va a `project-docs/roadmap.md` al cierre.
+What looks related but does NOT go in. Whatever deserves doing goes to `project-docs/roadmap.md` at close.
 
-## 8. Preguntas para el PO (GATE 1)
+## 8. Questions for the PO (GATE 1)
 
 - [ ] …
