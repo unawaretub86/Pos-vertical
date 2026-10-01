@@ -1,84 +1,85 @@
-﻿# Dominio â€” Restaurante (modo restaurante y mesas)
+# Domain — Restaurant (restaurant mode and tables)
 
-> **Tipo:** spec Â· **Vigente:** sÃ­ Â· **Manda sobre:** modo restaurante, mesas y estado de mesa
-> **Actualizado:** 2026-10-01 Â· Verificado contra el cÃ³digo en esa fecha (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
+> **Type:** spec · **Current:** yes · **Rules over:** restaurant mode, tables and table state
+> **Updated:** 2026-10-01 · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
 
-MÃ³dulo para cafeterÃ­as y restaurantes: mesas, pedidos y pantalla de barra (SPRINT-13). Hoy existen la gestiÃ³n de mesas, el interruptor y los pedidos por mesa (abrir, Ã­tems, anular, cancelar); cobro y barra llegan en US-057 y US-058 y agregarÃ¡n sus reglas aquÃ­.
+Module for cafeterías and restaurants: tables, orders and a bar screen (SPRINT-13). Today table management, the switch and per-table orders (open, items, void, cancel) exist; checkout and the bar arrive in US-057 and US-058 and will add their rules here.
+
+Enum values below (`libre`, `ocupada`, `por_cobrar`, route names like `/mesas`) are identifiers in the code and API and stay in Spanish; they are glossed once.
 
 ---
 
-## Modo restaurante
+## Restaurant mode
 
-- `business_config.restaurant_mode` (0/1, default 0) decide si el negocio usa el mÃ³dulo. Se activa en Ajustes con el toggle "Modo restaurante" (solo admin, vÃ­a `PUT /api/setup`).
-- Apagado: no se muestra la secciÃ³n de mesas en Ajustes ni "Mesas" (`/mesas`) y "Barra" (`/barra`) en el sidebar.
-- Encendido: la secciÃ³n de mesas aparece en Ajustes y el sidebar muestra "Mesas" y "Barra" tanto a `admin` como a `cashier`. AdemÃ¡s el POS oculta los carritos guardados en `localStorage` (chip mÃ³vil, chip de escritorio y "Dejar en espera": `showParked = !restaurant_mode`, `frontend/app/pos/page.tsx:622,1030,1141,1155`); apagado, el POS no cambia.
-- `business_config.lan_access_enabled` (0/1, default 0) se crea junto a esta migraciÃ³n pero pertenece a US-054 (acceso LAN); ver `servidor.md`.
-- `PUT /api/setup` reemplaza la fila completa. El formulario de Ajustes debe reenviar siempre `restaurant_mode` y `lan_access_enabled` (leÃ­dos de `GET /setup`) para que guardar otro campo no los apague.
+- `business_config.restaurant_mode` (0/1, default 0) decides whether the business uses the module. It is enabled in Settings with the "Modo restaurante" toggle (admin only, via `PUT /api/setup`).
+- Off: the tables section is not shown in Settings, nor "Mesas" (`/mesas`, tables) and "Barra" (`/barra`, bar) in the sidebar.
+- On: the tables section appears in Settings and the sidebar shows "Mesas" and "Barra" to both `admin` and `cashier`. In addition the POS hides the parked carts kept in `localStorage` (mobile chip, desktop chip and "Dejar en espera": `showParked = !restaurant_mode`, `frontend/app/pos/page.tsx:622,1030,1141,1155`); when off, the POS does not change.
+- `business_config.lan_access_enabled` (0/1, default 0) is created together with this migration but belongs to US-054 (LAN access); see `servidor.md`.
+- `PUT /api/setup` replaces the whole row. The Settings form must always resend `restaurant_mode` and `lan_access_enabled` (read from `GET /setup`) so that saving another field does not turn them off.
 
-## Mesas
+## Tables
 
-Tabla `dining_tables`: `name` Ãºnico, `zone` (texto libre para agrupar), `seats` (sin uso en pantallas todavÃ­a), `sort_order`, `active`.
+Table `dining_tables`: unique `name`, `zone` (free text for grouping), `seats` (not yet used in screens), `sort_order`, `active`.
 
-- Solo `admin` crea, edita o desactiva mesas (`POST/PUT/DELETE /api/tables`); cualquier usuario autenticado las lee (`GET /api/tables`, solo las activas, ordenadas por `sort_order` y luego `name`).
-- Nombre vacÃ­o o solo espacios: 400.
-- Nombre duplicado: 409 "Ya existe una mesa con ese nombre (puede estar desactivada)". La unicidad es exacta (distingue mayÃºsculas: "Mesa 1" y "mesa 1" coexisten) y **incluye mesas desactivadas**: no se puede recrear "Mesa 1" si existe una desactivada. Una mesa desactivada no aparece en la UI y hoy no se puede reactivar.
-- Borrado = desactivaciÃ³n lÃ³gica (`active = 0`), nunca `DELETE`, porque los pedidos histÃ³ricos la referencian.
-  - Con un pedido `status='open'` en esa mesa: 409 "La mesa tiene un pedido abierto" y la mesa sigue activa.
-  - Pedidos `closed` o `cancelled` no bloquean.
-  - La comprobaciÃ³n y la desactivaciÃ³n son atÃ³micas: un solo `UPDATE ... WHERE NOT EXISTS (pedido open)` (`internal/repository/dining_table.go:139-144`), de modo que un pedido abierto en paralelo no deja una mesa inactiva con pedido abierto (R-59 resuelto). `SQLITE_BUSY` â†’ 409 "reintenta" (`internal/handler/order.go:14`, `tables.go`).
-- Abrir un pedido exige mesa activa (ver Pedidos).
+- Only `admin` creates, edits or deactivates tables (`POST/PUT/DELETE /api/tables`); any authenticated user reads them (`GET /api/tables`, active ones only, ordered by `sort_order` then `name`).
+- Empty or whitespace-only name: 400.
+- Duplicate name: 409 "Ya existe una mesa con ese nombre (puede estar desactivada)" (UI message, Spanish). Uniqueness is exact (case-sensitive: "Mesa 1" and "mesa 1" coexist) and **includes deactivated tables**: "Mesa 1" cannot be recreated if a deactivated one exists. A deactivated table does not appear in the UI and today cannot be reactivated.
+- Delete = logical deactivation (`active = 0`), never `DELETE`, because historical orders reference it.
+  - With an `status='open'` order on that table: 409 "La mesa tiene un pedido abierto" and the table stays active.
+  - `closed` or `cancelled` orders do not block.
+  - The check and the deactivation are atomic: a single `UPDATE ... WHERE NOT EXISTS (open order)` (`internal/repository/dining_table.go:139-144`), so an order opened in parallel cannot leave an inactive table with an open order (R-59 resolved). `SQLITE_BUSY` → 409 "retry" (`internal/handler/order.go:14`, `tables.go`).
+- Opening an order requires an active table (see Orders).
 
-## Estado de una mesa (derivado, nunca almacenado)
+## Table state (derived, never stored)
 
-`GET /api/tables` devuelve `state`, `open_order_id`, `open_total` y `opened_minutes`.
+`GET /api/tables` returns `state`, `open_order_id`, `open_total` and `opened_minutes`.
 
-| Estado | CondiciÃ³n |
+| State | Condition |
 |---|---|
-| `libre` | No hay pedido `open` con ese `table_id`. `open_order_id` null, `open_total` y `opened_minutes` en 0/null. |
-| `ocupada` | Hay pedido `open` y al menos un Ã­tem no anulado en `pending` o `preparing`. Un pedido abierto **sin Ã­tems**, o con **todos sus Ã­tems `void`**, tambiÃ©n es `ocupada`. |
-| `por_cobrar` | Hay pedido `open`, al menos un Ã­tem no anulado, y todos los no anulados estÃ¡n en `ready` o `delivered`. |
+| `libre` (free) | There is no `open` order with that `table_id`. `open_order_id` null, `open_total` and `opened_minutes` 0/null. |
+| `ocupada` (occupied) | There is an `open` order and at least one non-void item in `pending` or `preparing`. An open order **without items**, or with **all its items `void`**, is also `ocupada`. |
+| `por_cobrar` (awaiting payment) | There is an `open` order, at least one non-void item, and all non-void items are `ready` or `delivered`. |
 
-- `open_total` = suma de `quantity * unit_price` de los Ã­tems con `status != 'void'`. Ejemplo: cafÃ© $4.500 x2 + torta $8.000 x1, ambos `ready` â†’ `por_cobrar`, `$17.000`; con la torta anulada â†’ `$9.000`.
-- `opened_minutes` = minutos enteros desde `orders.created_at` (UTC contra UTC).
-- Una lista sin mesas se serializa `[]`, no `null`.
+- `open_total` = sum of `quantity * unit_price` of items with `status != 'void'`. Example: coffee $4,500 x2 + cake $8,000 x1, both `ready` → `por_cobrar`, `$17,000`; with the cake voided → `$9,000`.
+- `opened_minutes` = whole minutes since `orders.created_at` (UTC against UTC).
+- A list with no tables serializes as `[]`, not `null`.
 
-## Pedidos
+## Orders
 
-Un pedido es la cuenta abierta de una mesa. Todos los usuarios autenticados (`cashier` y `admin`) operan pedidos; sin token, 401. No escriben en `sales` (el cobro llega con US-057). Rutas en `internal/handler/handler.go:213-219`.
+An order is the open tab of a table. All authenticated users (`cashier` and `admin`) operate orders; without a token, 401. They do not write to `sales` (checkout arrives with US-057). Routes in `internal/handler/handler.go:213-219`.
 
-| Endpoint | Resultado |
+| Endpoint | Result |
 |---|---|
-| `POST /api/orders` `{table_id}` | 201 `{id,type,table_id,status,created_at}`. 400 si falta/â‰¤0 `table_id` o `type` distinto de `table`; 404 mesa inexistente o desactivada; 409 si la mesa ya tiene pedido `open` o `SQLITE_BUSY`. |
-| `GET /api/orders?status=open` | `[{id,table_id,table_name,total,items_pending,opened_minutes}]`, `[]` si no hay. `status` vÃ¡lido: `open|closed|cancelled`, otro â†’ 400. `items_pending` = Ã­tems no anulados en `pending` o `preparing`. |
-| `GET /api/orders/{id}` | `{id,type,table_id,status,total,items[]}`; `items` incluye los `void` y nunca es `null`. 404 si no existe. |
-| `POST /api/orders/{id}/items` `{product_id,quantity,note?}` | 201 con el Ã­tem `{id,product_id,product_name,quantity,unit_price,subtotal,note,status}`. 404/400 producto inexistente o inactivo; 400 cantidad invÃ¡lida; 409 pedido no `open`. |
-| `PATCH /api/orders/{id}/items/{itemId}` `{quantity?,note?,status?}` | Actualiza solo lo enviado. 400 cantidad o `status` invÃ¡lido; 404 Ã­tem ajeno al pedido; 409 Ã­tem `void` o pedido no `open`. |
-| `DELETE /api/orders/{id}/items/{itemId}` | Anula (`status='void'`), 200 con el Ã­tem. 409 si ya estaba `void` (sin segunda auditorÃ­a) o pedido no `open`. |
-| `POST /api/orders/{id}/cancel` `{reason}` | 200; 400 motivo vacÃ­o o solo espacios; 404 no existe; 409 si no estÃ¡ `open`. |
+| `POST /api/orders` `{table_id}` | 201 `{id,type,table_id,status,created_at}`. 400 if `table_id` is missing/≤0 or `type` differs from `table`; 404 table does not exist or is deactivated; 409 if the table already has an `open` order or `SQLITE_BUSY`. |
+| `GET /api/orders?status=open` | `[{id,table_id,table_name,total,items_pending,opened_minutes}]`, `[]` if none. Valid `status`: `open|closed|cancelled`, anything else → 400. `items_pending` = non-void items in `pending` or `preparing`. |
+| `GET /api/orders/{id}` | `{id,type,table_id,status,total,items[]}`; `items` includes the `void` ones and is never `null`. 404 if it does not exist. |
+| `POST /api/orders/{id}/items` `{product_id,quantity,note?}` | 201 with the item `{id,product_id,product_name,quantity,unit_price,subtotal,note,status}`. 404/400 product nonexistent or inactive; 400 invalid quantity; 409 order not `open`. |
+| `PATCH /api/orders/{id}/items/{itemId}` `{quantity?,note?,status?}` | Updates only what is sent. 400 invalid quantity or `status`; 404 item not part of the order; 409 item `void` or order not `open`. |
+| `DELETE /api/orders/{id}/items/{itemId}` | Voids (`status='void'`), 200 with the item. 409 if it was already `void` (no second audit entry) or order not `open`. |
+| `POST /api/orders/{id}/cancel` `{reason}` | 200; 400 empty or whitespace-only reason; 404 does not exist; 409 if not `open`. |
 
-Reglas:
+Rules:
 
-- Ciclo: `open â†’ cancelled` (`closed` llega con US-057). `type` es siempre `table` en v1.
-- **Un solo pedido `open` por mesa**, garantizado por un `INSERT ... SELECT ... WHERE EXISTS (mesa activa) AND NOT EXISTS (pedido open)` en una sola sentencia (`internal/repository/order.go:131-136`), no por Ã­ndice Ãºnico (no hay migraciÃ³n 19). Quien pierde la carrera recibe 409 (`ErrTableHasOpenOrder`) o, si SQLite responde `SQLITE_BUSY` (cÃ³digo 5), `ErrBusy` â†’ 409 "El sistema estÃ¡ ocupado, reintenta en un momento" (`internal/handler/order.go:14,22-23`), nunca 500.
-- `unit_price` es un **snapshot** de `products.sale_price` al agregar el Ã­tem; cambiar el precio despuÃ©s no altera pedidos existentes.
-- `quantity` debe ser **entero > 0** (`0.5`, `2.0`, `"2"`, 0 y negativos â†’ 400). Se guarda en la columna REAL como entero.
-- `total` del pedido = Î£ `quantity * unit_price` de los Ã­tems con `status != 'void'`; subtotal de lÃ­nea = `quantity * unit_price`.
-- `PATCH` acepta `status` âˆˆ `pending|preparing|ready|delivered`, sin regla de orden entre transiciones. `void` u otro valor â†’ 400: se anula solo por `DELETE`.
-- Se puede editar `quantity` y `note` de un Ã­tem `ready` o `delivered`; eso no cambia su `status`. Solo un Ã­tem `void` es inmutable.
-- `order_items.ready_at` se fija al pasar a `ready` desde otro estado; reenviar `ready` no lo sobrescribe; al salir de `ready` vuelve a `NULL` (`internal/repository/order.go:235-237`).
-- Agregar, editar o anular Ã­tems solo con el pedido `open`; si no, 409 sin cambios.
-- Todo cambio de Ã­tem (agregar, editar, anular) toca `orders.updated_at` en la misma transacciÃ³n.
-- **AnulaciÃ³n de Ã­tem:** `audit_log` `action='order_item_void'`, `entity='order_item'`, `entity_id=<itemId>`, `user_id` de quien anula. `details` es JSON con exactamente las claves `order_id, product_id, product_name, quantity, unit_price, note, status, table_id, user_id`, donde `status` es el estado del Ã­tem justo antes de anularlo. Sin `DELETE` fÃ­sico.
-- **CancelaciÃ³n:** solo si `open`; `reason` obligatorio (tras `TrimSpace`). Pasa a `cancelled`, fija `closed_at` y `updated_at`, e inserta `audit_log` `action='order_cancel'`, `entity='order'`, `entity_id=<orderId>`, `details=<motivo>`, todo en una transacciÃ³n. Los Ã­tems se conservan. La mesa pasa a `libre` sin cÃ³digo adicional (estado derivado).
-- Sin descuento de stock al agregar Ã­tem (lo harÃ¡ la venta, US-057). Sin actualizaciÃ³n automÃ¡tica de `/mesas`: se refresca al entrar, al navegar y tras cada acciÃ³n propia (roadmap R-63).
+- Lifecycle: `open → cancelled` (`closed` arrives with US-057). `type` is always `table` in v1.
+- **Only one `open` order per table**, guaranteed by an `INSERT ... SELECT ... WHERE EXISTS (active table) AND NOT EXISTS (open order)` in a single statement (`internal/repository/order.go:131-136`), not by a unique index (there is no migration 19). Whoever loses the race gets 409 (`ErrTableHasOpenOrder`) or, if SQLite answers `SQLITE_BUSY` (code 5), `ErrBusy` → 409 "El sistema está ocupado, reintenta en un momento" (`internal/handler/order.go:14,22-23`), never 500.
+- `unit_price` is a **snapshot** of `products.sale_price` when the item is added; changing the price afterwards does not alter existing orders.
+- `quantity` must be an **integer > 0** (`0.5`, `2.0`, `"2"`, 0 and negatives → 400). It is stored in the REAL column as an integer.
+- Order `total` = Σ `quantity * unit_price` of items with `status != 'void'`; line subtotal = `quantity * unit_price`.
+- `PATCH` accepts `status` ∈ `pending|preparing|ready|delivered`, with no ordering rule between transitions. `void` or any other value → 400: an item is voided only by `DELETE`.
+- `quantity` and `note` of a `ready` or `delivered` item can be edited; that does not change its `status`. Only a `void` item is immutable.
+- `order_items.ready_at` is set when moving to `ready` from another state; resending `ready` does not overwrite it; on leaving `ready` it goes back to `NULL` (`internal/repository/order.go:235-237`).
+- Adding, editing or voiding items only while the order is `open`; otherwise 409 with no changes.
+- Every item change (add, edit, void) touches `orders.updated_at` in the same transaction.
+- **Item void:** `audit_log` `action='order_item_void'`, `entity='order_item'`, `entity_id=<itemId>`, `user_id` of whoever voids. `details` is JSON with exactly the keys `order_id, product_id, product_name, quantity, unit_price, note, status, table_id, user_id`, where `status` is the item's status right before voiding. No physical `DELETE`.
+- **Cancellation:** only if `open`; `reason` is mandatory (after `TrimSpace`). It moves to `cancelled`, sets `closed_at` and `updated_at`, and inserts `audit_log` `action='order_cancel'`, `entity='order'`, `entity_id=<orderId>`, `details=<reason>`, all in one transaction. Items are kept. The table becomes `libre` with no extra code (derived state).
+- No stock deduction when adding an item (the sale will do it, US-057). No automatic refresh of `/mesas`: it refreshes on entering, on navigating and after each own action (roadmap R-63).
 
-### Pantallas
+### Screens
 
-- `/mesas`: grid de mesas activas con color por estado; ocupadas con total y minutos abiertos; tocar una libre abre pedido y navega a `/mesas/<id>`; tocar una ocupada o por cobrar navega al `open_order_id` sin crear otro; si el `POST` da 409 se refresca y se navega al pedido existente. Sin mesas, enlace a Ajustes â†’ Mesas.
-- `/mesas/[orderId]`: catÃ¡logo con buscador (tocar agrega el Ã­tem al servidor de inmediato, sin "enviar a cocina"), lÃ­neas con cantidad, nota y estado (pendiente/preparando/listo/entregado), anulaciÃ³n con confirmaciÃ³n (lÃ­nea tachada), cancelaciÃ³n con motivo. Un fallo al agregar muestra mensaje y no deja lÃ­nea fantasma. En 320px catÃ¡logo y pedido se alternan por pestaÃ±as. No hay botones para avanzar el estado de un Ã­tem (llega con la barra, US-058).
-- Ruta dinÃ¡mica exportada estÃ¡ticamente con `generateStaticParams [{orderId:'_'}]`; ver `servidor.md`.
+- `/mesas`: grid of active tables with color by state; occupied ones with total and minutes open; tapping a free one opens an order and navigates to `/mesas/<id>`; tapping an occupied or awaiting-payment one navigates to `open_order_id` without creating another; if the `POST` gives 409 it refreshes and navigates to the existing order. With no tables, a link to Settings → Tables.
+- `/mesas/[orderId]`: catalog with search (tapping adds the item to the server immediately, no "send to kitchen"), lines with quantity, note and status (pendiente/preparando/listo/entregado — pending/preparing/ready/delivered), void with confirmation (struck-through line), cancellation with reason. A failure on add shows a message and leaves no phantom line. At 320px catalog and order alternate through tabs. There are no buttons to advance an item's status (arrives with the bar, US-058).
+- Dynamic route statically exported with `generateStaticParams [{orderId:'_'}]`; see `servidor.md`.
 
-## Esquema (migraciÃ³n 18)
+## Schema (migration 18)
 
-`dining_tables`, `orders` (`type` `table|takeaway`, `status` `open|closed|cancelled`) y `order_items` (`status` `pending|preparing|ready|delivered|void`) se crean de una vez; los endpoints de `orders`/`order_items` los introdujo US-056 (ver Pedidos). Las claves forÃ¡neas declaradas no se aplican en runtime (roadmap R-56), por lo que la integridad depende del borrado lÃ³gico y de las validaciones del servicio.
-
+`dining_tables`, `orders` (`type` `table|takeaway`, `status` `open|closed|cancelled`) and `order_items` (`status` `pending|preparing|ready|delivered|void`) are created at once; the `orders`/`order_items` endpoints were introduced by US-056 (see Orders). The declared foreign keys are not enforced at runtime (roadmap R-56), so integrity depends on logical deletion and service validations.

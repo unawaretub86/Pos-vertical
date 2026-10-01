@@ -1,17 +1,17 @@
-# Dominio — Servidor y acceso LAN
+# Domain — Server and LAN access
 
-> **Tipo:** spec · **Vigente:** sí · **Manda sobre:** bind del servidor, acceso desde otros dispositivos, servicio del frontend embebido
-> **Actualizado:** 2026-09-30 (US-056: ruta `/mesas/*`, CORS `PATCH`) · Verificado contra el código (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
+> **Type:** spec · **Current:** yes · **Rules over:** server bind, access from other devices, serving the embedded frontend
+> **Updated:** 2026-10-01 (US-056: `/mesas/*` route, CORS `PATCH`) · Verified against the code (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
 
-## Acceso LAN
+## LAN access
 
-- `business_config.lan_access_enabled = 0` (o config ilegible): escucha en `127.0.0.1:8080`. `= 1`: `0.0.0.0:8080`. Se lee al arrancar; cambiarlo aplica al reiniciar `pos.exe`.
-- El navegador se abre siempre en `http://localhost:8080`.
-- `GET /api/setup/lan-info` (solo admin) devuelve `{ip, url}`; `ip` es la primera IPv4 privada (10/8, 172.16/12, 192.168/16); nunca loopback ni 169.254.x. Sin IP: ambos vacíos y Ajustes muestra ayuda.
-- Con el toggle activo Ajustes avisa de cambiar la contraseña inicial `admin/admin`.
+- `business_config.lan_access_enabled = 0` (or unreadable config): listens on `127.0.0.1:8080`. `= 1`: `0.0.0.0:8080`. It is read at startup; changing it takes effect when `pos.exe` is restarted.
+- The browser always opens at `http://localhost:8080`.
+- `GET /api/setup/lan-info` (admin only) returns `{ip, url}`; `ip` is the first private IPv4 (10/8, 172.16/12, 192.168/16); never loopback nor 169.254.x. With no IP: both empty and Settings shows help.
+- With the toggle on, Settings warns about changing the initial `admin/admin` password.
 
-## Frontend embebido
+## Embedded frontend
 
-Orden de resolución: archivo exacto -> `<ruta>.html` (sin redirigir) -> `customers/_.html`, `catalogo/_.html` o `mesas/_.html` para `/customers/*`, `/catalogo/*` y `/mesas/*` (`dynamicRoutes`, `web/static.go:19`; `/mesas` a secas sigue sirviendo `mesas.html`) -> 404 si empieza por `/_next/` o tiene extensión -> `index.html`.
+Resolution order: exact file -> `<path>.html` (no redirect) -> `customers/_.html`, `catalogo/_.html` or `mesas/_.html` for `/customers/*`, `/catalogo/*` and `/mesas/*` (`dynamicRoutes`, `web/static.go:19`; a bare `/mesas` still serves `mesas.html`) -> 404 if it starts with `/_next/` or has an extension -> `index.html`.
 
-La UI usa `/api` relativo salvo que `NEXT_PUBLIC_API_URL` esté definido (dev en :3000). El CORS del dev permite `GET, POST, PUT, PATCH, DELETE, OPTIONS` (`internal/middleware/middleware.go:97`; `PATCH` se agregó con US-056) y `api.patch` existe en `frontend/lib/api.ts`.
+The UI uses relative `/api` unless `NEXT_PUBLIC_API_URL` is defined (dev on :3000). Dev CORS allows `GET, POST, PUT, PATCH, DELETE, OPTIONS` (`internal/middleware/middleware.go:97`; `PATCH` was added with US-056) and `api.patch` exists in `frontend/lib/api.ts`.

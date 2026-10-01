@@ -1,44 +1,44 @@
 # Personas
 
-> **Tipo:** spec · **Vigente:** sí · **Manda sobre:** para quién se escribe cada US
-> **Actualizado:** 2026-09-21 · Origen: `PRD.md:29-38`, verificado contra los roles del sistema.
+> **Type:** spec · **Current:** yes · **Rules over:** who each US is written for
+> **Updated:** 2026-10-01 · Origin: `PRD.md:29-38`, verified against the system roles.
 
-Toda US se escribe como *"Como Don Carlos (dueño)…"* o *"Como Laura (cajera)…"*. Si una US no se puede atribuir a ninguno de los dos, probablemente es trabajo técnico y va como *"Como desarrollador…"*.
-
----
-
-## Don Carlos — dueño
-
-Distribuidora de alimentos pequeña, en Bogotá. 45–60 años. Manejo básico del computador: usa WhatsApp, Excel de vez en cuando.
-
-Vende fiado a dueños de restaurantes y lleva las deudas en un cuaderno.
-
-**Qué necesita:** vender simple, saber quién le debe, imprimir recibos.
-
-**Qué lo hace desconfiar del sistema:** un número que no cuadra. Un cuadre de caja con una diferencia sin explicación, o dos pantallas mostrando cifras distintas del mismo dato, y vuelve al cuaderno.
-
-**Rol técnico:** `admin`. Ve dashboard, reportes, ganancias y cartera.
-
-## Laura — cajera
-
-Atiende el mostrador, 50–150 ventas por día. 20–35 años, cómoda con el celular y apps básicas.
-
-**Qué necesita:** búsqueda rápida de producto, cobro rápido, sin menús complicados.
-
-**Qué la frustra:** cualquier cosa que le quite las manos del teclado en hora pico, y cualquier paso extra entre escanear y cobrar.
-
-**Rol técnico:** `cashier`. **No ve** dashboard, reportes, ganancias ni cartera — están bajo `RequireAdmin`.
+Every US is written as *"As Don Carlos (owner)…"* or *"As Laura (cashier)…"*. If a US cannot be attributed to either, it is probably technical work and goes as *"As a developer…"*.
 
 ---
 
-## Regla de permisos
+## Don Carlos — owner
+
+Small food distributor in Bogotá. 45–60 years old. Basic computer skills: uses WhatsApp, Excel now and then.
+
+Sells on fiado (credit) to restaurant owners and keeps the debts in a notebook.
+
+**What he needs:** sell simply, know who owes him, print receipts.
+
+**What makes him distrust the system:** a number that does not add up. A register reconciliation with an unexplained difference, or two screens showing different figures for the same data, and he goes back to the notebook.
+
+**Technical role:** `admin`. Sees dashboard, reports, profit and receivables.
+
+## Laura — cashier
+
+Staffs the counter, 50–150 sales per day. 20–35 years old, comfortable with a phone and basic apps.
+
+**What she needs:** fast product search, fast checkout, no complicated menus.
+
+**What frustrates her:** anything that takes her hands off the keyboard at rush hour, and any extra step between scanning and charging.
+
+**Technical role:** `cashier`. **Does not see** dashboard, reports, profit or receivables — they are under `RequireAdmin`.
+
+---
+
+## Permissions rule
 
 ```
-roles del sistema (users.role): admin · cashier
+system roles (users.role): admin · cashier
 ```
 
-Fuente: `internal/database/migrate.go:156`.
+Source: `internal/database/migrate.go:156`.
 
-**Todo lo que exponga ventas totales, ganancias, margen o cartera va bajo `appmw.RequireAdmin`.** No por burocracia: Laura es empleada, y los márgenes y las deudas de los clientes son información del dueño.
+**Anything that exposes total sales, profit, margin or receivables goes under `appmw.RequireAdmin`.** Not out of bureaucracy: Laura is an employee, and margins and customer debts are the owner's information.
 
-Cuando se agregue una pantalla o un endpoint nuevo, la pregunta es siempre: *¿Laura debería poder ver esto?* Si la respuesta es no, va en un grupo admin.
+When a new screen or endpoint is added, the question is always: *should Laura be able to see this?* If the answer is no, it goes in an admin group.

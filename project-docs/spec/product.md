@@ -1,52 +1,52 @@
-# Producto — Pos-vertical
+# Product — Pos-vertical
 
-> **Tipo:** spec · **Vigente:** sí · **Manda sobre:** qué es el producto y qué no
-> **Actualizado:** 2026-09-21
+> **Type:** spec · **Current:** yes · **Rules over:** what the product is and is not
+> **Updated:** 2026-10-01
 
-## Qué es
+## What it is
 
-Un POS local que funciona sin internet, maneja el fiado de los clientes, y no cobra mensualidad.
+A local POS that works without internet, handles customer *fiado* (credit extended to customers), and charges no monthly fee.
 
-Se distribuye como **un solo ejecutable** que el tendero copia a su computador y abre. Sin instalador complicado, sin cuenta en la nube, sin configuración de servidor.
+It is distributed as **a single executable** that the shopkeeper (*tendero*) copies to their computer and opens. No complicated installer, no cloud account, no server setup.
 
-## Para quién
+## Who it is for
 
-Negocios pequeños y medianos en Colombia: tiendas de barrio, distribuidoras de alimentos, ferreterías, cafeterías. Ver [personas.md](personas.md).
+Small and medium businesses in Colombia: neighborhood shops (*tiendas de barrio*), food distributors, hardware stores, cafeterías. See [personas.md](personas.md).
 
-El parque de hardware es **4GB de RAM como caso común**, 8GB es "bueno", muchos con disco mecánico y CPU sin GPU. Cualquier decisión técnica se mide contra esa máquina, no contra la del desarrollador.
+The hardware fleet is **4GB of RAM as the common case**, 8GB is "good", many with spinning disks and CPUs without a GPU. Every technical decision is measured against that machine, not the developer's.
 
-## Las tres promesas
+## The three promises
 
-Son el producto. Romper cualquiera de las tres es cambiar de producto, y eso lo decide Andrey.
+They are the product. Breaking any of the three is changing product, and that is Andrey's call.
 
-### 1. Funciona sin internet
+### 1. Works without internet
 
-No hay llamada a un servicio externo en el camino crítico de vender, cobrar, fiar o cerrar caja. Se desconecta el cable y todo sigue igual.
+There is no call to an external service on the critical path of selling, charging, extending credit or closing the register. Pull the cable and everything stays the same.
 
-La única excepción aceptada es la **facturación electrónica DIAN**, que por ley requiere un proveedor autorizado — y está diseñada para no bloquear la venta cuando falla.
+The only accepted exception is **DIAN electronic invoicing**, which by law requires an authorized provider — and is designed not to block the sale when it fails.
 
-### 2. Maneja el fiado de verdad
+### 2. Handles fiado for real
 
-Es el diferenciador. Ningún competidor —local ni mundial— lo hace bien. Ver [domain/fiado.md](domain/fiado.md).
+It is the differentiator. No competitor — local or worldwide — does it well. See [domain/fiado.md](domain/fiado.md).
 
-### 3. No cobra mensualidad
+### 3. No monthly fee
 
-Ninguna feature puede introducir un costo recurrente para el cliente. Eso descarta APIs de pago, envío automático por WhatsApp Business y hosting en nube como parte del producto base.
+No feature may introduce a recurring cost for the customer. That rules out paid APIs, automatic WhatsApp Business sending and cloud hosting as part of the base product.
 
-## Qué NO es
+## What it is NOT
 
-- **No es un ERP.** No hay contabilidad, nómina ni activos fijos.
-- **No es multi-sede en la nube.** Multi-caja por LAN local está en roadmap (`R-18`); replicación entre locales no.
-- **No es una pasarela de pagos.** Nequi y transferencia se registran como método de pago; no se integra con la API de nadie.
-- **No presta plata.** El capital embebido (`R-41`) requiere partner fintech regulado y no se persigue en solitario.
+- **Not an ERP.** No accounting, payroll or fixed assets.
+- **Not multi-site in the cloud.** Multi-register over a local LAN is on the roadmap (`R-18`); replication between shops is not.
+- **Not a payment gateway.** Nequi and bank transfer are recorded as a payment method; no one's API is integrated.
+- **Does not lend money.** Embedded capital (`R-41`) requires a regulated fintech partner and is not pursued alone.
 
-## Cómo se decide qué construir
+## How we decide what to build
 
-Orden de prioridad cuando hay que elegir:
+Priority order when a choice has to be made:
 
-1. **Lo que el primer cliente necesita para dejar el cuadernillo.** Si no bloquea eso, no es urgente.
-2. **Lo que profundiza el fiado.** Es donde la competencia no llega.
-3. **Lo que cierra brecha obvia con los locales** (Alegra, Siigo, Tiendatek, Vendty). Que no falte lo que todos dan por sentado.
-4. **Lo que se ve bien en demo** — importa, pero nunca antes que 1 y 2.
+1. **What the first customer needs to drop the notebook.** If it does not block that, it is not urgent.
+2. **What deepens fiado.** It is where the competition does not reach.
+3. **What closes an obvious gap with local players** (Alegra, Siigo, Tiendatek, Vendty). Do not lack what everyone takes for granted.
+4. **What looks good in a demo** — it matters, but never before 1 and 2.
 
-Lo que viene está en [../roadmap.md](../roadmap.md), que es la única fuente.
+What comes next is in [../roadmap.md](../roadmap.md), the single source.

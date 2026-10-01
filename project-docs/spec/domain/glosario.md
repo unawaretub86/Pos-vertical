@@ -1,27 +1,27 @@
-# Glosario
+# Glossary
 
-> **Tipo:** spec · **Vigente:** sí · **Manda sobre:** vocabulario del dominio
-> **Actualizado:** 2026-09-21
+> **Type:** spec · **Current:** yes · **Rules over:** domain vocabulary
+> **Updated:** 2026-10-01
 
-Términos colombianos de tienda y su equivalente en el código. Sirve para que una US y una tabla hablen el mismo idioma, y para el banco de frases del asistente local.
+Colombian shop terms and their equivalent in the code. It exists so that a US and a table speak the same language, and for the local assistant's phrase bank. The Spanish term is the canonical name; docs in English use it with this gloss.
 
-| Término del tendero | Qué significa | Dónde vive en el código |
+| Shopkeeper term (Spanish) | What it means | Where it lives in the code |
 |---|---|---|
-| **Fiar / fiado** | Vender a crédito, que el cliente pague después | `sale_payments.method = 'credit'` |
-| **Cartera** | El total que le deben al negocio | Suma de saldos con `balance > 0` |
-| **Abono** | Pago parcial contra la deuda, no contra una factura | `customer_payments` |
-| **Cuadrar / cuadre** | Contar el efectivo al cerrar y compararlo con lo esperado | `registers.expected_close` vs `actual_close` |
-| **Arqueo** | Lo mismo que el cuadre, término más formal | Cierre de caja |
-| **Base** | El efectivo con el que arranca el turno | `registers.opening_amount` |
-| **Faltante / sobrante** | Diferencia negativa / positiva del cuadre | `registers.difference` |
-| **Quincena** | Los días de pago, 15 y 30. **Es el ciclo de cobro del fiado.** | No modelado todavía — roadmap `R-03` |
-| **Tirilla** | El recibo impreso | `TicketPreview`, `CloseTicketPreview` |
-| **Nequi / Daviplata** | Billeteras digitales colombianas, muy usadas | Hoy caen en `method = 'transfer'` |
-| **Mayorista** | Precio especial por volumen o por tipo de cliente | `products.wholesale_price` |
-| **Lo que más deja** | El producto de mayor margen, distinto del más vendido | Ver [rentabilidad.md](rentabilidad.md) |
-| **Plata** | Dinero. Se usa mucho más que "dinero" en habla real | — |
-| **Se está acabando** | Producto bajo el mínimo de stock | `stock < min_stock` |
+| **Fiar / fiado** | Selling on credit, the customer pays later | `sale_payments.method = 'credit'` |
+| **Cartera** | The total owed to the business (receivables) | Sum of balances with `balance > 0` |
+| **Abono** | Partial payment against the debt, not against an invoice | `customer_payments` |
+| **Cuadrar / cuadre** | Counting the cash at close and comparing it to what is expected | `registers.expected_close` vs `actual_close` |
+| **Arqueo** | Same as the cuadre, more formal term | Register close |
+| **Base** | The cash the shift starts with (opening float) | `registers.opening_amount` |
+| **Faltante / sobrante** | Negative / positive difference of the cuadre (shortage / surplus) | `registers.difference` |
+| **Quincena** | Payday, the 15th and 30th. **It is the fiado collection cycle.** | Not modeled yet — roadmap `R-03` |
+| **Tirilla** | The printed receipt | `TicketPreview`, `CloseTicketPreview` |
+| **Nequi / Daviplata** | Colombian digital wallets, widely used | Today they fall under `method = 'transfer'` |
+| **Mayorista** | Special price by volume or customer type (wholesale) | `products.wholesale_price` |
+| **Lo que más deja** | The highest-margin product, distinct from the best seller | See [rentabilidad.md](rentabilidad.md) |
+| **Plata** | Money. Used far more than "dinero" in real speech | — |
+| **Se está acabando** | Product below minimum stock | `stock < min_stock` |
 
-## Nota para textos de cara al usuario
+## Note for end-user text
 
-El producto le habla al tendero como le habla su proveedor, no como le habla un banco. "Plata" antes que "dinero", "cuánto te deben" antes que "cartera vigente". El vocabulario formal se reserva para documentos fiscales, donde sí se espera.
+The product speaks to the shopkeeper the way their supplier does, not the way a bank does. UI copy (in Spanish): "plata" before "dinero", "cuánto te deben" before "cartera vigente". Formal vocabulary is reserved for fiscal documents, where it is expected. (This note is about the Spanish UI strings; all docs remain in English.)

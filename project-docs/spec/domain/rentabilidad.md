@@ -1,65 +1,65 @@
-# Dominio — Rentabilidad (costo, margen, ganancia)
+# Domain — Profitability (cost, margin, profit)
 
-> **Tipo:** spec · **Vigente:** sí · **Manda sobre:** ganancia bruta, ganancia neta, margen
-> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`).
+> **Type:** spec · **Current:** yes · **Rules over:** gross profit, net profit, margin
+> **Updated:** 2026-10-01 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`).
 
-"Cuánto vendí" no es "cuánto gané", y la diferencia entre las dos es lo que hace que un tendero deje de vender a pérdida sin saberlo. `find-pos.md:41` lo identificó como un hueco que los competidores locales no cubren.
-
----
-
-## Regla: ganancia bruta
-
-```
-ganancia bruta = SUM( (sale_items.unit_price − products.cost) * sale_items.quantity )
-                 solo para productos con cost > 0
-                 solo ventas con status = 'completed'
-```
-
-Fuente: `internal/repository/metrics.go:86` (`MetricsRepository.Profit`; filtro `cost > 0` en `:91`). Dashboard y asistente leen esta misma función.
-
-**El filtro `cost > 0` es la regla crítica.** Un producto sin costo configurado no suma ganancia — se excluye del cálculo en vez de asumir costo cero, porque asumir cero reportaría 100% de margen y sería una mentira peligrosa.
-
-Por eso toda respuesta de ganancia o margen debe acompañarse del **conteo de productos sin costo configurado**, para que el dueño sepa que la cifra real es mayor que la mostrada.
-
-## Regla: ganancia neta
-
-```
-ganancia neta = ganancia bruta − gastos del mismo rango
-```
-
-Ver [caja.md](caja.md) para las categorías de gasto.
-
-## Regla: margen
-
-```
-margen % = (ganancia bruta / ingresos) * 100
-           0 si ingresos = 0
-```
-
-Por producto, en el top por margen:
-
-```
-margen_pct(producto) = ((AVG(unit_price) − cost) / AVG(unit_price)) * 100
-```
-
-Fuente: `internal/repository/metrics.go:166` (`MetricsRepository.TopByMargin`). El dashboard muestra el top por margen solo si hay al menos 2 productos con costo configurado en el rango; con menos, la lista va vacía (`internal/handler/dashboard.go:87-90`).
-
-Se usa `AVG(unit_price)` porque el mismo producto puede haberse vendido a precios distintos (descuento, mayorista) dentro del rango.
-
-## El contraste que vende
-
-**El producto que más se vende casi nunca es el que más deja.** `research/2026-05-verticales-y-rentabilidad.md:93-95` (antes `find-pos.md`) lo documenta con el caso real: arroz a 11% de margen y 89 unidades contra aceite a 38% y 24 unidades.
-
-Cualquier pantalla o respuesta que muestre "lo más vendido" debería poder mostrar ese contraste. Es la diferencia entre entregar un reporte y entregar un consejo.
-
-## Regla: snapshot de precio
-
-`sale_items.unit_price` es una **copia** del precio al momento de la venta. Cambiar el precio o el costo de un producto **no altera ventas ya registradas**. Cualquier cálculo histórico de margen usa el precio de entonces y el costo **actual** del producto — es una aproximación conocida, no un bug.
+"How much I sold" is not "how much I earned", and the difference between the two is what stops a shopkeeper from selling at a loss without knowing it. `find-pos.md:41` identified it as a gap local competitors do not cover.
 
 ---
 
-## Qué NO existe todavía
+## Rule: gross profit
 
-- Historial de costo por producto. El costo es un valor único y actual, así que el margen histórico usa el costo de hoy contra el precio de entonces.
-- Productos sin rotación / capital muerto — US-048, pendiente de SPRINT-09.
-- Margen por categoría o por proveedor.
+```
+gross profit = SUM( (sale_items.unit_price − products.cost) * sale_items.quantity )
+               only for products with cost > 0
+               only sales with status = 'completed'
+```
+
+Source: `internal/repository/metrics.go:86` (`MetricsRepository.Profit`; `cost > 0` filter at `:91`). Dashboard and assistant read this same function.
+
+**The `cost > 0` filter is the critical rule.** A product with no configured cost adds no profit — it is excluded from the calculation instead of assuming zero cost, because assuming zero would report 100% margin, which would be a dangerous lie.
+
+That is why every profit or margin answer must be accompanied by the **count of products with no configured cost**, so the owner knows the real figure is higher than the one shown.
+
+## Rule: net profit
+
+```
+net profit = gross profit − expenses of the same range
+```
+
+See [caja.md](caja.md) for the expense categories.
+
+## Rule: margin
+
+```
+margin % = (gross profit / revenue) * 100
+           0 if revenue = 0
+```
+
+Per product, in the top by margin:
+
+```
+margin_pct(product) = ((AVG(unit_price) − cost) / AVG(unit_price)) * 100
+```
+
+Source: `internal/repository/metrics.go:166` (`MetricsRepository.TopByMargin`). The dashboard shows the top by margin only if there are at least 2 products with a configured cost in the range; with fewer, the list is empty (`internal/handler/dashboard.go:87-90`).
+
+`AVG(unit_price)` is used because the same product may have been sold at different prices (discount, wholesale) within the range.
+
+## The contrast that sells
+
+**The best-selling product is almost never the one that earns the most.** `research/2026-05-verticales-y-rentabilidad.md:93-95` (formerly `find-pos.md`) documents it with the real case: rice at 11% margin and 89 units versus cooking oil at 38% and 24 units.
+
+Any screen or answer that shows "best seller" should be able to show that contrast. It is the difference between delivering a report and delivering advice.
+
+## Rule: price snapshot
+
+`sale_items.unit_price` is a **copy** of the price at the time of sale. Changing a product's price or cost **does not alter already-recorded sales**. Any historical margin calculation uses the price of that time and the product's **current** cost — a known approximation, not a bug.
+
+---
+
+## What does NOT exist yet
+
+- Cost history per product. Cost is a single, current value, so historical margin uses today's cost against the price of then.
+- Products with no turnover / dead capital — US-048, pending in SPRINT-09.
+- Margin by category or by supplier.

@@ -1,71 +1,71 @@
-# Dominio — Fiado (crédito a clientes)
+# Domain — Fiado (credit to customers)
 
-> **Tipo:** spec · **Vigente:** sí · **Manda sobre:** saldo del cliente, abonos, cartera
-> **Actualizado:** 2026-09-23 · Verificado contra el código en esa fecha (US-059: métricas en `internal/repository/metrics.go`; US-063: la cartera envejecida usa la misma fórmula de saldo; US-064: `total_portfolio` de `GET /customers` usa la misma fórmula y excluye saldos `≤ 0`).
+> **Type:** spec · **Current:** yes · **Rules over:** customer balance, payments (*abonos*), receivables (*cartera*)
+> **Updated:** 2026-10-01 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
 
-El fiado es **el diferenciador del producto**. Los competidores lo tratan como un campo contable; aquí es una relación con historia. Cualquier cambio en estas reglas cambia la propuesta de valor, no solo el código.
-
----
-
-## Modelo
-
-Una venta se paga con una o varias líneas en `sale_payments`, cada una con un método. Cuando el método es `credit`, esa línea **es** la deuda. No hay tabla de deudas: la deuda es la suma de lo fiado menos la suma de lo abonado.
-
-```
-métodos válidos (sale_payments.method):  cash · transfer · card · credit
-                 (sales.payment_method): cash · transfer · card · credit · mixed
-```
-
-`sales.payment_method = 'mixed'` es un rótulo de la venta; el desglose real siempre vive en `sale_payments`.
-
-## Regla: saldo del cliente
-
-El saldo **nunca se almacena**. Se calcula al vuelo en cada consulta.
-
-```
-saldo(cliente) = SUM(sale_payments.amount donde method='credit'
-                     y la venta está 'completed')
-               − SUM(customer_payments.amount)
-```
-
-Fuente: `internal/repository/customer.go:24-40`.
-
-Consecuencias que hay que respetar:
-
-- **Una venta anulada deja de contar automáticamente**, porque el filtro es `status='completed'`. No hay que "revertir" la deuda a mano.
-- **No existe un saldo desactualizado.** Cualquier pantalla que muestre saldo lo lee de la misma query. Si alguna vez aparece un saldo distinto en dos pantallas, es un bug de query, no de sincronización.
-- El cliente con saldo `0` o negativo **no está en cartera**. La cartera filtra `balance > 0`.
-- Orden de la cartera: saldo descendente y, en empate, nombre ascendente. Fuente: `MetricsRepository.Debtors` (`internal/repository/metrics.go:286`, orden en `:297`), misma fórmula de saldo que `customer.go:24-40`.
-- La cartera envejecida del dashboard (`MetricsRepository.AgingReceivables`, `internal/repository/metrics.go:326`) usa la misma fórmula de saldo que `Debtors`: ambos arman el saldo con `customerBalanceExpr` (`metrics.go:265`) sobre `customerBalanceFrom` (`metrics.go:270`), que agrega fiados y abonos por cliente antes de unir, así que cada abono cuenta una sola vez. Filtra `balance > 0`.
-- Orden de la cartera envejecida: primero `days_overdue` descendente y, en empate de días, el mismo desempate que `Debtors` — saldo descendente y, si también empata, nombre ascendente (`metrics.go:336`).
-- `total_portfolio` de `GET /customers` (`CustomerRepository.TotalPortfolioBalance`, `internal/repository/customer.go:145`) usa la misma fórmula agregada por cliente (`customerBalanceExpr`/`customerBalanceFrom`) y excluye saldos `≤ 0`, sumando solo los positivos — no una resta global de todos los fiados menos todos los abonos (ese era el bug de R-44, corregido en US-064).
-
-## Regla: antigüedad de la deuda
-
-```
-oldest_debt_at = MIN(created_at) de las ventas con línea de crédito
-                 del cliente, entre las 'completed'
-días_mora      = hoy − oldest_debt_at
-```
-
-Es la fecha de la deuda **más vieja sin distinguir abonos parciales**: un cliente que abona sin saldar completo conserva su fecha original. Es deliberado — mide cuánto lleva ese cliente debiendo algo, no cuánto lleva debiendo ese peso.
-
-## Regla: límite de crédito
-
-`customers.credit_limit` es **opcional** (`NULL` = sin límite definido) y hoy es **informativo**: advierte, no bloquea la venta.
-
-Fuente: `internal/service/customer.go:39,54`. Escenario cubierto en `internal/service/customer_test.go:213`.
-
-Si alguna vez se decide que bloquee, es un cambio de producto que debe aprobar Andrey: un tendero que no puede fiar por un tope que él mismo puso mal, deja de usar el sistema.
-
-## Regla: abonos
-
-Un abono es una fila en `customer_payments`. No se asocia a una venta específica — se abona al saldo total del cliente, no a una factura. Es como funciona el cuadernillo que el sistema reemplaza, y cambiarlo a imputación por factura sería un rediseño, no un ajuste.
+*Fiado* (selling on credit) is **the product's differentiator**. Competitors treat it as an accounting field; here it is a relationship with history. Any change to these rules changes the value proposition, not just the code.
 
 ---
 
-## Qué NO existe todavía
+## Model
 
-- **Scoring de riesgo del cliente** — roadmap `R-17`. Es el diferenciador más fuerte sin construir: con el historial de abonos que ya se guarda se puede calcular score, límite sugerido y alerta temprana de mora. Ningún competidor local guarda ni analiza esto.
-- **Bloqueo de venta por exceder el límite** — decisión de producto pendiente.
-- **Intereses o recargos por mora** — nunca se ha considerado; el tendero colombiano no los cobra.
+A sale is paid with one or more lines in `sale_payments`, each with a method. When the method is `credit`, that line **is** the debt. There is no debts table: the debt is the sum of what was put on credit minus the sum of what was paid back.
+
+```
+valid methods (sale_payments.method):  cash · transfer · card · credit
+              (sales.payment_method):  cash · transfer · card · credit · mixed
+```
+
+`sales.payment_method = 'mixed'` is a sale-level label; the real breakdown always lives in `sale_payments`.
+
+## Rule: customer balance
+
+The balance is **never stored**. It is computed on the fly in every query.
+
+```
+balance(customer) = SUM(sale_payments.amount where method='credit'
+                        and the sale is 'completed')
+                  − SUM(customer_payments.amount)
+```
+
+Source: `internal/repository/customer.go:24-40`.
+
+Consequences that must be respected:
+
+- **A voided sale stops counting automatically**, because the filter is `status='completed'`. There is no need to "reverse" the debt by hand.
+- **There is no such thing as a stale balance.** Any screen that shows a balance reads it from the same query. If two screens ever show different balances, it is a query bug, not a synchronization bug.
+- A customer with balance `0` or negative is **not in receivables**. Receivables filter `balance > 0`.
+- Receivables order: balance descending and, on a tie, name ascending. Source: `MetricsRepository.Debtors` (`internal/repository/metrics.go:286`, ordering at `:297`), same balance formula as `customer.go:24-40`.
+- The dashboard's aging receivables (`MetricsRepository.AgingReceivables`, `internal/repository/metrics.go:326`) use the same balance formula as `Debtors`: both build the balance with `customerBalanceExpr` (`metrics.go:265`) over `customerBalanceFrom` (`metrics.go:270`), which aggregates credit sales and payments per customer before joining, so each payment counts exactly once. Filters `balance > 0`.
+- Aging receivables order: `days_overdue` descending first and, on a tie of days, the same tie-break as `Debtors` — balance descending and, if that also ties, name ascending (`metrics.go:336`).
+- `total_portfolio` of `GET /customers` (`CustomerRepository.TotalPortfolioBalance`, `internal/repository/customer.go:145`) uses the same per-customer aggregated formula (`customerBalanceExpr`/`customerBalanceFrom`) and excludes balances `≤ 0`, summing only the positive ones — not a global subtraction of all credit sales minus all payments (that was the R-44 bug, fixed in US-064).
+
+## Rule: debt age
+
+```
+oldest_debt_at = MIN(created_at) of the customer's sales that have a
+                 credit line, among the 'completed' ones
+days_overdue   = today − oldest_debt_at
+```
+
+It is the date of the **oldest debt without distinguishing partial payments**: a customer who pays without settling in full keeps their original date. This is deliberate — it measures how long that customer has owed something, not how long they have owed that particular peso.
+
+## Rule: credit limit
+
+`customers.credit_limit` is **optional** (`NULL` = no limit defined) and is currently **informational**: it warns, it does not block the sale.
+
+Source: `internal/service/customer.go:39,54`. Scenario covered in `internal/service/customer_test.go:213`.
+
+If it is ever decided that it should block, that is a product change Andrey must approve: a shopkeeper who cannot extend credit because of a cap they set wrong stops using the system.
+
+## Rule: payments (*abonos*)
+
+An *abono* is a row in `customer_payments`. It is not tied to a specific sale — it is applied to the customer's total balance, not to an invoice. That is how the notebook the system replaces works, and changing it to per-invoice allocation would be a redesign, not an adjustment.
+
+---
+
+## What does NOT exist yet
+
+- **Customer risk scoring** — roadmap `R-17`. It is the strongest differentiator not yet built: with the payment history already stored, a score, suggested limit and early late-payment alert can be computed. No local competitor stores or analyzes this.
+- **Blocking a sale for exceeding the limit** — pending product decision.
+- **Interest or late fees** — never considered; the Colombian shopkeeper does not charge them.
