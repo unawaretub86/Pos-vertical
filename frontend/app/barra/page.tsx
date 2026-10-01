@@ -1,11 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { useBusinessConfig } from "@/lib/business-config-context";
 import { useRouter } from "next/navigation";
 import { FiVolume2, FiVolumeX, FiAlertCircle } from "react-icons/fi";
-import useIsMobile from "@/hooks/useIsMobile";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 type KDSItem = {
   id: number;
@@ -112,7 +112,7 @@ export default function BarraPage() {
     else return;
 
     try {
-      await api.patch(/orders/ + orderId + /items/ + itemId, { status: nextStatus });
+      await api.patch(`/orders/${orderId}/items/${itemId}`, { status: nextStatus });
       loadData();
     } catch (err) {
       console.error("Error advancing item", err);
@@ -140,7 +140,7 @@ export default function BarraPage() {
     })).filter(o => o.items.length > 0) || [];
 
     return (
-      <div className={lex-1 flex flex-col gap-4  + (isMobile ? "w-full" : "min-w-[300px]")}>
+      <div className={"flex-1 flex flex-col gap-4 " + (isMobile ? "w-full" : "min-w-[300px]")}>
         <h2 className="text-xl font-bold p-3 bg-gray-100 text-center rounded-lg shadow-sm border border-gray-200">{title}</h2>
         {filteredOrders.length === 0 ? (
           <p className="text-gray-400 text-center py-8">Ningún ítem</p>
@@ -153,7 +153,7 @@ export default function BarraPage() {
                   <div 
                     key={item.id} 
                     onClick={() => advanceItem(order.order_id, item.id, item.status)}
-                    className={p-4 border-l-4 rounded-lg shadow-sm cursor-pointer select-none active:opacity-75 transition-colors  + getColorClass(mins)}
+                    className={"p-4 border-l-4 rounded-lg shadow-sm cursor-pointer select-none active:opacity-75 transition-colors " + getColorClass(mins)}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <span className="font-bold text-lg">{order.table_name || 'Sin Mesa'}</span>
@@ -196,7 +196,7 @@ export default function BarraPage() {
               }
               setSoundEnabled(!soundEnabled);
             }}
-            className={lex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all  + (soundEnabled ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-200 text-gray-700 hover:bg-gray-300")}
+            className={"flex items-center gap-2 px-4 py-2 rounded-full font-bold transition-all " + (soundEnabled ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-200 text-gray-700 hover:bg-gray-300")}
           >
             {soundEnabled ? <FiVolume2 className="text-xl" /> : <FiVolumeX className="text-xl" />}
             {soundEnabled ? "Sonido Activado" : "Activar Sonido"}
@@ -215,7 +215,7 @@ export default function BarraPage() {
             <p className="text-gray-400 text-lg">No hay pedidos pendientes en barra.</p>
           </div>
         ) : (
-          <div className={lex gap-6  + (isMobile ? "flex-col" : "flex-row")}>
+          <div className={"flex gap-6 " + (isMobile ? "flex-col" : "flex-row")}>
             {renderColumn("Pendiente", "pending")}
             {renderColumn("Preparando", "preparing")}
             {renderColumn("Listo", "ready")}

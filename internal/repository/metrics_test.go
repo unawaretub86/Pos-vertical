@@ -356,10 +356,31 @@ func TestMetricsRepo_T11_LowStock(t *testing.T) {
 	db := openMetricsDB(t)
 	ctx := context.Background()
 
-	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (1, 'X', 'X', 1000, 500, 'unit', 1, 2, 10)`)
-	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (2, 'Y', 'Y', 1000, 500, 'unit', 1, 4, 5)`)
-	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (3, 'Z', 'Z', 1000, 500, 'unit', 1, 0, 0)`)
-	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (4, 'W', 'W', 1000, 500, 'unit', 0, 1, 20)`)
+	// Products
+	// P1: stock 5, min 10. Avg daily = 2.5. Days remaining = 2. (Critical)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (1, 'P1', 'P1', 1000, 500, 'unit', 1, 5, 10)`)
+	// P2: stock 2, min 10. No sales in 7 days. Days remaining = null. (Goes to the end)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (2, 'P2', 'P2', 1000, 500, 'unit', 1, 2, 10)`)
+	// P3: stock 10, min 20. Avg daily = 2. Days remaining = 5. (Less critical than P1)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (3, 'P3', 'P3', 1000, 500, 'unit', 1, 10, 20)`)
+	// P4: stock 0, min 0. (Ignored, not low stock)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (4, 'P4', 'P4', 1000, 500, 'unit', 1, 0, 0)`)
+	// P5: stock 1, min 20. Inactive. (Ignored)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (5, 'P5', 'P5', 1000, 500, 'unit', 0, 1, 20)`)
+	// P6: stock 5, min 10. Avg daily = 0. Days remaining = null. (Goes to the end)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (6, 'P6', 'P6', 1000, 500, 'unit', 1, 5, 10)`)
+
+	// Sales
+	// P1 sold 17.5 in total over 7 days -> 17.5 / 7 = 2.5/day.
+	metricsExec(t, db, `INSERT INTO sales (id, customer_id, user_id, payment_method, status, subtotal, total, created_at) VALUES (1, 1, 1, 'cash', 'completed', 0, 0, datetime('now', 'localtime', '-1 day'))`)
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 17.5, 1000, 17500)`)
+
+	// P3 sold 14 in total over 7 days -> 14 / 7 = 2/day.
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 3, 14, 1000, 14000)`)
+
+	// P6 sold 0 over 7 days (technically, we just won't insert any sale_items for it, but let's say there was a sale that was voided)
+	metricsExec(t, db, `INSERT INTO sales (id, customer_id, user_id, payment_method, status, subtotal, total, created_at) VALUES (2, 1, 1, 'cash', 'voided', 0, 0, datetime('now', 'localtime', '-1 day'))`)
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (2, 6, 10, 1000, 10000)`)
 
 	repo := NewMetricsRepository(db.DB)
 
@@ -367,22 +388,30 @@ func TestMetricsRepo_T11_LowStock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LowStock(5): %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("LowStock(5) len = %d, want 2 (X, Y): %+v", len(items), items)
+	if len(items) != 4 {
+		t.Fatalf("LowStock(5) len = %d, want 4 (P1, P3, P2, P6): %+v", len(items), items)
 	}
-	if items[0].ProductID != 1 || items[0].Name != "X" || items[0].Stock != 2 || items[0].MinStock != 10 {
-		t.Errorf("items[0] = %+v, want X (id 1) 2/10", items[0])
+	
+	// Order should be: P1 (days_remaining = 2), P3 (days_remaining = 5), P2 (days_remaining = nil, deficit = 8), P6 (days_remaining = nil, deficit = 5)
+	if items[0].ProductID != 1 || items[0].DaysRemaining == nil || *items[0].DaysRemaining != 2 || *items[0].AvgDaily != 2.5 {
+		t.Errorf("items[0] = %+v, want P1 with days_remaining=2, avg_daily=2.5", items[0])
 	}
-	if items[1].ProductID != 2 || items[1].Name != "Y" || items[1].Stock != 4 || items[1].MinStock != 5 {
-		t.Errorf("items[1] = %+v, want Y (id 2) 4/5", items[1])
+	if items[1].ProductID != 3 || items[1].DaysRemaining == nil || *items[1].DaysRemaining != 5 || *items[1].AvgDaily != 2.0 {
+		t.Errorf("items[1] = %+v, want P3 with days_remaining=5, avg_daily=2.0", items[1])
+	}
+	if items[2].ProductID != 2 || items[2].DaysRemaining != nil {
+		t.Errorf("items[2] = %+v, want P2 with days_remaining=nil", items[2])
+	}
+	if items[3].ProductID != 6 || items[3].DaysRemaining != nil {
+		t.Errorf("items[3] = %+v, want P6 with days_remaining=nil", items[3])
 	}
 
 	items, err = repo.LowStock(ctx, 1)
 	if err != nil {
 		t.Fatalf("LowStock(1): %v", err)
 	}
-	if len(items) != 1 || items[0].Name != "X" {
-		t.Errorf("LowStock(1) = %+v, want [X]", items)
+	if len(items) != 1 || items[0].Name != "P1" {
+		t.Errorf("LowStock(1) = %+v, want [P1]", items)
 	}
 }
 

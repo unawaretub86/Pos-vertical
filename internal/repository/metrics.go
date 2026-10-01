@@ -26,11 +26,15 @@ type SellerItem struct {
 }
 
 // LowStockItem is an active product whose stock is below its configured minimum.
+// It includes velocity metrics (AvgDaily and DaysRemaining) if the product
+// has been sold in the last 7 days.
 type LowStockItem struct {
-	ProductID int64   `json:"product_id"`
-	Name      string  `json:"name"`
-	Stock     float64 `json:"stock"`
-	MinStock  float64 `json:"min_stock"`
+	ProductID     int64    `json:"product_id"`
+	Name          string   `json:"name"`
+	Stock         float64  `json:"stock"`
+	MinStock      float64  `json:"min_stock"`
+	AvgDaily      *float64 `json:"avg_daily"`
+	DaysRemaining *float64 `json:"days_remaining"`
 }
 
 // Debtor is a customer with an outstanding credit balance.
@@ -277,13 +281,33 @@ func (r *metricsRepo) TopSellers(ctx context.Context, from, to time.Time, limit 
 }
 
 // LowStock returns up to limit active products below their minimum stock,
-// ordered by deficit descending.
+// ordered by days_remaining ascending (urgency). Products without recent sales
+// (days_remaining = NULL) appear at the end.
 func (r *metricsRepo) LowStock(ctx context.Context, limit int) ([]LowStockItem, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, name, stock, min_stock
-		FROM products
-		WHERE active = 1 AND min_stock > 0 AND stock < min_stock
-		ORDER BY (min_stock - stock) DESC
+		SELECT
+			p.id,
+			p.name,
+			p.stock,
+			p.min_stock,
+			v.avg_daily,
+			ROUND(p.stock / v.avg_daily) AS days_remaining
+		FROM products p
+		LEFT JOIN (
+			SELECT
+				si.product_id,
+				SUM(si.quantity) / 7.0 AS avg_daily
+			FROM sale_items si
+			JOIN sales s ON s.id = si.sale_id
+			WHERE s.status = 'completed'
+			  AND julianday('now', 'localtime') - julianday(s.created_at) <= 7
+			GROUP BY si.product_id
+		) v ON v.product_id = p.id AND v.avg_daily > 0
+		WHERE p.active = 1 AND p.min_stock > 0 AND p.stock < p.min_stock
+		ORDER BY
+			days_remaining IS NULL,
+			days_remaining ASC,
+			(p.min_stock - p.stock) DESC
 		LIMIT ?`,
 		limit,
 	)
@@ -295,7 +319,7 @@ func (r *metricsRepo) LowStock(ctx context.Context, limit int) ([]LowStockItem, 
 	items := []LowStockItem{}
 	for rows.Next() {
 		var item LowStockItem
-		if err := rows.Scan(&item.ProductID, &item.Name, &item.Stock, &item.MinStock); err != nil {
+		if err := rows.Scan(&item.ProductID, &item.Name, &item.Stock, &item.MinStock, &item.AvgDaily, &item.DaysRemaining); err != nil {
 			return nil, fmt.Errorf("metrics low stock: %w", err)
 		}
 		items = append(items, item)

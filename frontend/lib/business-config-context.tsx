@@ -11,6 +11,7 @@ interface BusinessConfig {
 
 interface BusinessConfigCtx {
   config: BusinessConfig;
+  loading: boolean;
   invalidate: () => void;
 }
 
@@ -18,23 +19,28 @@ const defaultConfig: BusinessConfig = { name: '', logo: '', restaurant_mode: fal
 
 const BusinessConfigContext = createContext<BusinessConfigCtx>({
   config: defaultConfig,
+  loading: true,
   invalidate: () => {},
 });
 
 export function BusinessConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<BusinessConfig>(defaultConfig);
+  const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     api.get<BusinessConfig>('/setup')
-      .then(cfg => setConfig({ name: cfg.name ?? '', logo: cfg.logo ?? '', restaurant_mode: cfg.restaurant_mode ?? false }))
-      .catch(() => {});
+      .then(cfg => {
+        setConfig({ name: cfg.name ?? '', logo: cfg.logo ?? '', restaurant_mode: cfg.restaurant_mode ?? false });
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, [tick]);
 
   const invalidate = useCallback(() => setTick(t => t + 1), []);
 
   return (
-    <BusinessConfigContext.Provider value={{ config, invalidate }}>
+    <BusinessConfigContext.Provider value={{ config, loading, invalidate }}>
       {children}
     </BusinessConfigContext.Provider>
   );

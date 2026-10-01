@@ -1,4 +1,4 @@
-﻿# SPRINT-13 â€” Mesas, Pedidos y Pantalla de Barra
+# SPRINT-13 â€” Mesas, Pedidos y Pantalla de Barra
 
 **Objetivo:** Que una cafeterÃ­a pueda abrir una mesa, tomarle el pedido con sus notas ("sin azÃºcar, leche deslactosada"), que el barista lo vea en una tablet en la barra en lugar de un post-it, y que el cobro salga por el flujo de venta que ya existe.
 
@@ -26,8 +26,8 @@
 | US-055 | MigraciÃ³n 16, modo restaurante y gestiÃ³n de mesas | [x] Completa en cÃ³digo, tests y verificaciÃ³n en navegador (2026-09-29) | 2026-09-29 |
 | US-054 | Acceso al POS desde el celular/tablet por WiFi local (deuda SPRINT-12) + R-55 servir el frontend desde el binario | [x] Completa en cÃ³digo y tests; pendiente prueba manual con dos dispositivos (2026-09-30) | 2026-09-30 |
 | US-056 | Pedido por mesa: abrir, agregar Ã­tems con nota, anular, cancelar | [x] Completa en cÃ³digo y tests; pendiente verificaciÃ³n manual T-19 del PO (2026-09-30) | 2026-09-30 |
-| US-057 | Cobro del pedido reusando el flujo de venta | [ ] Pendiente | â€” |
-| US-058 | Pantalla de barra (KDS) con estados, tiempos y alerta sonora | [ ] Pendiente | â€” |
+| US-057 | Cobro del pedido reusando el flujo de venta | [x] Completa en código y tests (2026-10-01) | 2026-10-01 |
+| US-058 | Pantalla de barra (KDS) con estados, tiempos y alerta sonora | [x] Completa en código y tests (2026-10-01) | 2026-10-01 |
 
 **Esfuerzo total estimado: 8.5 dÃ­as** (US-054 sube de 0.5 a 1 por absorber R-55) â€” por encima del objetivo de ~7. LÃ­nea de corte si la fecha aprieta: US-058 vuelve a `roadmap.md` como Ã­tem nuevo. Advertencia honesta: sin US-058 no hay demo que resuelva el dolor del cliente (los post-its siguen), solo mesas y cuenta abierta. Preferible recortar por otro lado antes que por el KDS.
 

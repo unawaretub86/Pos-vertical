@@ -64,6 +64,8 @@ interface LowStockItem {
   name: string;
   stock: number;
   min_stock: number;
+  avg_daily: number | null;
+  days_remaining: number | null;
 }
 
 interface AgingReceivable {
@@ -637,14 +639,23 @@ export default function DashboardPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {todayData!.low_stock.map(item => (
-                <div key={item.product_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                  <span style={{ flex: 1, fontWeight: 500 }}>{item.name}</span>
+                <div key={item.product_id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 500 }}>{item.name}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>·</span>
                   <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
                     {item.stock} unid
                   </span>
                   <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                     / mín {item.min_stock}
                   </span>
+                  {item.days_remaining !== null && (
+                    <>
+                      <span style={{ color: 'var(--text-muted)' }}>·</span>
+                      <span style={{ fontWeight: 700 }}>
+                        {item.days_remaining} {item.days_remaining === 1 ? 'día restante' : 'días restantes'}
+                      </span>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
