@@ -1,124 +1,126 @@
-# SPRINT-05 — Mobile Responsive: Demo-Ready en Celular
+# SPRINT-05 — Mobile Responsive: Demo-Ready on a Phone
 
-**Objetivo:** El sistema se puede demostrar y usar en un celular (320px–430px). El bloqueador actual es el sidebar fijo de 220px que aplasta el contenido en pantallas pequeñas. Al final de este sprint, un prospecto puede ver el POS en su propio celular.
+**Goal:** The system can be demoed and used on a phone (320px–430px). The current blocker is the fixed 220px sidebar that crushes the content on small screens. At the end of this sprint, a prospect can see the POS on their own phone.
 
-**Fecha inicio:** —
+**Start date:** —
 
-**Contexto de uso mobile:**
-- Demo a prospectos en celular del vendedor o del cliente
-- Cajero en tablet/celular pequeño haciendo ventas
-- Admin revisando dashboard o cartera desde el celular
-
----
-
-## Problemas identificados (iPhone 14 Pro Max — 430px)
-
-1. **Sidebar fijo 220px** — ocupa ~50% del ancho, el contenido queda inutilizable
-2. **Textos cortados** — "TRANSACCI...", "Todos los est..." en dashboard
-3. **No hay menú hamburger** — no hay forma de navegar en mobile
-4. **AppLayout no tiene breakpoints** — `display: flex` siempre lateral, nunca apilado
+**Mobile usage context:**
+- Demo to prospects on the salesperson's or the customer's phone
+- Cashier on a tablet/small phone making sales
+- Admin checking the dashboard or receivables from the phone
 
 ---
 
-## Prioridad 1 — Navegación mobile
+## Identified problems (iPhone 14 Pro Max — 430px)
 
-### US-022: Sidebar colapsable con drawer en mobile
+1. **Fixed 220px sidebar** — takes ~50% of the width, the content becomes unusable
+2. **Truncated texts** — "TRANSACCI...", "Todos los est..." on the dashboard
+3. **No hamburger menu** — there is no way to navigate on mobile
+4. **AppLayout has no breakpoints** — `display: flex` always side-by-side, never stacked
 
-- [x] Convertir el sidebar en un drawer deslizante en pantallas < 768px
+(Quoted strings are UI labels, which stay in Spanish.)
+
+---
+
+## Priority 1 — Mobile navigation
+
+### US-022: Collapsible sidebar with a drawer on mobile
+
+- [x] Turn the sidebar into a sliding drawer on screens < 768px
 - **Acceptance Criteria:**
-  - En pantallas ≥ 768px: sidebar fijo lateral de 220px (comportamiento actual, sin cambios)
-  - En pantallas < 768px: sidebar oculto por defecto, se abre con botón hamburger (☰)
-  - El botón hamburger aparece en la esquina superior izquierda en mobile, visible en todas las páginas
-  - Al abrir el drawer, aparece un overlay semitransparente detrás; tocarlo cierra el drawer
-  - El drawer tiene el mismo contenido que el sidebar actual (nav items, usuario, logout, theme toggle)
-  - Al navegar a una página, el drawer se cierra automáticamente
-  - Animación de entrada/salida suave (transform translateX), sin librerías externas
-  - La detección de breakpoint se hace con `window.matchMedia` o `useMediaQuery` hook, no con CSS puro (para evitar flash de layout)
-- **Archivos a modificar:**
-  - `frontend/components/Sidebar.tsx` — agregar estado open/closed y lógica de overlay
-  - `frontend/components/AppLayout.tsx` — pasar estado del drawer si es necesario, ajustar layout en mobile
-- **No romper:** comportamiento desktop actual (220px fijo, sin cambios visibles en ≥ 768px)
+  - On screens ≥ 768px: fixed 220px side sidebar (current behavior, unchanged)
+  - On screens < 768px: sidebar hidden by default, opened with a hamburger button (☰)
+  - The hamburger button appears in the top-left corner on mobile, visible on every page
+  - When the drawer opens, a semi-transparent overlay appears behind it; tapping it closes the drawer
+  - The drawer has the same content as the current sidebar (nav items, user, logout, theme toggle)
+  - On navigating to a page, the drawer closes automatically
+  - Smooth enter/exit animation (transform translateX), no external libraries
+  - Breakpoint detection is done with `window.matchMedia` or a `useMediaQuery` hook, not pure CSS (to avoid a layout flash)
+- **Files to modify:**
+  - `frontend/components/Sidebar.tsx` — add open/closed state and overlay logic
+  - `frontend/components/AppLayout.tsx` — pass the drawer state if needed, adjust layout on mobile
+- **Do not break:** current desktop behavior (fixed 220px, no visible changes at ≥ 768px)
 
 ---
 
-## Prioridad 2 — Dashboard mobile
+## Priority 2 — Mobile dashboard
 
-### US-023: Dashboard legible en 320px–430px
+### US-023: Readable dashboard at 320px–430px
 
-- [x] Corregir textos cortados y layout del dashboard en mobile
-- **Problemas específicos (vistos en screenshot):**
-  - Card "TRANSACCI..." — título cortado, necesita truncar con ellipsis o abreviar
-  - "Ventas recientes — Todos los est..." — botón/texto cortado
-  - Cards de stats apiladas verticalmente en mobile (hoy ocupan row fijo que se desborda)
-  - Topbar con demasiada info apilada en 430px
+- [x] Fix truncated texts and the dashboard layout on mobile
+- **Specific problems (seen in a screenshot):**
+  - "TRANSACCI..." card — title cut off, needs ellipsis truncation or abbreviation
+  - "Ventas recientes — Todos los est..." — button/text cut off
+  - Stat cards stacked vertically on mobile (today they take a fixed row that overflows)
+  - Topbar with too much info stacked at 430px
 - **Acceptance Criteria:**
-  - En mobile (< 768px): las cards de stats (`Ventas hoy`, `Transacciones`) se apilan en columna o en grid 2×2 sin desbordarse
-  - Ningún texto se corta con `...` excepto nombres de clientes/productos (comportamiento esperado)
-  - El botón "Todos los..." en ventas recientes tiene texto completo o se abrevia intencionalmente ("Ver todos")
-  - La Topbar en mobile muestra solo lo esencial (saludo + botón POS), sin desbordarse
-  - Ventas recientes muestra máximo 3 filas en mobile para no requerir scroll excesivo
-- **Archivos a modificar:**
-  - `frontend/app/page.tsx` — ajustes de layout y texto en secciones del dashboard
-  - `frontend/components/Topbar.tsx` — simplificar en mobile si aplica
+  - On mobile (< 768px): the stat cards (`Ventas hoy`, `Transacciones`) stack in a column or a 2×2 grid without overflowing
+  - No text is cut with `...` except customer/product names (expected behavior)
+  - The "Todos los..." button in recent sales has full text or is intentionally abbreviated ("Ver todos")
+  - The Topbar on mobile shows only the essentials (greeting + POS button), without overflowing
+  - Recent sales shows at most 3 rows on mobile so it does not require excessive scrolling
+- **Files to modify:**
+  - `frontend/app/page.tsx` — layout and text adjustments in the dashboard sections
+  - `frontend/components/Topbar.tsx` — simplify on mobile if applicable
 
 ---
 
-## Prioridad 3 — POS usable en mobile
+## Priority 3 — Usable POS on mobile
 
-### US-024: Punto de venta funcional en celular
+### US-024: Functional point of sale on a phone
 
-- [x] El flujo de venta completo debe poder hacerse en mobile (320px–430px)
-- **Contexto:** El cajero puede estar en un local pequeño usando el celular como terminal
+- [x] The full sale flow must be doable on mobile (320px–430px)
+- **Context:** The cashier may be in a small shop using the phone as a terminal
 - **Acceptance Criteria:**
-  - El buscador de productos ocupa el ancho completo en mobile
-  - Los ítems del carrito son legibles (nombre, cantidad, precio) sin desbordarse
-  - El resumen de totales (subtotal, descuento, IVA, total) es visible sin scroll horizontal
-  - El botón "Cobrar" es prominente y fácil de tocar (mínimo 48px de altura)
-  - El modal de pago (selección de método, monto recibido, cambio) funciona en mobile sin que el teclado tape los campos críticos
-  - El modal del ticket post-venta se puede cerrar fácilmente en mobile
-- **Archivos a modificar:**
-  - `frontend/app/pos/page.tsx` — ajustes de layout específicos para mobile
+  - The product search takes the full width on mobile
+  - Cart items are legible (name, quantity, price) without overflowing
+  - The totals summary (subtotal, discount, VAT, total) is visible without horizontal scroll
+  - The "Cobrar" (charge) button is prominent and easy to tap (minimum 48px height)
+  - The payment modal (method selection, amount received, change) works on mobile without the keyboard covering critical fields
+  - The post-sale ticket modal can be closed easily on mobile
+- **Files to modify:**
+  - `frontend/app/pos/page.tsx` — mobile-specific layout adjustments
 
 ---
 
-## Prioridad 4 — Páginas secundarias
+## Priority 4 — Secondary pages
 
-### US-025: Clientes, Cartera e Inventario legibles en mobile
+### US-025: Customers, Receivables and Inventory readable on mobile
 
-- [x] Las páginas más usadas por admin deben ser navegables en mobile
-- **Scope:** Solo legibilidad y navegación básica — no se requiere edición en mobile
+- [x] The pages admins use most must be navigable on mobile
+- **Scope:** Only readability and basic navigation — editing on mobile is not required
 - **Acceptance Criteria:**
-  - `/customers`: lista de clientes con nombre, teléfono y saldo visible sin scroll horizontal
-  - `/portfolio`: tabla de cartera legible; columnas se reducen en mobile (mostrar nombre + deuda, ocultar fecha)
-  - `/inventory`: lista de productos con nombre, stock y precio visible; acciones (editar/agregar stock) accesibles
-  - Ninguna tabla requiere scroll horizontal en 320px
-  - Las tablas en mobile pueden mostrar menos columnas que en desktop (columnas secundarias se ocultan)
-- **Archivos a modificar:**
+  - `/customers`: customer list with name, phone and balance visible without horizontal scroll
+  - `/portfolio`: readable receivables table; columns are reduced on mobile (show name + debt, hide date)
+  - `/inventory`: product list with name, stock and price visible; actions (edit/add stock) accessible
+  - No table requires horizontal scroll at 320px
+  - Tables on mobile may show fewer columns than on desktop (secondary columns are hidden)
+- **Files to modify:**
   - `frontend/app/customers/page.tsx`
   - `frontend/app/portfolio/page.tsx`
   - `frontend/app/inventory/page.tsx`
 
 ---
 
-## Fuera del scope de este sprint
+## Out of scope for this sprint
 
-- Páginas de admin pesado (Usuarios, Configuración, Reportes) — se usan en desktop
-- Instalación como PWA / app móvil
-- Soporte para pantallas < 320px
-
----
-
-## Criterio de éxito del sprint
-
-Al terminar, Andrey puede abrir el sistema en su celular, crear una venta de prueba completa (buscar producto → agregar al carrito → cobrar en efectivo → ver ticket), y mostrarle eso a un prospecto en su celular sin vergüenza.
+- Heavy admin pages (Users, Settings, Reports) — used on desktop
+- Installation as a PWA / mobile app
+- Support for screens < 320px
 
 ---
 
-## Registro de progreso
+## Sprint success criterion
 
-| US | Nombre | Estado | Fecha |
-|----|--------|--------|-------|
-| US-022 | Sidebar drawer en mobile | ✅ Completo | 2026-04-09 |
-| US-023 | Dashboard mobile | ✅ Completo | 2026-04-09 |
-| US-024 | POS funcional en mobile | ✅ Completo | 2026-04-09 |
-| US-025 | Clientes/Cartera/Inventario mobile | ✅ Completo | 2026-04-10 |
+When done, Andrey can open the system on his phone, create a complete test sale (search product → add to cart → charge in cash → see ticket), and show that to a prospect on his phone without embarrassment.
+
+---
+
+## Progress log
+
+| US | Name | Status | Date |
+|----|------|--------|------|
+| US-022 | Sidebar drawer on mobile | ✅ Complete | 2026-04-09 |
+| US-023 | Mobile dashboard | ✅ Complete | 2026-04-09 |
+| US-024 | Functional POS on mobile | ✅ Complete | 2026-04-09 |
+| US-025 | Customers/Receivables/Inventory on mobile | ✅ Complete | 2026-04-10 |

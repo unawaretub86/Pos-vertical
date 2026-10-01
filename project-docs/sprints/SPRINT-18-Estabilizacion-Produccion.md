@@ -1,262 +1,262 @@
-# SPRINT-18 — Estabilización y Bloqueadores de Producción
+# SPRINT-18 — Stabilization and Production Blockers
 
-**Objetivo:** Eliminar los 4 bloqueadores críticos (seguridad, consistencia de datos, acceso estático y sesión) que impiden entregar el binario a un cliente real. Este sprint no introduce features de negocio nuevas; deja la fundación sólida para que el sistema no se caiga ni comprometa información en el primer uso.
+**Goal:** Eliminate the 4 critical blockers (security, data consistency, static serving and session) that prevent delivering the binary to a real customer. This sprint introduces no new business features; it lays a solid foundation so the system does not crash or compromise information on first use.
 
-**Fecha inicio:** (por definir)
+**Start date:** (to be defined)
 
-**Referencias:** `project-docs/roadmap.md`, `project-docs/gaps.md`
+**References:** `project-docs/roadmap.md`, `project-docs/gaps.md`
 
-**Deuda técnica entrante:**
-- R-55: El binario no sirve el frontend embebido: página en blanco en `:8080`. -> **Se cierra en US-075**.
-- R-57: `GET /setup` expone `owner_email_app_password` a cualquier usuario autenticado. -> **Se cierra en US-076**.
-- R-49: Redirigir a `/login` cuando cualquier petición responde 401. -> **Se cierra en US-077**.
-- R-56: Las llaves foráneas de SQLite no se aplican. -> **Se cierra en US-078**.
-- R-35: 42 problemas de linting de React (`set-state-in-effect`, `any`). -> **Se cierra en US-079**.
-- Gaps (POS Prodcheck): Soporte nativo ESC/POS para impresoras térmicas. -> **Se cierra en US-080**.
-- E1/K1 (US-054 parcial): Pruebas de concurrencia Multi-caja en LAN. -> **Se cierra en US-081**.
-
----
-
-## Tareas
-
-| US | Nombre | Estado | Fecha |
-|----|--------|--------|-------|
-| US-075 | Binario sirve SPA Next.js correctamente (R-55) | ⬜ Pendiente | |
-| US-076 | Ocultar contraseña App Email en GET (R-57) | ⬜ Pendiente | |
-| US-077 | Redirección forzada al vencer sesión (R-49) | ⬜ Pendiente | |
-| US-078 | Activar Foreign Keys en SQLite (R-56) | ⬜ Pendiente | |
-| US-079 | Corrección 42 Errores de Linting (R-35) | ⬜ Pendiente | |
-| US-080 | Impresión Nativa ESC/POS 58/80mm | ⬜ Pendiente | |
-| US-081 | Concurrencia y Estabilidad Multi-Caja LAN | ⬜ Pendiente | |
-
-**Esfuerzo total estimado: ~6 días**
+**Incoming technical debt:**
+- R-55: The binary does not serve the embedded frontend: blank page on `:8080`. -> **Closed in US-075**.
+- R-57: `GET /setup` exposes `owner_email_app_password` to any authenticated user. -> **Closed in US-076**.
+- R-49: Redirect to `/login` when any request answers 401. -> **Closed in US-077**.
+- R-56: SQLite foreign keys are not enforced. -> **Closed in US-078**.
+- R-35: 42 React lint problems (`set-state-in-effect`, `any`). -> **Closed in US-079**.
+- Gaps (POS Prodcheck): Native ESC/POS support for thermal printers. -> **Closed in US-080**.
+- E1/K1 (US-054 partial): Multi-register concurrency tests on LAN. -> **Closed in US-081**.
 
 ---
 
-## Orden de implementación recomendado
+## Tasks
 
-| Orden | US | Razón |
-|-------|----|-------|
-| **1** | US-075 | Desbloquea probar el resto de las tareas desde el binario real, en vez del server de desarrollo. |
-| **2** | US-076 | Es el cambio más crítico de seguridad y muy rápido (esconder un campo en un JSON). |
-| **3** | US-077 | Mejora la experiencia de pruebas de todos, evitando las "pantallas rotas" cuando caduca el token. |
-| **4** | US-078 | Cambio de driver de base de datos que podría destapar data huérfana en fixtures, ideal dejarlo para el final y correr todos los tests. |
-| **5** | US-079 | Paga la deuda de UI (evitando parpadeos y re-renders) antes de tocar lógica pesada de concurrencia. |
-| **6** | US-080 | El módulo de impresión es autocontenido y de alto valor comercial, requiere pruebas con hardware/emuladores. |
-| **7** | US-081 | Prueba integral de concurrencia LAN, requiere tener todo el sistema estable antes de simular estrés con 2+ dispositivos. |
+| US | Name | Status | Date |
+|----|------|--------|------|
+| US-075 | Binary serves the Next.js SPA correctly (R-55) | ⬜ Pending | |
+| US-076 | Hide the email App password in GET (R-57) | ⬜ Pending | |
+| US-077 | Forced redirect when the session expires (R-49) | ⬜ Pending | |
+| US-078 | Enable Foreign Keys in SQLite (R-56) | ⬜ Pending | |
+| US-079 | Fix 42 Lint Errors (R-35) | ⬜ Pending | |
+| US-080 | Native ESC/POS Printing 58/80mm | ⬜ Pending | |
+| US-081 | Multi-Register LAN Concurrency and Stability | ⬜ Pending | |
+
+**Total estimated effort: ~6 days**
 
 ---
 
-## US-075 — Binario sirve SPA Next.js correctamente (R-55)
+## Recommended implementation order
 
-**Como** dueño del negocio,
-**quiero** hacer doble clic en el programa y que la interfaz funcione al instante,
-**para** poder usar el sistema sin necesitar la consola de Node o estar conectado a internet.
+| Order | US | Reason |
+|-------|----|--------|
+| **1** | US-075 | Unblocks testing the rest of the tasks from the real binary instead of the development server. |
+| **2** | US-076 | It is the most critical security change and very quick (hide a field in a JSON). |
+| **3** | US-077 | Improves everyone's testing experience, avoiding "broken screens" when the token expires. |
+| **4** | US-078 | A database driver change that could uncover orphan data in fixtures; best left for the end, running all tests. |
+| **5** | US-079 | Pays off the UI debt (avoiding flicker and re-renders) before touching heavy concurrency logic. |
+| **6** | US-080 | The printing module is self-contained and of high commercial value; requires testing with hardware/emulators. |
+| **7** | US-081 | Full LAN concurrency test; requires the whole system to be stable before simulating stress with 2+ devices. |
 
-**Esfuerzo estimado:** 0.5 días. **Impacto:** Crítico (El software no abre).
+---
 
-**Contexto técnico:**
-- `web/static.go` monta un `http.FileServer` con `embed.FS`.
-- Ya hace un `TrimPrefix` de `/` para que `io/fs.ValidPath` no falle (mitad del fix).
-- Falta: las exportaciones estáticas de Next sin `.html` al final devuelven 404 en `frontendFS.Open(cleanPath)`, el sistema cae al fallback y sirve `index.html`, rompiéndose las rutas que Next exportó como `<ruta>.html` (por ej. `/login.html`).
-- `frontend/lib/api.ts:3` tiene la URL base `/api`, pero debe asegurarse de no requerir CORS estricto de desarrollo o ajustarlo.
-- `internal/middleware/middleware.go:96` bloquea llamadas si no vienen de `:3000`. 
+## US-075 — Binary serves the Next.js SPA correctly (R-55)
 
-**Regla de negocio:**
-- Si la URL no es `/api/...`, intenta servir `ruta`, luego `ruta.html`, y finalmente cae a `index.html`. 
-- El middleware CORS debe permitir el origen del binario (mismo dominio/puerto) o estar apagado para peticiones locales donde frontend/backend conviven en el mismo puerto.
+**As** the business owner,
+**I want** to double-click the program and have the interface work instantly,
+**so that** I can use the system without needing the Node console or an internet connection.
 
-**Scope — qué NO entra:**
-- Modificar el flujo de login.
+**Estimated effort:** 0.5 day. **Impact:** Critical (the software does not open).
+
+**Technical context:**
+- `web/static.go` mounts an `http.FileServer` with `embed.FS`.
+- It already does a `TrimPrefix` of `/` so that `io/fs.ValidPath` does not fail (half of the fix).
+- Missing: Next static exports without a trailing `.html` return 404 in `frontendFS.Open(cleanPath)`, the system falls to the fallback and serves `index.html`, breaking the routes Next exported as `<path>.html` (e.g. `/login.html`).
+- `frontend/lib/api.ts:3` has the base URL `/api`, but it must be ensured it does not require strict development CORS, or it must be adjusted.
+- `internal/middleware/middleware.go:96` blocks calls that do not come from `:3000`.
+
+**Business rule:**
+- If the URL is not `/api/...`, try serving `path`, then `path.html`, and finally fall back to `index.html`.
+- The CORS middleware must allow the binary's origin (same domain/port) or be off for local requests where frontend/backend live on the same port.
+
+**Scope — what is NOT included:**
+- Modifying the login flow.
 
 **Acceptance Criteria:**
-- [ ] Compilar el binario (`make build` o equivalente), ejecutarlo y abrir `http://localhost:8080/login`.
-- [ ] La pantalla de login carga sin errores 404 de archivos CSS o JS.
-- [ ] Hacer login y ver que la redirección a `/dashboard` funciona y llama a la API.
+- [ ] Build the binary (`make build` or equivalent), run it and open `http://localhost:8080/login`.
+- [ ] The login screen loads without 404 errors for CSS or JS files.
+- [ ] Log in and see that the redirect to `/dashboard` works and calls the API.
 
 **DoD:**
-- Ajuste de `frontendFS.Open` en `web/static.go` intentando `.html` si falla la ruta base.
-- Middleware CORS ajustado en `middleware.go` para funcionar en prod (mismo host).
-- Build limpio comprobado.
+- Adjust `frontendFS.Open` in `web/static.go` trying `.html` if the base path fails.
+- CORS middleware adjusted in `middleware.go` to work in prod (same host).
+- Clean build verified.
 
 ---
 
-## US-076 — Ocultar contraseña App Email en GET (R-57)
+## US-076 — Hide the email App password in GET (R-57)
 
-**Como** cajero,
-**no debería** poder ver las credenciales de correo de la tienda,
-**para** evitar el robo de la contraseña de aplicación de Gmail del dueño.
+**As** a cashier,
+**I should not** be able to see the shop's email credentials,
+**so that** the theft of the owner's Gmail app password is avoided.
 
-**Esfuerzo estimado:** 0.5 días. **Impacto:** Alto (Fuga de secreto).
+**Estimated effort:** 0.5 day. **Impact:** High (secret leak).
 
-**Contexto técnico:**
-- `internal/handler/setup.go` tiene `getSetup` que responde todo el `repository.BusinessConfig`, incluyendo `OwnerEmailAppPassword`.
-- Este endpoint está protegido solo por `Auth` (cajeros tienen acceso).
+**Technical context:**
+- `internal/handler/setup.go` has `getSetup`, which answers the whole `repository.BusinessConfig`, including `OwnerEmailAppPassword`.
+- This endpoint is protected only by `Auth` (cashiers have access).
 
-**Regla de negocio:**
-- El GET `/setup` no debe incluir el `owner_email_app_password`. Puedes serializarlo vacío, o crear un DTO de respuesta que lo omita. 
-- Puedes agregar un boolean `has_email_app_password: true` para que la UI sepa que ya está configurado.
-- El PUT `/setup` de actualización (que usa upsert) no debe borrar la contraseña existente si el payload la omite, a menos que se quiera explícitamente.
+**Business rule:**
+- `GET /setup` must not include `owner_email_app_password`. You can serialize it empty, or create a response DTO that omits it.
+- You can add a boolean `has_email_app_password: true` so the UI knows it is already configured.
+- The update `PUT /setup` (which uses upsert) must not erase the existing password if the payload omits it, unless that is explicitly intended.
 
 **Acceptance Criteria:**
-- [ ] Un usuario logueado con rol `cashier` inspecciona la red en `/setup` y no ve el campo `owner_email_app_password`.
-- [ ] Actualizar el setup desde la UI como admin no destruye la contraseña guardada previamente (se mantiene la configuración del correo).
+- [ ] A logged-in user with the `cashier` role inspects the network on `/setup` and does not see the `owner_email_app_password` field.
+- [ ] Updating the setup from the UI as admin does not destroy the previously saved password (the email configuration is kept).
 
 **DoD:**
-- Modificar la respuesta en `getSetup`.
-- Ajustar lógica en `updateSetup` o `repo.Upsert` para ignorar la sobreescritura de password en blanco.
-- 1 test unitario de que `GET /setup` no filtra la credencial.
+- Modify the response in `getSetup`.
+- Adjust logic in `updateSetup` or `repo.Upsert` to ignore overwriting the password with a blank.
+- 1 unit test that `GET /setup` does not leak the credential.
 
 ---
 
-## US-077 — Redirección forzada al vencer sesión (R-49)
+## US-077 — Forced redirect when the session expires (R-49)
 
-**Como** usuario,
-**quiero** que si mi sesión caducó me envíen al login,
-**para** no enfrentarme a pantallas vacías, errores crípticos o el sistema bloqueado.
+**As** a user,
+**I want** to be sent to the login if my session expired,
+**so that** I do not face empty screens, cryptic errors or a blocked system.
 
-**Esfuerzo estimado:** 0.5 días. **Impacto:** Medio-Alto (UX y soporte).
+**Estimated effort:** 0.5 day. **Impact:** Medium-High (UX and support).
 
-**Contexto técnico:**
-- En `frontend/lib/api.ts`, si `res.ok` es falso, simplemente se hace `throw new Error(...)`.
-- Los componentes capturan esto y muestran un error genérico o fallan.
+**Technical context:**
+- In `frontend/lib/api.ts`, if `res.ok` is false, it simply does `throw new Error(...)`.
+- Components catch this and show a generic error or fail.
 
-**Regla de negocio:**
-- Si un request fetch retorna `HTTP 401 Unauthorized`, limpiar la sesión (localStorage, cookies o la función `logout` existente).
-- Redirigir a `/login` en el lado del cliente (ej. `window.location.href = '/login'`).
+**Business rule:**
+- If a fetch request returns `HTTP 401 Unauthorized`, clear the session (localStorage, cookies or the existing `logout` function).
+- Redirect to `/login` on the client side (e.g. `window.location.href = '/login'`).
 
 **Acceptance Criteria:**
-- [ ] Entrar al POS con sesión activa.
-- [ ] Borrar el JWT de localStorage (o esperar 24h).
-- [ ] Hacer clic en cualquier vista (Inventario, Dashboard, etc).
-- [ ] Ser redirigido instantáneamente a `/login`.
-- [ ] La app no debe entrar en un bucle infinito si la página de `/login` hace un fetch que devuelve 401.
+- [ ] Enter the POS with an active session.
+- [ ] Delete the JWT from localStorage (or wait 24h).
+- [ ] Click any view (Inventory, Dashboard, etc.).
+- [ ] Be redirected instantly to `/login`.
+- [ ] The app must not enter an infinite loop if the `/login` page makes a fetch that returns 401.
 
 **DoD:**
-- `frontend/lib/api.ts` ajustado.
-- Verificación de que `window.location.pathname !== '/login'` antes de redirigir (opcional pero recomendado).
+- `frontend/lib/api.ts` adjusted.
+- Verification that `window.location.pathname !== '/login'` before redirecting (optional but recommended).
 
 ---
 
-## US-078 — Activar Foreign Keys en SQLite (R-56)
+## US-078 — Enable Foreign Keys in SQLite (R-56)
 
-**Como** administrador del sistema,
-**quiero** que la base de datos no me deje borrar entidades atadas (como un producto con ventas),
-**para** que no se rompan mis reportes de cierres de caja en el futuro.
+**As** the system administrator,
+**I want** the database not to let me delete tied entities (such as a product with sales),
+**so that** my register-close reports do not break in the future.
 
-**Esfuerzo estimado:** 0.5 días. **Impacto:** Alto (Integridad de datos).
+**Estimated effort:** 0.5 day. **Impact:** High (data integrity).
 
-**Contexto técnico:**
-- `internal/database/database.go` usa `?_foreign_keys=on`, lo cual es sintaxis para `mattn/go-sqlite3` pero ignorado por `modernc.org/sqlite`.
-- La sintaxis de `modernc` es `_pragma=foreign_keys(1)`.
+**Technical context:**
+- `internal/database/database.go` uses `?_foreign_keys=on`, which is `mattn/go-sqlite3` syntax but ignored by `modernc.org/sqlite`.
+- The `modernc` syntax is `_pragma=foreign_keys(1)`.
 
-**Regla de negocio:**
-- Habilitar `PRAGMA foreign_keys = ON` correctamente.
-- OJO: Esto puede romper tests existentes si insertan facturas usando `register_id` falsos o no insertados previamente. Se debe ejecutar todos los tests y arreglar los fixtures huérfanos.
+**Business rule:**
+- Enable `PRAGMA foreign_keys = ON` correctly.
+- NOTE: This may break existing tests if they insert invoices using fake `register_id`s or ones not previously inserted. All tests must be run and the orphan fixtures fixed.
 
 **Acceptance Criteria:**
-- [ ] Ejecutar todos los tests del backend (`go test ./...`) y que pasen con las FK activadas.
-- [ ] Si se intenta hacer un `DELETE` de un `register` con ventas mediante una sentencia SQL directa (o un handler), SQLite debe disparar un error de FK constraint.
+- [ ] Run all backend tests (`go test ./...`) and have them pass with FKs enabled.
+- [ ] If a `DELETE` of a `register` with sales is attempted through a direct SQL statement (or a handler), SQLite must raise an FK constraint error.
 
 **DoD:**
-- DSN en `database.go` ajustado.
-- Fixtures de tests saneados (ningún test inserta data huérfana).
-- Los pipelines/build pasan limpios.
+- DSN in `database.go` adjusted.
+- Test fixtures cleaned (no test inserts orphan data).
+- Pipelines/build pass clean.
 
 ---
 
-## US-079 — Corrección 42 Errores de Linting (R-35)
+## US-079 — Fix 42 Lint Errors (R-35)
 
-**Como** desarrollador y usuario final,
-**quiero** que el código de React respete las reglas de hooks (`set-state-in-effect`),
-**para** que la interfaz no haga re-renders innecesarios que sientan la app "pesada" o con parpadeos.
+**As** a developer and end user,
+**I want** the React code to respect the hooks rules (`set-state-in-effect`),
+**so that** the interface does not do unnecessary re-renders that make the app feel "heavy" or flickery.
 
-**Esfuerzo estimado:** 1 día. **Impacto:** Medio (Rendimiento UX / Calidad de código).
+**Estimated effort:** 1 day. **Impact:** Medium (UX performance / code quality).
 
-**Contexto técnico:**
-- El comando `pnpm run lint` arroja 42 errores, principalmente en `AppLayout.tsx`, `useIsMobile.ts`, `ThemeProvider.tsx`.
-- El error común es actualizar un estado de React sincrónicamente dentro de un `useEffect` (`react-hooks/set-state-in-effect`).
+**Technical context:**
+- The command `pnpm run lint` throws 42 errors, mainly in `AppLayout.tsx`, `useIsMobile.ts`, `ThemeProvider.tsx`.
+- The common error is updating React state synchronously inside a `useEffect` (`react-hooks/set-state-in-effect`).
 
-**Regla de negocio:**
-- Mover las lecturas iniciales (como el tema actual o el matchMedia) al estado inicial del `useState` (o inicializador perezoso `useState(() => ...)`), o usar un manejador de eventos asíncrono para que no colapse el render de React 18+.
-- Eliminar los tipos `any` injustificados (tipar como `unknown` o la interfaz adecuada).
+**Business rule:**
+- Move the initial reads (such as the current theme or matchMedia) into the initial state of `useState` (or the lazy initializer `useState(() => ...)`), or use an asynchronous event handler so it does not collapse the React 18+ render.
+- Remove unjustified `any` types (type as `unknown` or the proper interface).
 
 **Acceptance Criteria:**
-- [ ] Ejecutar `pnpm run lint` en `/frontend` debe devolver cero errores y cero warnings.
-- [ ] Navegar por la app y verificar que no haya parpadeos al abrir el menú lateral (AppLayout) o al cambiar de modo claro a oscuro (ThemeProvider).
+- [ ] Running `pnpm run lint` in `/frontend` must return zero errors and zero warnings.
+- [ ] Navigate the app and verify there is no flicker when opening the side menu (AppLayout) or when switching from light to dark mode (ThemeProvider).
 
 **DoD:**
-- Modificaciones a los hooks problemáticos.
-- CI/Build limpio (`pnpm lint` && `pnpm build`).
+- Modifications to the problematic hooks.
+- Clean CI/Build (`pnpm lint` && `pnpm build`).
 
 ---
 
-## US-080 — Impresión Nativa ESC/POS 58/80mm
+## US-080 — Native ESC/POS Printing 58/80mm
 
-**Como** cajero o mesero,
-**quiero** que el ticket de venta o la comanda salgan instantáneamente de mi impresora térmica al cobrar,
-**para** no tener que hacer clic en la ventana de impresión de Windows ni configurar márgenes en el navegador.
+**As** a cashier or waiter,
+**I want** the sale ticket or the order ticket to come out instantly from my thermal printer on checkout,
+**so that** I do not have to click through the Windows print dialog or configure margins in the browser.
 
-**Esfuerzo estimado:** 2 días. **Impacto:** Muy Alto (Feature crítica comercial).
+**Estimated effort:** 2 days. **Impact:** Very High (critical commercial feature).
 
-**Contexto técnico:**
-- Actualmente se usa el diálogo de impresión del navegador (`window.print()`).
-- Para ESC/POS, Go deberá comunicarse por red (LAN a la IP de la impresora) o mediante conexión USB/Serial (usando una librería de comandos térmicos como `github.com/alexbrainman/printer` en Windows o impresión raw genérica).
+**Technical context:**
+- The browser print dialog (`window.print()`) is currently used.
+- For ESC/POS, Go will have to communicate over the network (LAN to the printer's IP) or through a USB/Serial connection (using a thermal-command library such as `github.com/alexbrainman/printer` on Windows or generic raw printing).
 
-**Regla de negocio:**
-- Se debe añadir un endpoint en el backend (`POST /api/printer/print-ticket/:sale_id`).
-- La configuración del negocio (Settings) debe permitir elegir el método de impresión: `[Browser, ESC/POS Local, ESC/POS Red]`.
-- Si es red, guardar IP y puerto. Si es local, guardar el nombre de la impresora compartida de Windows.
+**Business rule:**
+- A backend endpoint must be added (`POST /api/printer/print-ticket/:sale_id`).
+- The business configuration (Settings) must allow choosing the print method: `[Browser, ESC/POS Local, ESC/POS Network]`.
+- If network, store IP and port. If local, store the name of the shared Windows printer.
 
 **Acceptance Criteria:**
-- [ ] En la configuración del POS, el usuario puede habilitar "Impresión Directa".
-- [ ] Al hacer un cobro o reimprimir un ticket, el backend despacha el comando ESC/POS puro.
-- [ ] La impresora saca el papel inmediatamente sin pop-ups en la pantalla.
-- [ ] Se imprimen correctamente el logo (si es posible), el encabezado, los ítems y el pie de página de la configuración comercial.
+- [ ] In the POS configuration, the user can enable "Impresión Directa" (direct printing).
+- [ ] On charging or reprinting a ticket, the backend dispatches the raw ESC/POS command.
+- [ ] The printer outputs the paper immediately with no pop-ups on screen.
+- [ ] The logo (if possible), the header, the items and the footer from the business configuration are printed correctly.
 
 **DoD:**
-- API de impresión ESC/POS (`internal/service/printer.go`).
-- Interfaz en frontend para configurar la impresora.
-- Test unitario simulando el generador de comandos térmicos.
+- ESC/POS printing API (`internal/service/printer.go`).
+- Frontend interface to configure the printer.
+- Unit test simulating the thermal command generator.
 
 ---
 
-## US-081 — Concurrencia y Estabilidad Multi-Caja LAN
+## US-081 — Multi-Register LAN Concurrency and Stability
 
-**Como** dueño del restaurante o tienda,
-**quiero** que varios empleados puedan cobrar y usar el sistema al mismo tiempo desde distintos celulares/tablets en la misma red WiFi,
-**para** agilizar la atención sin que se pisen los datos o rompan las cuentas.
+**As** the owner of the restaurant or shop,
+**I want** several employees to be able to charge and use the system at the same time from different phones/tablets on the same WiFi network,
+**so that** service is faster without data overwriting each other or accounts breaking.
 
-**Esfuerzo estimado:** 1 día. **Impacto:** Alto (Escalabilidad de operación real).
+**Estimated effort:** 1 day. **Impact:** High (scalability of real operation).
 
-**Contexto técnico:**
-- US-054 habilitó el acceso LAN. SQLite está configurado con `WAL` (Write-Ahead Logging) y un timeout de `5000ms`, lo cual soporta lectura/escritura concurrente decentemente.
-- Se debe validar en un entorno real que no haya fallos de locking (`database is locked`) bajo carga simultánea.
+**Technical context:**
+- US-054 enabled LAN access. SQLite is configured with `WAL` (Write-Ahead Logging) and a `5000ms` timeout, which supports concurrent read/write decently.
+- It must be validated in a real environment that there are no locking failures (`database is locked`) under simultaneous load.
 
-**Regla de negocio:**
-- Si dos cajas descuentan del mismo producto, la lógica debe manejar bien las transacciones (ya que el servicio lo hace en una Tx, esto debería estar cubierto, pero se debe validar el frontend).
-- Reforzar el manejo de errores: Si el frontend recibe `HTTP 503` o `locked`, debe reintentar automáticamente (política de retry en `api.ts`).
+**Business rule:**
+- If two registers deduct from the same product, the logic must handle transactions well (since the service does it in a Tx, this should be covered, but the frontend must be validated).
+- Reinforce error handling: if the frontend receives `HTTP 503` or `locked`, it must retry automatically (retry policy in `api.ts`).
 
 **Acceptance Criteria:**
-- [ ] Cargar el POS en una PC y en 2 celulares a través de la IP LAN.
-- [ ] Simular dos cobros de diferentes mesas/clientes en el exacto mismo segundo.
-- [ ] Validar que ninguna petición muera con un crash blanco; si hay colisión, un *toast* avisa que hubo un error o la app lo reintenta invisiblemente.
-- [ ] Revisar el cierre de caja para confirmar que todos los montos de ambas sesiones coinciden perfectamente sin registros fantasma.
+- [ ] Load the POS on one PC and on 2 phones through the LAN IP.
+- [ ] Simulate two charges from different tables/customers in the exact same second.
+- [ ] Validate that no request dies with a white crash; if there is a collision, a *toast* warns that there was an error or the app retries invisibly.
+- [ ] Review the register close to confirm that all amounts of both sessions match perfectly with no phantom records.
 
 **DoD:**
-- Añadir retry-logic en `frontend/lib/api.ts` para requests fallidos por locking temporal.
-- Validaciones en consola de que no saltan panics en Go al manejar transacciones concurrentes.
+- Add retry logic in `frontend/lib/api.ts` for requests that fail due to temporary locking.
+- Console validations that no Go panics occur when handling concurrent transactions.
 
 ---
 
-## Criterio de éxito del sprint
-- El binario Windows `.exe` puede lanzarse y usarse al 100% en localhost:8080 sin NodeJS.
-- Ningún cajero puede robarse la clave del email.
-- Las sesiones vencidas redirigen limpiamente.
-- La base de datos es robusta contra eliminación accidental de datos conectados.
-- La base de código de React está libre de warnings y deuda de linting.
-- El POS es capaz de escupir tickets térmicos instantáneos sin intervención del navegador.
-- El sistema no se cae ni se corrompe cuando hay 3 empleados cobrando a la vez.
+## Sprint success criterion
+- The Windows `.exe` binary can be launched and used 100% on localhost:8080 without NodeJS.
+- No cashier can steal the email password.
+- Expired sessions redirect cleanly.
+- The database is robust against accidental deletion of connected data.
+- The React codebase is free of warnings and lint debt.
+- The POS is able to spit out thermal tickets instantly without browser intervention.
+- The system does not crash or corrupt when 3 employees are charging at the same time.
 
-## Notas técnicas para el dev
-- Sobre US-076: Revisa si el struct `BusinessConfig` ya se usa directamente como request y response. Es recomendable separarlos o vaciar el campo en la respuesta y comprobar en el PUT si viene vacío para mantener el valor anterior haciendo un merge antes del `Upsert`.
+## Technical notes for the dev
+- On US-076: Check whether the `BusinessConfig` struct is already used directly as request and response. It is advisable to separate them, or blank the field in the response and check in the PUT whether it comes empty to keep the previous value by doing a merge before the `Upsert`.

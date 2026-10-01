@@ -1,175 +1,175 @@
-# SPRINT-12 — Resumen por WhatsApp al Dueño y Acceso al POS desde el Celular
+# SPRINT-12 — Owner Summary and POS Access from the Phone
 
-**Objetivo:** Darle a Don Carlos (dueño, no siempre en la tienda) visibilidad del negocio desde el celular sin depender de nube ni mensualidad: un resumen de cierre de caja por WhatsApp con un clic, y la posibilidad de abrir el POS desde su celular mientras está en la tienda, conectado al mismo WiFi.
+**Goal:** Give Don Carlos (owner, not always at the shop) visibility into the business from his phone without depending on the cloud or a monthly fee: a register-close summary delivered to the owner automatically, and the ability to open the POS from his phone while he is at the shop, connected to the same WiFi.
 
-**Fecha inicio:** (por definir)
+**Start date:** (to be defined)
 
-**Referencias:** `project-docs/better-finds-pos.md` (bloque K — K1, K2/I2), `project-docs/SPRINT-10-Cobro-Mixto-Auditoria-Gastos.md` (roadmap), `project-docs/SPRINT-11-QA-Proveedores-Cierre-Caja.md` (roadmap)
+**References:** `project-docs/better-finds-pos.md` (block K — K1, K2/I2), `project-docs/SPRINT-10-Cobro-Mixto-Auditoria-Gastos.md` (roadmap), `project-docs/SPRINT-11-QA-Proveedores-Cierre-Caja.md` (roadmap)
 
-**Deuda técnica entrante:**
-- US-034 — Factus sandbox validation (abierta desde SPRINT-07, requiere acceso externo a Factus) — **sigue abierta**, no bloqueante, sin acción en este sprint.
-- SPRINT-05 — Mobile Responsive (marcado ⬜ Pendiente en `BACKLOG-Development-Workflow.md`) — **sigue abierta**, no relacionada con este sprint (aunque este sprint sí exige responsive 320px en lo que toca).
-- US-042c, US-043, US-044, US-045 (SPRINT-09, ⬜ Pendiente) — **sigue abierta**. US-044 (sugerencia de pedido) ya no está bloqueada desde el cierre de SPRINT-11 (US-052 le dio proveedores), pero su implementación en sí no entra aquí.
+**Incoming technical debt:**
+- US-034 — Factus sandbox validation (open since SPRINT-07, requires external access to Factus) — **still open**, non-blocking, no action in this sprint.
+- SPRINT-05 — Mobile Responsive (marked ⬜ Pending in `BACKLOG-Development-Workflow.md`, now `workflow.md`) — **still open**, unrelated to this sprint (although this sprint does require 320px responsive in what it touches).
+- US-042c, US-043, US-044, US-045 (SPRINT-09, ⬜ Pending) — **still open**. US-044 (supplier order suggestion) has not been blocked since SPRINT-11 closed (US-052 provided suppliers), but its implementation itself does not enter here.
 
-**Nota de tamaño:** este sprint son 2 US de ~0.5 día cada una (el propio doc fuente las documenta como "Combo de 1 día" en el bloque K). Es intencionalmente corto — ambos sprints anteriores (10 y 11) ya fijaron esta combinación específica en su Roadmap; no se infla con features de SPRINT-13 (H2 apartados, G2 kardex) para no romper esa decisión ya tomada dos veces.
-
----
-
-## Tareas
-
-| US | Nombre | Estado | Fecha |
-|----|--------|--------|-------|
-| US-053 | Resumen de cierre de caja por WhatsApp al dueño (I2) | [ ] Pendiente | — |
-| US-054 | Acceso al POS desde el celular por WiFi local (K1) | [ ] Pendiente | — |
+**Size note:** this sprint is 2 USs of ~0.5 day each (the source doc itself documents them as a "1-day combo" in block K). It is intentionally short — both previous sprints (10 and 11) already fixed this specific combination in their Roadmap; it is not inflated with SPRINT-13 features (H2 layaway, G2 kardex) so as not to break that decision already made twice.
 
 ---
 
-## Orden de implementación recomendado
+## Tasks
 
-| Orden | US | Razón |
-|-------|----|-------|
-| **1** | US-053 | Aditivo puro: una columna nueva y un botón. No toca cómo arranca el servidor — cero riesgo de dejar el POS inalcanzable. |
-| **2** | US-054 | Toca el bind del servidor (`cmd/pos/main.go`) — el único cambio de este sprint con radio de impacto real (si algo sale mal, nadie entra al POS). Se hace después, con US-053 ya probada y la migración 14 ya en pie. |
+| US | Name | Status | Date |
+|----|------|--------|------|
+| US-053 | Register-close summary to the owner (I2) | [ ] Pending | — |
+| US-054 | POS access from the phone over local WiFi (K1) | [ ] Pending | — |
 
 ---
 
-## US-053 — Resumen de cierre de caja por correo automático al dueño (I2, pivote)
+## Recommended implementation order
 
-**Como** Don Carlos (dueño, no siempre presente en la tienda),
-**quiero** recibir por correo el resumen del cierre de caja (vendido por método, entradas, salidas, esperado vs. real) automáticamente apenas Laura cierra caja, sin que nadie tenga que hacer clic en nada,
-**para** saber cómo fue el día sin depender de que el cajero recuerde enviarlo.
+| Order | US | Reason |
+|-------|----|--------|
+| **1** | US-053 | Purely additive: a new column and a button. Does not touch how the server starts — zero risk of leaving the POS unreachable. |
+| **2** | US-054 | Touches the server bind (`cmd/pos/main.go`) — the only change in this sprint with real blast radius (if something goes wrong, nobody gets into the POS). Done afterwards, with US-053 already tested and migration 14 already in place. |
 
-**Esfuerzo estimado:** 0.5 día. **Impacto:** Alto — cubre la necesidad de "app móvil del dueño" sin fricción de flujo.
+---
 
-**Pivote (2026-09-12):** la versión original de esta US usaba un botón "Enviar por WhatsApp" (`wa.me`, clic manual del cajero). En pruebas manuales, Andrey encontró que el navegador bloqueaba el popup de WhatsApp silenciosamente (sin error de consola) y, sobre todo, que un paso manual extra en el flujo de cierre no era el UX deseado — pidió explícitamente algo automático e integrado. Se evaluaron alternativas de automatización de WhatsApp (Business Cloud API de Meta: requiere verificación de negocio y cobra por conversación; librerías no oficiales tipo `whatsapp-web.js`: violan ToS de WhatsApp, riesgo de baneo) y se descartaron. Se decidió cambiar de canal a **correo vía Gmail SMTP**, enviado automáticamente desde el backend al cerrar caja — sin clic, sin costo (dentro del límite gratuito de Gmail), sin librerías nuevas (usa `net/smtp` del stdlib de Go). Nota: esto sí requiere internet en el momento del cierre para que el correo salga (a diferencia del click-to-WhatsApp, que no lo requería hasta que el dueño abriera el mensaje) — si no hay internet, el envío falla silenciosamente y solo se registra en el log del servidor; el cierre de caja en sí nunca se bloquea ni se reintenta.
+## US-053 — Register-close summary by automatic email to the owner (I2, pivot)
 
-**Contexto técnico (implementado):**
-- **Migración 14** (compartida con US-054 — ver US-054 para el segundo bloque):
+**As** Don Carlos (owner, not always present at the shop),
+**I want** to receive by email the register-close summary (sold per method, cash in, cash out, expected vs. actual) automatically as soon as Laura closes the register, without anyone having to click anything,
+**so that** I know how the day went without depending on the cashier remembering to send it.
+
+**Estimated effort:** 0.5 day. **Impact:** High — covers the need for an "owner mobile app" without workflow friction.
+
+**Pivot (2026-09-12):** the original version of this US used a "Send by WhatsApp" button (`wa.me`, manual cashier click). In manual testing, Andrey found that the browser silently blocked the WhatsApp popup (no console error) and, above all, that an extra manual step in the close flow was not the desired UX — he explicitly asked for something automatic and integrated. Alternatives for WhatsApp automation were evaluated (Meta's Business Cloud API: requires business verification and charges per conversation; unofficial libraries like `whatsapp-web.js`: violate WhatsApp's ToS, ban risk) and discarded. The decision was to switch channel to **email via Gmail SMTP**, sent automatically from the backend on register close — no click, no cost (within Gmail's free limit), no new libraries (uses Go stdlib `net/smtp`). Note: this does require internet at close time for the email to go out (unlike click-to-WhatsApp, which did not require it until the owner opened the message) — if there is no internet, sending fails silently and is only logged on the server; the register close itself is never blocked or retried.
+
+**Technical context (implemented):**
+- **Migration 14** (shared with US-054 — see US-054 for the second block):
   ```sql
   ALTER TABLE business_config ADD COLUMN owner_email TEXT;
   ALTER TABLE business_config ADD COLUMN owner_email_app_password TEXT;
   ```
-- `internal/repository/setup.go` — `BusinessConfig` gana `OwnerEmail` y `OwnerEmailAppPassword`; `Get()`/`Upsert()` incluyen ambas columnas. Sin endpoint nuevo — `PUT /setup` ya acepta el body completo.
-- `internal/mailer/mailer.go` (nuevo paquete) — `BuildRegisterSummaryEmail(data) (subject, body string)` pura y testeada (Go, no frontend), y `Send(cfg SMTPConfig, subject, body string) error` que envía por `smtp.gmail.com:587` (STARTTLS vía `net/smtp.SendMail`, sin dependencia externa). El mismo correo Gmail actúa como remitente y destinatario — un solo par de credenciales a configurar.
-- `internal/handler/register.go` (`closeRegister`) — tras cerrar la caja con éxito, dispara `go h.sendRegisterSummaryEmail(summary, cashier)` en goroutine (fire-and-forget): si `owner_email`/`owner_email_app_password` no están configurados, o el envío falla (sin internet, credenciales inválidas), se loguea con `log.Printf` y no afecta la respuesta HTTP — el cierre ya quedó persistido antes de intentar el envío.
-- `frontend/app/settings/page.tsx` — reemplaza el campo de teléfono por dos `ConfigRow` en Administración: "Correo del dueño" (`type="email"`) y "Contraseña de aplicación" (`type="password"`, con nota de que es la contraseña de aplicación de Gmail, no la contraseña normal de la cuenta).
-- `frontend/components/CloseTicketPreview.tsx` y `frontend/app/register/page.tsx` — se revierte el botón de WhatsApp y el plumbing de `ownerPhone`; el ticket de cierre vuelve a tener solo el botón "Imprimir" (el correo ya se envió solo, no hace falta acción del cajero).
-- `frontend/lib/registerSummaryMessage.ts` (creado en el intento con WhatsApp) se elimina — la lógica de armar el mensaje vive ahora en Go (`internal/mailer`), no en el frontend, porque el envío ya no lo dispara el navegador.
+- `internal/repository/setup.go` — `BusinessConfig` gains `OwnerEmail` and `OwnerEmailAppPassword`; `Get()`/`Upsert()` include both columns. No new endpoint — `PUT /setup` already accepts the full body.
+- `internal/mailer/mailer.go` (new package) — pure, tested `BuildRegisterSummaryEmail(data) (subject, body string)` (Go, not frontend), and `Send(cfg SMTPConfig, subject, body string) error` which sends through `smtp.gmail.com:587` (STARTTLS via `net/smtp.SendMail`, no external dependency). The same Gmail address acts as sender and recipient — a single pair of credentials to configure.
+- `internal/handler/register.go` (`closeRegister`) — after closing the register successfully, it fires `go h.sendRegisterSummaryEmail(summary, cashier)` in a goroutine (fire-and-forget): if `owner_email`/`owner_email_app_password` are not configured, or sending fails (no internet, invalid credentials), it is logged with `log.Printf` and does not affect the HTTP response — the close was already persisted before attempting the send.
+- `frontend/app/settings/page.tsx` — replaces the phone field with two `ConfigRow`s under Administration: "Correo del dueño" (`type="email"`) and "Contraseña de aplicación" (`type="password"`, with a note that it is the Gmail app password, not the account's normal password). (Quoted labels are UI strings, Spanish.)
+- `frontend/components/CloseTicketPreview.tsx` and `frontend/app/register/page.tsx` — the WhatsApp button and the `ownerPhone` plumbing are reverted; the close ticket goes back to having only the "Imprimir" button (the email was already sent on its own, no cashier action is needed).
+- `frontend/lib/registerSummaryMessage.ts` (created in the WhatsApp attempt) is removed — the logic for building the message now lives in Go (`internal/mailer`), not in the frontend, because sending is no longer triggered by the browser.
 
-**Regla de negocio (igual que antes, ahora en el cuerpo del correo):**
+**Business rule (same as before, now in the email body; the email text itself is Spanish product content):**
 ```
-cuerpo = "Resumen de cierre — <business.name>\n"
-       + "Cajero: <cashier> · <closed_at formateado>\n\n"
-       + para cada línea en by_payment_method: "<label(method)>: <formatCOP(total)>\n"
-       + "Entradas: <formatCOP(cash_in)>\n"
-       + "Salidas: <formatCOP(cash_out)>\n"
-       + "Esperado: <formatCOP(expected)>\n"
-       + "Real: <formatCOP(actual_close)>\n"
-       + si difference < 0 → "Faltante: <formatCOP(abs(difference))>"
-         si no             → "Diferencia: <formatCOP(difference)>"
+body = "Resumen de cierre — <business.name>\n"
+     + "Cajero: <cashier> · <closed_at formatted>\n\n"
+     + for each line in by_payment_method: "<label(method)>: <formatCOP(total)>\n"
+     + "Entradas: <formatCOP(cash_in)>\n"
+     + "Salidas: <formatCOP(cash_out)>\n"
+     + "Esperado: <formatCOP(expected)>\n"
+     + "Real: <formatCOP(actual_close)>\n"
+     + if difference < 0 → "Faltante: <formatCOP(abs(difference))>"
+       else              → "Diferencia: <formatCOP(difference)>"
 ```
 
-**Scope — qué NO entra:**
-- Múltiples destinatarios (varios dueños/socios) — un solo `owner_email`, ampliable si se pide.
-- Reintentos o cola de envío si falla (sin internet, credenciales vencidas) — se loguea server-side y ya; no hay UI de "correos pendientes de reenviar".
-- Envío de PDF/imagen adjunta del ticket — el correo es texto plano, igual que era el mensaje de WhatsApp.
+**Scope — what is NOT included:**
+- Multiple recipients (several owners/partners) — a single `owner_email`, extendable if requested.
+- Retries or a send queue on failure (no internet, expired credentials) — it is logged server-side and that is it; there is no "emails pending resend" UI.
+- Sending an attached PDF/image of the ticket — the email is plain text, same as the WhatsApp message was.
 
 **Acceptance Criteria:**
 
-**Configuración:**
-- [x] Campos "Correo del dueño" y "Contraseña de aplicación" en Configuración → Administración, se guardan con `PUT /setup` igual que el resto del formulario.
-- [x] Vacíos por defecto — no rompe negocios ya configurados (columnas nuevas con `NULL`/`''`).
+**Configuration:**
+- [x] "Correo del dueño" and "Contraseña de aplicación" fields in Settings → Administration, saved with `PUT /setup` like the rest of the form.
+- [x] Empty by default — does not break already-configured businesses (new columns with `NULL`/`''`).
 
-**Cierre de caja:**
-- [x] Al cerrar caja con `owner_email` y `owner_email_app_password` configurados, el backend envía automáticamente el correo con el resumen — sin clic ni acción del cajero.
-- [x] Sin `owner_email` configurado: el cierre funciona exactamente igual (no se intenta enviar nada, no hay error visible).
-- [x] Si el envío falla (sin internet, credenciales inválidas): el cierre de caja se completa igual, el error solo queda en el log del servidor.
-- [x] Cierre con diferencia negativa (faltante) → cuerpo del correo dice "Faltante: $X", no "Diferencia: -$X".
+**Register close:**
+- [x] When closing the register with `owner_email` and `owner_email_app_password` configured, the backend sends the summary email automatically — no click or action from the cashier.
+- [x] Without `owner_email` configured: the close works exactly the same (nothing is attempted, no visible error).
+- [x] If sending fails (no internet, invalid credentials): the register close completes anyway, the error is only left in the server log.
+- [x] Close with a negative difference (shortage) → email body says "Faltante: $X", not "Diferencia: -$X".
 
 **DoD:**
-- [x] Migración 14 (compartida con US-054): columnas `owner_email` y `owner_email_app_password` en `business_config` — ver SQL exacto arriba.
-- [x] `GET /setup` y `PUT /setup` (ya existentes) incluyen ambos campos en el JSON, sin cambio de ruta ni de grupo de auth.
-- [x] Test (Go, `internal/mailer`): `BuildRegisterSummaryEmail` con un cierre de ejemplo — ventas $60.000 (cash $30.000 + transfer $20.000 + credit $10.000), cash_in $0, cash_out $5.000, expected $25.000, actual_close $24.500 → cuerpo contiene "Faltante: $500" y las 3 líneas de método con sus montos exactos.
-- [x] Test (Go, `internal/mailer`): mismo caso pero `actual_close` = `expected` exacto (diferencia 0) → cuerpo dice "Diferencia: $0", no "Faltante: $0".
-- [x] Build limpio (`go build ./...`, `npm run build`).
-- [ ] Test manual (no automatizable sin cuenta Gmail real — pendiente para Andrey): configurar correo + contraseña de aplicación real, cerrar caja, confirmar que el correo llega con los montos correctos.
+- [x] Migration 14 (shared with US-054): columns `owner_email` and `owner_email_app_password` in `business_config` — see exact SQL above.
+- [x] `GET /setup` and `PUT /setup` (already existing) include both fields in the JSON, with no change of route or auth group.
+- [x] Test (Go, `internal/mailer`): `BuildRegisterSummaryEmail` with a sample close — sales $60,000 (cash $30,000 + transfer $20,000 + credit $10,000), cash_in $0, cash_out $5,000, expected $25,000, actual_close $24,500 → body contains "Faltante: $500" and the 3 method lines with their exact amounts.
+- [x] Test (Go, `internal/mailer`): same case but `actual_close` = `expected` exactly (difference 0) → body says "Diferencia: $0", not "Faltante: $0".
+- [x] Clean build (`go build ./...`, `npm run build`).
+- [ ] Manual test (not automatable without a real Gmail account — pending for Andrey): configure a real email + app password, close the register, confirm the email arrives with the correct amounts.
 
 ---
 
-## US-054 — Acceso al POS desde el celular por WiFi local (K1)
+## US-054 — POS access from the phone over local WiFi (K1)
 
-**Como** Don Carlos (dueño, presente en la tienda),
-**quiero** abrir el POS desde el navegador de mi celular mientras estoy conectado al WiFi del local, sin instalar nada,
-**para** ver las ventas del día en vivo sin pararme frente al computador de la caja.
+**As** Don Carlos (owner, present at the shop),
+**I want** to open the POS from my phone's browser while connected to the shop's WiFi, without installing anything,
+**so that** I can see the day's sales live without standing in front of the register computer.
 
-**Esfuerzo estimado:** 0.5 día. **Impacto:** Medio-alto — cubre "ver ventas en celular" en vivo, complementa a US-053 (que cubre el resumen fuera del local).
+**Estimated effort:** 0.5 day. **Impact:** Medium-high — covers "see sales on phone" live, complements US-053 (which covers the summary outside the shop).
 
-**Estado verificado:**
-- `cmd/pos/main.go:41` tiene `addr := "localhost:8080"` hardcodeado — un celular en la misma WiFi que la caja no puede entrar hoy (`localhost` solo acepta conexiones desde la misma máquina).
-- El frontend ya es responsive/mobile-first desde SPRINT-05 (aunque esa US sigue marcada ⬜ Pendiente en el backlog general, la base de estilos mobile ya se usó y se validó en SPRINT-11 para los componentes nuevos).
-- El login usa JWT (`internal/middleware`, confirmado por uso en `appmw.GetClaims` en múltiples handlers) — la app ya exige autenticación aunque el puerto quede expuesto en la LAN.
-- No existe ningún endpoint que reporte la IP local del equipo (`grep -rn "InterfaceAddrs\|network-info" internal/` no encuentra nada).
+**Verified state:**
+- `cmd/pos/main.go:41` has a hardcoded `addr := "localhost:8080"` — a phone on the same WiFi as the register cannot get in today (`localhost` only accepts connections from the same machine).
+- The frontend has been responsive/mobile-first since SPRINT-05 (although that US is still marked ⬜ Pending in the general backlog, the mobile style base was already used and validated in SPRINT-11 for the new components).
+- Login uses JWT (`internal/middleware`, confirmed by use of `appmw.GetClaims` in multiple handlers) — the app already demands authentication even if the port is exposed on the LAN.
+- No endpoint exists that reports the machine's local IP (`grep -rn "InterfaceAddrs\|network-info" internal/` finds nothing).
 
-**Contexto técnico:**
-- **Migración 14** (misma migración que US-053 — un solo archivo `migration14` con ambos `ALTER TABLE`):
+**Technical context:**
+- **Migration 14** (same migration as US-053 — a single `migration14` file with both `ALTER TABLE`s):
   ```sql
   ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
   ```
-  Default `0` = comportamiento actual sin cambios para toda base de datos existente.
-- `internal/repository/setup.go` — `BusinessConfig` gana `LanAccessEnabled bool \`json:"lan_access_enabled"\``, incluido en `Get()`/`Upsert()` igual que `AllowGlobalDiscount` (mismo patrón booleano ya usado en esa misma tabla).
-- `cmd/pos/main.go` — extraer una función pura `listenAddr(lanEnabled bool) string` (`"0.0.0.0:8080"` si `true`, `"localhost:8080"` si `false`), llamada después de `database.New(...)` y antes de `http.ListenAndServe`, leyendo el flag con `h.setup` (o el repo directo) recién creado el `Handler`. **El cambio solo aplica al reiniciar el binario** — Go ya tiene el socket abierto en el bind original; no hay forma de re-bindear sin reiniciar el proceso.
-- Nuevo endpoint `GET /api/network-info` (grupo admin, mismo patrón que `/api/audit`) → `{lan_ip: string, port: string, enabled: bool}`. `lan_ip` se obtiene con el truco estándar de Go: abrir un `net.Dial("udp", "8.8.8.8:80")` (no envía tráfico real, solo hace que el SO resuelva qué interfaz usaría) y leer `LocalAddr()`; si falla (sin red en absoluto), devolver `lan_ip: ""` y el frontend muestra "No se detectó red local" en vez de romper.
-- `frontend/app/settings/page.tsx` — nueva `ConfigRow` "Acceso desde celular (WiFi local)": toggle `lan_access_enabled` (se guarda con el mismo `PUT /setup` del formulario existente); debajo, cuando está activado, `GET /api/network-info` y mostrar `http://<lan_ip>:8080` en fuente monoespaciada grande + botón "Copiar"; texto de advertencia fijo: "Solo funciona dentro de la WiFi de este local. Asegúrate que tenga contraseña. Debes reiniciar la aplicación para que el cambio tome efecto."
+  Default `0` = current behavior unchanged for every existing database.
+- `internal/repository/setup.go` — `BusinessConfig` gains `LanAccessEnabled bool \`json:"lan_access_enabled"\``, included in `Get()`/`Upsert()` like `AllowGlobalDiscount` (same boolean pattern already used in that same table).
+- `cmd/pos/main.go` — extract a pure function `listenAddr(lanEnabled bool) string` (`"0.0.0.0:8080"` if `true`, `"localhost:8080"` if `false`), called after `database.New(...)` and before `http.ListenAndServe`, reading the flag through `h.setup` (or the repo directly) right after the `Handler` is created. **The change only applies on restarting the binary** — Go already has the socket open at the original bind; there is no way to re-bind without restarting the process.
+- New endpoint `GET /api/network-info` (admin group, same pattern as `/api/audit`) → `{lan_ip: string, port: string, enabled: bool}`. `lan_ip` is obtained with the standard Go trick: open a `net.Dial("udp", "8.8.8.8:80")` (sends no real traffic, it just makes the OS resolve which interface it would use) and read `LocalAddr()`; if it fails (no network at all), return `lan_ip: ""` and the frontend shows "No se detectó red local" instead of breaking.
+- `frontend/app/settings/page.tsx` — new `ConfigRow` "Acceso desde celular (WiFi local)": `lan_access_enabled` toggle (saved with the same `PUT /setup` of the existing form); below it, when enabled, `GET /api/network-info` and show `http://<lan_ip>:8080` in large monospace font + a "Copiar" button; fixed warning text: "Solo funciona dentro de la WiFi de este local. Asegúrate que tenga contraseña. Debes reiniciar la aplicación para que el cambio tome efecto." (UI strings, Spanish.)
 
-**Regla de negocio:** N/A (flag de configuración + detección de red, sin aritmética).
+**Business rule:** N/A (configuration flag + network detection, no arithmetic).
 
-**Scope — qué NO entra:**
-- Código QR — el doc fuente lo sugiere, pero agregar una librería nueva solo para esto no se justifica frente a mostrar la IP en texto grande y copiable; si un cliente real lo pide, es un cambio pequeño y aislado en el mismo componente.
-- Acceso remoto fuera de la LAN (tunnel/nube) — eso es K4 en el doc fuente, `v2` explícito, requiere 5+ días y contradice el posicionamiento offline.
-- Hot-reload del bind sin reiniciar — limitación real de `http.ListenAndServe`, se documenta en la UI en vez de resolverse con complejidad adicional (ej. reverse proxy interno).
+**Scope — what is NOT included:**
+- QR code — the source doc suggests it, but adding a new library just for this is not justified compared to showing the IP in large, copyable text; if a real customer asks for it, it is a small, isolated change in the same component.
+- Remote access outside the LAN (tunnel/cloud) — that is K4 in the source doc, explicit `v2`, requires 5+ days and contradicts the offline positioning.
+- Hot-reload of the bind without restarting — a real limitation of `http.ListenAndServe`, documented in the UI instead of being solved with extra complexity (e.g. an internal reverse proxy).
 
 **Acceptance Criteria:**
 
-**Configuración:**
-- [ ] Toggle "Acceso desde celular" en Configuración, apagado por defecto — bases de datos existentes no cambian de comportamiento sin acción explícita del dueño.
-- [ ] Con el toggle activado, se muestra la IP local + puerto y el aviso de reinicio.
-- [ ] Si no se detecta ninguna red local (`lan_ip` vacío), se muestra "No se detectó red local" en vez de una IP vacía o un error crudo.
-- [ ] Responsive: sección usable en 320px.
+**Configuration:**
+- [ ] "Acceso desde celular" toggle in Settings, off by default — existing databases do not change behavior without explicit action from the owner.
+- [ ] With the toggle on, the local IP + port and the restart notice are shown.
+- [ ] If no local network is detected (`lan_ip` empty), "No se detectó red local" is shown instead of an empty IP or a raw error.
+- [ ] Responsive: section usable at 320px.
 
-**Acceso real:**
-- [ ] Con el toggle activado y la aplicación reiniciada, un celular conectado a la misma WiFi abre `http://<lan_ip>:8080` y ve la pantalla de login.
-- [ ] Con el toggle desactivado (default), el servidor sigue escuchando solo en `localhost:8080` — comportamiento idéntico al actual.
-- [ ] Login desde el celular funciona igual que desde el computador de caja (mismo JWT, mismos roles).
+**Real access:**
+- [ ] With the toggle on and the application restarted, a phone connected to the same WiFi opens `http://<lan_ip>:8080` and sees the login screen.
+- [ ] With the toggle off (default), the server keeps listening only on `localhost:8080` — behavior identical to the current one.
+- [ ] Login from the phone works the same as from the register computer (same JWT, same roles).
 
 **DoD:**
-- [ ] Migración 14 (compartida con US-053): columna `lan_access_enabled` — ver SQL exacto arriba.
-- [ ] `GET /api/network-info` (grupo admin) → `{lan_ip, port, enabled}`.
-- [ ] `GET /setup` y `PUT /setup` incluyen `lan_access_enabled`.
-- [ ] Test (Go, `cmd/pos` o paquete extraído): `listenAddr(true) == "0.0.0.0:8080"`, `listenAddr(false) == "localhost:8080"`.
-- [ ] Test (Go, `internal/handler`): `GET /api/network-info` sin sesión admin → 403; con sesión admin → 200 con `port: "8080"`.
-- [ ] Test manual (no automatizable sin dos dispositivos en red): activar toggle, reiniciar `pos.exe`, confirmar acceso desde un celular real en la misma WiFi — **pendiente para Andrey**, mismo criterio que los checks de GitHub Actions de US-050 que no corren en este entorno.
-- [ ] Build limpio (`go build ./...`, `npm run build`).
+- [ ] Migration 14 (shared with US-053): column `lan_access_enabled` — see exact SQL above.
+- [ ] `GET /api/network-info` (admin group) → `{lan_ip, port, enabled}`.
+- [ ] `GET /setup` and `PUT /setup` include `lan_access_enabled`.
+- [ ] Test (Go, `cmd/pos` or extracted package): `listenAddr(true) == "0.0.0.0:8080"`, `listenAddr(false) == "localhost:8080"`.
+- [ ] Test (Go, `internal/handler`): `GET /api/network-info` without an admin session → 403; with an admin session → 200 with `port: "8080"`.
+- [ ] Manual test (not automatable without two devices on a network): turn on the toggle, restart `pos.exe`, confirm access from a real phone on the same WiFi — **pending for Andrey**, same criterion as the GitHub Actions checks of US-050 that do not run in this environment.
+- [ ] Clean build (`go build ./...`, `npm run build`).
 
 ---
 
-## Criterio de éxito del sprint
+## Sprint success criterion
 
-- Laura cierra caja, Don Carlos recibe en su WhatsApp (sin estar en la tienda) el resumen exacto de cómo fue el día — vendido por método, entradas, salidas, si sobró o faltó plata.
-- Don Carlos, parado en su tienda con el celular, activa el acceso LAN una vez, reinicia la app, y desde ese momento entra al POS desde su celular en la misma WiFi para ver las ventas en vivo sin tocar el computador de la caja.
+- Laura closes the register, Don Carlos receives (without being at the shop) the exact summary of how the day went — sold per method, cash in, cash out, whether money was left over or missing.
+- Don Carlos, standing in his shop with his phone, turns on LAN access once, restarts the app, and from then on enters the POS from his phone on the same WiFi to see sales live without touching the register computer.
 
 ---
 
-## Notas técnicas para el dev
+## Technical notes for the dev
 
-- **US-053 y US-054 comparten la migración 14** — un solo archivo/función `migration14` con ambos `ALTER TABLE`, mismo criterio que SPRINT-10 aplicó a US-046/US-049.
-- El botón de WhatsApp de US-053 y el `whatsappUrl` de `frontend/app/customers/page.tsx` deberían compartir el prefijo `57` y la lógica de limpiar dígitos (`replace(/\D/g, '')`) — vale la pena extraer un helper común `lib/whatsapp.ts` en vez de duplicarlo por tercera vez si aparece un cuarto caso de uso.
-- `listenAddr()` en US-054 debe quedar como función pura exportada (no inline en `main()`) específicamente para poder testear sin levantar un servidor real — `main.go` hoy no tiene ningún test porque todo su contenido es orquestación; esta es la primera pieza de lógica ahí que vale la pena aislar.
-- Advertir a Andrey en la demo: el toggle de US-054 exige reinicio manual del `.exe` — no es un bug, es una limitación de cómo `net/http` bindea el socket. Si en el futuro se quiere que el toggle aplique en caliente, la solución real es un segundo listener condicional o un proxy interno — no vale la pena para este sprint.
+- **US-053 and US-054 share migration 14** — a single `migration14` file/function with both `ALTER TABLE`s, same criterion SPRINT-10 applied to US-046/US-049.
+- The WhatsApp button of US-053 (now removed) and the `whatsappUrl` of `frontend/app/customers/page.tsx` should share the `57` prefix and the digit-cleaning logic (`replace(/\D/g, '')`) — it is worth extracting a common `lib/whatsapp.ts` helper instead of duplicating it a third time if a fourth use case appears.
+- `listenAddr()` in US-054 must remain a pure exported function (not inline in `main()`) specifically so it can be tested without starting a real server — `main.go` has no tests today because all its content is orchestration; this is the first piece of logic there worth isolating.
+- Warn Andrey in the demo: the US-054 toggle requires a manual restart of the `.exe` — it is not a bug, it is a limitation of how `net/http` binds the socket. If in the future the toggle should apply live, the real solution is a second conditional listener or an internal proxy — not worth it for this sprint.
 
 ---
 
 ## Roadmap
 
-Lo que queda por construir vive en [roadmap.md](roadmap.md), que es la única fuente. Este documento no reserva números de sprint futuros.
+What remains to be built lives in [roadmap.md](../roadmap.md), which is the single source. This document does not reserve future sprint numbers.
 
-> Antes había aquí una tabla de roadmap propia. Se consolidó el 2026-09-21: las copias por sprint divergieron entre sí y llegaron a reclamar el mismo número de sprint para features distintas.
+> There used to be a roadmap table of its own here. It was consolidated on 2026-09-21: the per-sprint copies diverged from each other and ended up claiming the same sprint number for different features.

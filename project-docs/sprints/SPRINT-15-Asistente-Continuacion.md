@@ -1,159 +1,159 @@
-# SPRINT-15 — Continuación del Asistente y Deuda UTC
+# SPRINT-15 — Assistant Continuation and UTC Debt
 
-**Objetivo:** Completar el caso de uso del asistente añadiendo búsqueda de inventario y periodos por "quincenas", y corregir el bug de fechas UTC/Local que causa colapsos silenciosos en los reportes (detectado en QA y en el roadmap).
+**Goal:** Complete the assistant use case by adding inventory lookup and "quincena" (half-month pay period) periods, and fix the UTC/Local date bug that causes silent collapses in reports (detected in QA and in the roadmap).
 
-**Fecha inicio:** (por definir)
+**Start date:** (to be defined)
 
-**Referencias:** `project-docs/roadmap.md`, QA de US-061.
+**References:** `project-docs/roadmap.md`, US-061 QA.
 
-**Deuda técnica entrante:**
-- US-034 (Factus), SPRINT-05 (Mobile), SPRINT-09, SPRINT-12 y SPRINT-13 (`dining_tables`) **siguen abiertas** y aparcadas.
-- R-06 (Volver semiabierto el `to` de `ExpenseRepository.List`) **sigue abierta**.
-
----
-
-## Tareas
-
-| US | Nombre | Estado | Fecha |
-|----|--------|--------|-------|
-| US-066 | Bugfix UTC/Local: corregir colapso en SalesSummary (R-48) y desfase de fechas (R-05) | [ ] Pendiente | — |
-| US-067 | Asistente: Intent PRODUCT_LOOKUP ("¿cuánto queda de arroz?") (R-02) | [ ] Pendiente | — |
-| US-068 | Asistente: Referencia temporal "la quincena" (R-03) | [ ] Pendiente | — |
-| US-069 | Correcciones UI: 404 Expenses, Setup permissions, static params y CSS scroll | [ ] Pendiente | — |
-
-**Esfuerzo total estimado: 4 días** (Sprint corto, ideal para limpiar la deuda post-QA antes de saltar a mesas/facturación).
+**Incoming technical debt:**
+- US-034 (Factus), SPRINT-05 (Mobile), SPRINT-09, SPRINT-12 and SPRINT-13 (`dining_tables`) **remain open** and parked.
+- R-06 (Make `to` half-open in `ExpenseRepository.List`) **remains open**.
 
 ---
 
-## Orden de implementación recomendado
+## Tasks
 
-| Orden | US | Razón |
-|-------|----|-------|
-| **1** | US-066 | El bug de fechas afecta los reportes, la base entera de cálculos y los rangos de fechas. Resolverlo primero quita ambigüedades. |
-| **2** | US-067 | Amplía la utilidad del asistente para un caso de uso hiper-frecuente. Requiere interactuar con la DB. |
-| **3** | US-068 | Incorpora un nuevo periodo ("quincena") que requiere ajustes aislados en `period.go`. |
-| **4** | US-069 | Paquete de arreglos de Interfaz y Permisos (bloqueantes para UX/Despliegue). |
+| US | Name | Status | Date |
+|----|------|--------|------|
+| US-066 | UTC/Local bugfix: fix the SalesSummary collapse (R-48) and the date offset (R-05) | [ ] Pending | — |
+| US-067 | Assistant: PRODUCT_LOOKUP intent ("¿cuánto queda de arroz?") (R-02) | [ ] Pending | — |
+| US-068 | Assistant: time reference "la quincena" (R-03) | [ ] Pending | — |
+| US-069 | UI fixes: 404 Expenses, Setup permissions, static params and CSS scroll | [ ] Pending | — |
+
+**Total estimated effort: 4 days** (short sprint, ideal for cleaning the post-QA debt before jumping to tables/invoicing).
 
 ---
 
-## US-066 — Bugfix UTC/Local y colapso de SalesSummary
+## Recommended implementation order
 
-**Como** desarrollador,
-**quiero** que SQLite guarde y procese las fechas asumiendo un mismo formato y zona horaria (Local vs UTC),
-**para** que no haya discrepancias entre `dashboard.go` y los reportes (bug de 19:00 hrs en Colombia) y no colapsen en un solo bucket `period=""`.
+| Order | US | Reason |
+|-------|----|--------|
+| **1** | US-066 | The date bug affects the reports, the whole base of calculations and the date ranges. Solving it first removes ambiguity. |
+| **2** | US-067 | Widens the assistant's usefulness for a hyper-frequent use case. Requires interacting with the DB. |
+| **3** | US-068 | Adds a new period ("quincena") that requires isolated adjustments in `period.go`. |
+| **4** | US-069 | Bundle of Interface and Permissions fixes (blockers for UX/Deployment). |
 
-**Esfuerzo estimado:** 1 día. **Impacto:** Alto. Corrige dos defectos críticos de reportes y cálculos base de rangos (R-05, R-48).
+---
 
-**Estado verificado:**
-- `internal/database/database.go:14`: La conexión SQLite se abre sin especificar formato de fecha (modernc.org/sqlite soporta pragma y querystring args).
-- `internal/repository/report.go:113-127`: `SalesSummary` usa `COALESCE(strftime(...), '')` causando colapso silencioso de ventas de múltiples días en un solo bucket si el fixture lo ingresa como `time.Time` literal.
-- `internal/repository/metrics.go:335`: Aging excluye fechas si son nulas o en un parseo incorrecto.
+## US-066 — UTC/Local bugfix and SalesSummary collapse
 
-**Regla de negocio:**
+**As** a developer,
+**I want** SQLite to store and process dates assuming a single format and time zone (Local vs UTC),
+**so that** there are no discrepancies between `dashboard.go` and the reports (the 19:00 bug in Colombia) and they do not collapse into a single bucket `period=""`.
+
+**Estimated effort:** 1 day. **Impact:** High. Fixes two critical report defects and the base range calculations (R-05, R-48).
+
+**Verified state:**
+- `internal/database/database.go:14`: The SQLite connection is opened without specifying a date format (modernc.org/sqlite supports pragma and querystring args).
+- `internal/repository/report.go:113-127`: `SalesSummary` uses `COALESCE(strftime(...), '')`, causing a silent collapse of sales from multiple days into a single bucket if the fixture inserts them as a literal `time.Time`.
+- `internal/repository/metrics.go:335`: Aging excludes dates if they are null or wrongly parsed.
+
+**Business rule:**
 ```text
-Todos los timestamps de SQLite (incluido CURRENT_TIMESTAMP) deben interpretarse en la zona horaria local.
-Eliminar el COALESCE de report.go tras corregir el parseo de SQLite desde la conexión.
+All SQLite timestamps (including CURRENT_TIMESTAMP) must be interpreted in the local time zone.
+Remove the COALESCE in report.go after fixing SQLite parsing from the connection.
 ```
 
 **Acceptance Criteria:**
-- [ ] Reproducir el bug (R-05) con un test usando un timestamp pasadas las 19:00 hrs (UTC-5) comprobando que no se mueva erróneamente de día.
-- [ ] Agregar la configuración necesaria al DSN de `internal/database/database.go:14` (e.g., parseTime, locales o lo que pida el driver `modernc.org/sqlite`).
-- [ ] Validar que 3 ventas en 3 días distintos generan exactamente 3 grupos en `SalesSummary`, no 1 vacío (R-48).
-- [ ] Los test `dashboard_test.go` y `metrics_test.go` pasan con el cambio.
+- [ ] Reproduce the bug (R-05) with a test using a timestamp past 19:00 (UTC-5), checking that it does not wrongly move to another day.
+- [ ] Add the necessary configuration to the DSN in `internal/database/database.go:14` (e.g., parseTime, locales or whatever the `modernc.org/sqlite` driver requires).
+- [ ] Validate that 3 sales on 3 different days produce exactly 3 groups in `SalesSummary`, not 1 empty one (R-48).
+- [ ] The `dashboard_test.go` and `metrics_test.go` tests pass with the change.
 
 **DoD:**
-- [ ] Sin migración.
-- [ ] `internal/database/database.go` y `internal/repository/report.go` ajustados.
-- [ ] Test con assert del D-5 escrito.
-- [ ] Build limpio (`go build ./...`).
+- [ ] No migration.
+- [ ] `internal/database/database.go` and `internal/repository/report.go` adjusted.
+- [ ] Test with the D-5 assertion written.
+- [ ] Clean build (`go build ./...`).
 
 ---
 
-## US-067 — Asistente: Intent PRODUCT_LOOKUP
+## US-067 — Assistant: PRODUCT_LOOKUP intent
 
-**Como** cajero o dueño,
-**quiero** preguntarle al asistente "¿cuánto queda de X?" o "¿precio de X?",
-**para** consultar el inventario rápido sin buscar en el catálogo visualmente.
+**As** a cashier or owner,
+**I want** to ask the assistant "¿cuánto queda de X?" or "¿precio de X?",
+**so that** I can check inventory quickly without searching the catalog visually.
 
-**Esfuerzo estimado:** 1.5 días. **Impacto:** Medio-Alto. Permite al usuario consultar su data primaria (inventario). Requiere búsqueda por similitud en el catálogo.
+**Estimated effort:** 1.5 days. **Impact:** Medium-High. Lets the user query their primary data (inventory). Requires similarity search over the catalog.
 
-**Estado verificado:**
-- `internal/assistant/engine.go:13-25`: `PRODUCT_LOOKUP` no existe entre los Intents actuales.
-- Existe `ProductRepository.Search(ctx, query)` para buscar el producto que el usuario mencione.
+**Verified state:**
+- `internal/assistant/engine.go:13-25`: `PRODUCT_LOOKUP` does not exist among the current Intents.
+- `ProductRepository.Search(ctx, query)` exists to search for the product the user mentions.
 
-**Contexto técnico:**
-Nuevo Intent `IntentProductLookup = "PRODUCT_LOOKUP"`. Modifica `engine.go` (banco de regex/fuzzy). Extracción de entidad: aislar el objeto directo ("arroz" en "cuanto arroz queda"), luego pasarlo a `ProductRepository.Search`.
+**Technical context:**
+New Intent `IntentProductLookup = "PRODUCT_LOOKUP"`. Modifies `engine.go` (regex/fuzzy bank). Entity extraction: isolate the direct object ("arroz" in "cuanto arroz queda"), then pass it to `ProductRepository.Search`.
 
 **Acceptance Criteria:**
-- [ ] Intent resuelve correctamente ante "cuánto [x] queda", "precio de la [x]", "tengo [x]", etc.
-- [ ] Si `Search` encuentra múltiples matches (e.g. 5 tipos de arroz), la respuesta lista el precio/stock de los primeros 3 y dice "...y 2 opciones más".
-- [ ] Si `Search` no encuentra nada, responde explícitamente que no se encontró el producto en inventario.
-- [ ] Cualquier usuario (`admin` y `cashier`) puede usar este Intent (modificando la capa de permisos de US-061 si es necesario).
+- [ ] The intent resolves correctly for "cuánto [x] queda", "precio de la [x]", "tengo [x]", etc.
+- [ ] If `Search` finds multiple matches (e.g. 5 kinds of rice), the answer lists the price/stock of the first 3 and says "...y 2 opciones más".
+- [ ] If `Search` finds nothing, it answers explicitly that the product was not found in inventory.
+- [ ] Any user (`admin` and `cashier`) can use this Intent (modifying the permissions layer of US-061 if needed).
 
 **DoD:**
-- [ ] Toca `assistant.go`, `engine.go`.
-- [ ] Nuevos test cases unitarios en `engine_test.go` para los fixtures del banco de palabras.
-- [ ] Build limpio.
+- [ ] Touches `assistant.go`, `engine.go`.
+- [ ] New unit test cases in `engine_test.go` for the word-bank fixtures.
+- [ ] Clean build.
 
 ---
 
-## US-068 — Asistente: Referencia temporal "la quincena"
+## US-068 — Assistant: time reference "la quincena"
 
-**Como** dueño,
-**quiero** preguntar "cuánto fiaron esta quincena",
-**para** ver mi periodo real de cobro en Colombia (del 1 al 15, o del 16 a fin de mes).
+**As** the owner,
+**I want** to ask "cuánto fiaron esta quincena",
+**so that** I can see my real collection period in Colombia (from the 1st to the 15th, or from the 16th to month end).
 
-**Esfuerzo estimado:** 0.5 días. **Impacto:** Medio. Referencia clave muy usada en el contexto del negocio local.
+**Estimated effort:** 0.5 day. **Impact:** Medium. A key reference heavily used in the local business context.
 
-**Estado verificado:**
-- `internal/assistant/period.go:21`: `temporalWords` no incluye "quincena".
-- `internal/assistant/period.go`: no hay cálculo de rangos para "esta quincena" ni "la quincena pasada".
+**Verified state:**
+- `internal/assistant/period.go:21`: `temporalWords` does not include "quincena".
+- `internal/assistant/period.go`: there is no range calculation for "esta quincena" nor "la quincena pasada".
 
-**Regla de negocio:**
+**Business rule:**
 ```text
-Quincena 1 (Q1): día 1 al día 15 del mes. Rango [1, 16)
-Quincena 2 (Q2): día 16 al último día del mes. Rango [16, 1 del sig. mes)
+Quincena 1 (Q1): day 1 to day 15 of the month. Range [1, 16)
+Quincena 2 (Q2): day 16 to the last day of the month. Range [16, 1st of next month)
 
-"Esta quincena" evalúa en qué quincena estamos hoy, y devuelve ese rango.
-"Quincena pasada" devuelve la quincena inmediatamente anterior.
+"Esta quincena" evaluates which quincena we are in today, and returns that range.
+"Quincena pasada" returns the immediately preceding quincena.
 ```
 
 **Acceptance Criteria:**
-- [ ] "quincena" agregado a `temporalWords`.
-- [ ] Resolver "esta quincena" para hoy = día 10 → rango del 1 al 15 del mes actual.
-- [ ] Resolver "esta quincena" para hoy = día 20 → rango del 16 a fin del mes actual.
-- [ ] Resolver "quincena pasada" correctamente cruzando límite de mes (e.g. hoy 4 de Abril -> quincena pasada es 16-31 de Marzo).
-- [ ] Tests en `period_test.go` validados.
+- [ ] "quincena" added to `temporalWords`.
+- [ ] Resolve "esta quincena" for today = day 10 → range from the 1st to the 15th of the current month.
+- [ ] Resolve "esta quincena" for today = day 20 → range from the 16th to the end of the current month.
+- [ ] Resolve "quincena pasada" correctly across a month boundary (e.g. today April 4 -> last quincena is March 16-31).
+- [ ] Tests in `period_test.go` validated.
 
 **DoD:**
-- [ ] Modificado `period.go`.
-- [ ] Fixtures en `period_test.go` para los 4 límites de mes.
-- [ ] Build limpio.
+- [ ] `period.go` modified.
+- [ ] Fixtures in `period_test.go` for the 4 month boundaries.
+- [ ] Clean build.
 
 ---
 
-## US-069 — Correcciones UI: 404 Expenses, Setup permissions, static params y CSS scroll
+## US-069 — UI fixes: 404 Expenses, Setup permissions, static params and CSS scroll
 
-**Como** usuario y administrador,
-**quiero** que la interfaz de la aplicación no tenga errores de ruteo y restrinja los accesos,
-**para** poder operar fluidamente y sin fallos técnicos.
+**As** a user and administrator,
+**I want** the application interface to have no routing errors and to restrict access,
+**so that** I can operate smoothly and without technical failures.
 
-**Esfuerzo estimado:** 1 día. **Impacto:** Alto (Correcciones de QA).
+**Estimated effort:** 1 day. **Impact:** High (QA fixes).
 
-**Estado verificado:**
-1. Al crear un gasto (POST `/expenses`) en `/reports`, retorna 404 en el entorno Next.js.
-2. Build fallido: `Page "/customers/[id]/page" is missing param "/customers/[id]" in "generateStaticParams()"`.
-3. Label `Ventas del período` en reportes no es descriptivo.
-4. El cajero (`cashier`) puede entrar a `GET /setup` porque el backend no exige `RequireAdmin`.
-5. En `/settings`, la configuración de la tienda no tiene scroll (le falta `overflow-y-auto` en el contenedor principal).
+**Verified state:**
+1. Creating an expense (POST `/expenses`) in `/reports` returns 404 in the Next.js environment.
+2. Failing build: `Page "/customers/[id]/page" is missing param "/customers/[id]" in "generateStaticParams()"`.
+3. The label `Ventas del período` in reports is not descriptive.
+4. The cashier (`cashier`) can enter `GET /setup` because the backend does not require `RequireAdmin`.
+5. In `/settings`, the store configuration has no scroll (the main container lacks `overflow-y-auto`).
 
 **Acceptance Criteria:**
-- [ ] La creación de gastos funciona (resolver el 404 verificando el cliente API y CORS o trailing slashes).
-- [ ] La compilación estática (`output: export`) es exitosa agregando `generateStaticParams()` con retorno `[]` en `app/customers/[id]/page.tsx`.
-- [ ] El título de ventas en el reporte es claro y descriptivo (ej: "Total vendido en el periodo").
-- [ ] Un usuario con rol `cashier` no puede acceder a `/setup`. `handler.go` protege `GET /setup` con `RequireAdmin` y el frontend lo expulsa o no le muestra la pestaña.
-- [ ] El contenedor en `/settings` tiene scroll vertical funcional (`overflow-y-auto`) para que se vean todas las opciones.
+- [ ] Expense creation works (resolve the 404 by checking the API client and CORS or trailing slashes).
+- [ ] The static build (`output: export`) succeeds by adding `generateStaticParams()` returning `[]` in `app/customers/[id]/page.tsx`.
+- [ ] The sales title in the report is clear and descriptive (e.g.: "Total vendido en el periodo").
+- [ ] A user with the `cashier` role cannot access `/setup`. `handler.go` protects `GET /setup` with `RequireAdmin` and the frontend kicks them out or does not show them the tab.
+- [ ] The container in `/settings` has functional vertical scroll (`overflow-y-auto`) so all options are visible.
 
 **DoD:**
-- [ ] `next build` finaliza correctamente sin errores de "missing param".
-- [ ] Se verifica manualmente cada corrección.
+- [ ] `next build` finishes correctly with no "missing param" errors.
+- [ ] Each fix is verified manually.
