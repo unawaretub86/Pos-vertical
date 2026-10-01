@@ -42,6 +42,7 @@ interface RegisterSummary {
   expected: number;
   movements: Movement[];
   by_payment_method: { method: string; total: number; count: number }[];
+  open_orders_count: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -348,6 +349,16 @@ function CloseModal({
         <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--text-secondary)' }}>
           Cuenta las denominaciones para calcular el monto real automáticamente.
         </p>
+
+        {summary.open_orders_count > 0 && (
+          <div style={{
+            background: 'rgba(255,165,0,0.1)', border: '1px solid var(--warning)',
+            borderRadius: 8, padding: '12px 16px', marginBottom: 20, color: 'var(--warning-dark)',
+            fontSize: 14, fontWeight: 500,
+          }}>
+            Hay {summary.open_orders_count} pedido{summary.open_orders_count === 1 ? '' : 's'} sin cobrar. Asegúrate de cerrarlo{summary.open_orders_count === 1 ? '' : 's'} antes de continuar o ciérralo{summary.open_orders_count === 1 ? '' : 's'} como pérdida si corresponde.
+          </div>
+        )}
 
         {/* Resumen esperado */}
         <div style={{

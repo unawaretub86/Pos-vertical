@@ -217,6 +217,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Patch("/orders/{id}/items/{itemId}", h.updateOrderItem)
 		r.Delete("/orders/{id}/items/{itemId}", h.voidOrderItem)
 		r.Post("/orders/{id}/cancel", h.cancelOrder)
+		r.Post("/orders/{id}/checkout", h.checkoutOrder)
 
 		// Purchases (all authenticated users can read; admin to write)
 		r.Get("/purchases", h.listPurchases)

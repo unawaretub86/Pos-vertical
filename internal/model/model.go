@@ -130,6 +130,7 @@ type Sale struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	Items         []SaleItem `json:"items,omitempty"`
 	Payments      []Payment  `json:"payments,omitempty"`
+	OrderID       *int64     `json:"order_id,omitempty"`
 }
 
 // Payment is one payment line of a sale. A sale with a single payment method

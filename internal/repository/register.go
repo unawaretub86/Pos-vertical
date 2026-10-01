@@ -28,6 +28,7 @@ type RegisterRepository interface {
 	// any authenticated cashier can see even though GET /reports/sales is
 	// admin-only.
 	SumByPaymentMethod(ctx context.Context, registerID int64) ([]PaymentMethodTotal, error)
+	CountOpenOrders(ctx context.Context) (int, error)
 }
 
 type registerRepo struct {
@@ -200,6 +201,12 @@ func (r *registerRepo) SumCashOut(ctx context.Context, registerID int64) (float6
 		`SELECT COALESCE(SUM(amount), 0) FROM register_movements WHERE register_id = ? AND type = 'cash_out'`,
 		registerID).Scan(&sum)
 	return sum, err
+}
+
+func (r *registerRepo) CountOpenOrders(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM orders WHERE status = 'open'`).Scan(&count)
+	return count, err
 }
 
 func (r *registerRepo) SumCashIn(ctx context.Context, registerID int64) (float64, error) {

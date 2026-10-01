@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	appmw "github.com/andreyo/pos/internal/middleware"
+	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
 	"github.com/andreyo/pos/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -166,4 +167,79 @@ func (h *Handler) cancelOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusOK, map[string]string{"message": "pedido cancelado"})
+}
+
+func (h *Handler) checkoutOrder(w http.ResponseWriter, r *http.Request) {
+	id, ok := idParam(r, "id")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+
+	var req struct {
+		model.Sale
+		BuyerEmail string `json:"buyer_email"`
+	}
+	if err := decode(r, &req); err != nil {
+		respondError(w, http.StatusBadRequest, "request inválido")
+		return
+	}
+
+	order, err := h.orders.Get(r.Context(), id)
+	if err != nil {
+		respondOrderError(w, err, "error obteniendo el pedido")
+		return
+	}
+	if order.Status != "open" {
+		respondError(w, http.StatusBadRequest, "el pedido no está abierto")
+		return
+	}
+
+	var saleItems []model.SaleItem
+	for _, it := range order.Items {
+		if it.Status == "void" {
+			continue
+		}
+		saleItems = append(saleItems, model.SaleItem{
+			ProductID: it.ProductID,
+			Quantity:  float64(it.Quantity),
+			UnitPrice: it.UnitPrice,
+		})
+	}
+	if len(saleItems) == 0 {
+		respondError(w, http.StatusBadRequest, "el pedido no tiene ítems válidos para cobrar")
+		return
+	}
+	req.Sale.Items = saleItems
+	req.Sale.OrderID = &id
+
+	claims := appmw.GetClaims(r)
+	if claims != nil {
+		req.Sale.UserID = claims.UserID
+	}
+
+	var subtotal float64
+	for i := range req.Sale.Items {
+		item := &req.Sale.Items[i]
+		item.Subtotal = item.UnitPrice*item.Quantity - item.Discount
+		subtotal += item.Subtotal
+	}
+	req.Sale.Subtotal = subtotal
+	req.Sale.Total = subtotal - req.Sale.Discount + req.Sale.Tax
+
+	created, err := h.sales.Create(r.Context(), &req.Sale)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.factelect != nil && req.BuyerEmail != "" {
+		go h.factelect.EmitFromSale(r.Context(), created.ID, req.BuyerEmail)
+	}
+
+	respond(w, http.StatusCreated, map[string]any{
+		"order_id": id,
+		"sale_id":  created.ID,
+		"total":    created.Total,
+	})
 }

@@ -57,6 +57,9 @@ func (s *stubRegisterRepo) SumCashIn(_ context.Context, _ int64) (float64, error
 func (s *stubRegisterRepo) SumByPaymentMethod(_ context.Context, _ int64) ([]repository.PaymentMethodTotal, error) {
 	return nil, nil
 }
+func (s *stubRegisterRepo) CountOpenOrders(_ context.Context) (int, error) {
+	return 0, nil
+}
 
 
 func TestRegisterService_Open_AlreadyOpen_ReturnsError(t *testing.T) {

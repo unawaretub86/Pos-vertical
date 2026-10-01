@@ -24,8 +24,9 @@ type RegisterSummary struct {
 	CashIn          float64                      `json:"cash_in"`
 	CashOut         float64                      `json:"cash_out"`
 	Expected        float64                      `json:"expected"`
-	Movements       []*model.RegisterMovement    `json:"movements"`
+	Movements       []*model.RegisterMovement       `json:"movements"`
 	ByPaymentMethod []repository.PaymentMethodTotal `json:"by_payment_method"`
+	OpenOrdersCount int                             `json:"open_orders_count"`
 }
 
 // RegisterService handles business logic for cash registers.
@@ -106,6 +107,7 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 	if err != nil {
 		return nil, err
 	}
+	openOrders, _ := s.repo.CountOpenOrders(ctx)
 	expected := reg.OpeningAmount + cashSales + cashIn - cashOut
 	return &RegisterSummary{
 		Register:        reg,
@@ -115,6 +117,7 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 		Expected:        expected,
 		Movements:       movements,
 		ByPaymentMethod: byMethod,
+		OpenOrdersCount: openOrders,
 	}, nil
 }
 

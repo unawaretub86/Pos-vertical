@@ -98,6 +98,9 @@ func (m *mockRegisterRepo) SumCashIn(_ context.Context, _ int64) (float64, error
 func (m *mockRegisterRepo) SumByPaymentMethod(_ context.Context, _ int64) ([]repository.PaymentMethodTotal, error) {
 	return nil, nil
 }
+func (m *mockRegisterRepo) CountOpenOrders(_ context.Context) (int, error) {
+	return 0, nil
+}
 
 // --- helpers ---
 

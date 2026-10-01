@@ -9,6 +9,8 @@ import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { formatCOP } from '@/lib/format';
 import { ITEM_STATUS_LABEL, type Order, type OrderItem } from '@/lib/orders';
+import TicketPreview, { type TicketData } from '@/components/TicketPreview';
+import SalePaymentPanel, { type CheckoutData, type PaymentMethod, type Customer } from '@/components/SalePaymentPanel';
 
 interface Product {
   id: number;
@@ -30,6 +32,10 @@ export default function OrderClient() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [ticketData, setTicketData] = useState<TicketData | null>(null);
 
   const loadOrder = useCallback(async () => {
     if (!orderId || orderId === '_') return;
@@ -99,8 +105,59 @@ export default function OrderClient() {
     }
   }
 
+  async function onCheckout(data: CheckoutData) {
+    setBusy(true);
+    try {
+      const pmMap: Record<PaymentMethod, string> = {
+        efectivo: 'cash',
+        transferencia: 'transfer',
+        tarjeta: 'card',
+        credito: 'credit',
+      };
+      
+      const payments = data.paymentLines
+          .filter(l => l.amount > 0)
+          .map(l => ({ method: pmMap[l.method] ?? l.method, amount: l.amount }));
+
+      const body: Record<string, any> = {
+        payments,
+        ...(selectedCustomer && { customer_id: selectedCustomer.id }),
+      };
+
+      if (!data.isMixedMode && data.payMethod === 'efectivo') {
+        body.cash_tendered = data.cashReceivedNum || (order?.total ?? 0);
+        body.change_amount = data.change;
+      }
+
+      const res = await api.post<{ sale_id: number }>(`/orders/${orderId}/checkout`, body);
+      
+      try {
+        const ticket = await api.get<TicketData>(`/sales/${res.sale_id}/ticket`);
+        setTicketData(ticket);
+      } catch {
+        toast('Venta completada', 'success');
+        router.push('/mesas');
+      }
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Error al cobrar', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (ticketData) {
+    return (
+      <TicketPreview
+        ticket={ticketData}
+        onClose={() => { setTicketData(null); router.push('/mesas'); }}
+        onPrint={() => window.print()}
+      />
+    );
+  }
+
   const isOpen = order?.status === 'open';
   const items = order?.items ?? [];
+  const validItemsCount = items.filter(i => i.status !== 'void').length;
 
   const catalog = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minHeight: 0, flex: 1 }}>
@@ -178,9 +235,14 @@ export default function OrderClient() {
         </span>
       </div>
       {isOpen && (
-        <button className="btn btn-sm" disabled={busy} onClick={() => { setReason(''); setCancelOpen(true); }}>
-          Cancelar pedido
-        </button>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+          <button className="btn btn-sm" disabled={busy} onClick={() => { setReason(''); setCancelOpen(true); }} style={{ flex: 1 }}>
+            Cancelar
+          </button>
+          <button className="btn btn-sm" disabled={busy || validItemsCount === 0} onClick={() => setShowCheckout(true)} style={{ flex: 2, background: 'var(--accent)', color: 'white', border: 'none' }}>
+            Cobrar
+          </button>
+        </div>
       )}
       {order && !isOpen && (
         <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Este pedido ya no está abierto.</div>
@@ -216,8 +278,28 @@ export default function OrderClient() {
           {tabBtn('order', `Pedido (${items.filter(i => i.status !== 'void').length})`)}
         </div>
         <div className="mesa-body" style={{ flex: 1, minHeight: 0, padding: '12px', display: 'flex', gap: '16px' }}>
-          <div className={tab === 'catalog' ? 'mesa-pane' : 'mesa-pane mesa-hidden'}>{catalog}</div>
-          <div className={tab === 'order' ? 'mesa-pane' : 'mesa-pane mesa-hidden'}>{orderPanel}</div>
+          {showCheckout ? (
+             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                 <div style={{ fontSize: '18px', fontWeight: 600 }}>Cobrar Pedido</div>
+                 <button className="btn btn-sm" onClick={() => setShowCheckout(false)}>Volver al pedido</button>
+               </div>
+               <SalePaymentPanel
+                 total={order?.total ?? 0}
+                 cartTotal={order?.total ?? 0}
+                 selectedCustomer={selectedCustomer}
+                 onCustomerChange={setSelectedCustomer}
+                 onCheckout={onCheckout}
+                 loading={busy}
+                 disabled={busy || validItemsCount === 0}
+               />
+             </div>
+          ) : (
+            <>
+              <div className={tab === 'catalog' ? 'mesa-pane' : 'mesa-pane mesa-hidden'}>{catalog}</div>
+              <div className={tab === 'order' ? 'mesa-pane' : 'mesa-pane mesa-hidden'}>{orderPanel}</div>
+            </>
+          )}
         </div>
         <style>{`
           .mesa-pane { display: flex; flex: 1; min-height: 0; min-width: 0; }

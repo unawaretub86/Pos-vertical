@@ -141,6 +141,21 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		}
 	}
 
+	// US-057: Atomically close the order if this sale is a checkout
+	if sale.OrderID != nil {
+		resOrder, err := tx.ExecContext(ctx, `UPDATE orders SET status = 'closed', closed_at = CURRENT_TIMESTAMP, sale_id = ? WHERE id = ? AND status = 'open'`, saleID, *sale.OrderID)
+		if err != nil {
+			return nil, fmt.Errorf("sale close order update: %w", err)
+		}
+		affected, err := resOrder.RowsAffected()
+		if err != nil {
+			return nil, fmt.Errorf("sale close order rows: %w", err)
+		}
+		if affected == 0 {
+			return nil, fmt.Errorf("el pedido no está abierto o no existe")
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("sale commit: %w", err)
 	}
