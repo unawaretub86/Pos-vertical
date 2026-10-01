@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -37,6 +37,7 @@ type Handler struct {
 	assistant    *service.AssistantService
 	tables       *service.DiningTableService
 	orders       *service.OrderService
+	kds          *service.KDSService
 	localIP      func() string // injectable for tests; netutil.LocalIPv4 in production
 }
 
@@ -61,6 +62,7 @@ func New(db *database.DB) *Handler {
 	assistantQueryRepo := repository.NewAssistantQueryRepository(db.DB)
 	tableRepo := repository.NewDiningTableRepository(db.DB)
 	orderRepo := repository.NewOrderRepository(db.DB)
+	kdsRepo := repository.NewKDSRepository(db.DB)
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
@@ -96,6 +98,7 @@ func New(db *database.DB) *Handler {
 		assistant:    service.NewAssistantService(metricsRepo, reportRepo, expenseRepo, assistantQueryRepo),
 		tables:       service.NewDiningTableService(tableRepo),
 		orders:       service.NewOrderService(orderRepo),
+		kds:          service.NewKDSService(kdsRepo),
 		localIP:      netutil.LocalIPv4,
 	}
 }
@@ -219,6 +222,9 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/orders/{id}/cancel", h.cancelOrder)
 		r.Post("/orders/{id}/checkout", h.checkoutOrder)
 
+		// KDS
+		r.Get("/kds/orders", h.kdsGetActiveOrders)
+
 		// Purchases (all authenticated users can read; admin to write)
 		r.Get("/purchases", h.listPurchases)
 		r.Group(func(r chi.Router) {
@@ -291,3 +297,6 @@ func respondError(w http.ResponseWriter, status int, message string) {
 func decode(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
+
+
+
