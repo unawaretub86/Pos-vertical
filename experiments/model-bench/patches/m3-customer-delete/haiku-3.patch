@@ -1,0 +1,69 @@
+diff --git a/internal/database/migrate.go b/internal/database/migrate.go
+index ae972b7..b22c97a 100644
+--- a/internal/database/migrate.go
++++ b/internal/database/migrate.go
+@@ -39,6 +39,7 @@ var dbMigrations = []migration{
+ 	{version: 16, up: migration16},
+ 	{version: 17, up: migration17},
+ 	{version: 18, up: migration18},
++	{version: 19, up: migration19},
+ }
+ 
+ // migrate creates the schema_migrations table, detects pending migrations,
+@@ -547,3 +548,10 @@ CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+ `
++
++// migration19 adds logical deletion to customers (US-079). Customers with
++// history are deactivated (active = 0), never physically deleted, so sales and
++// payments keep their customer reference.
++const migration19 = `
++ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
++`
+diff --git a/internal/repository/customer.go b/internal/repository/customer.go
+index 5f3ab66..a6dd33e 100644
+--- a/internal/repository/customer.go
++++ b/internal/repository/customer.go
+@@ -28,8 +28,9 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
+ 			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
+ 
+ 	args := []any{}
++	query += ` WHERE c.active = 1`
+ 	if strings.TrimSpace(search) != "" {
+-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
++		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
+ 		like := "%" + search + "%"
+ 		args = append(args, like, like)
+ 	}
+@@ -99,8 +100,10 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
+ 	return r.GetByID(ctx, c.ID)
+ }
+ 
++// Delete deactivates a customer (logical delete, US-079). The row and its
++// sales and payments stay, so history keeps the customer name.
+ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
++	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
+ 	if err != nil {
+ 		return fmt.Errorf("customer delete: %w", err)
+ 	}
+diff --git a/project-docs/spec/domain/fiado.md b/project-docs/spec/domain/fiado.md
+index 0076f9b..9da8275 100644
+--- a/project-docs/spec/domain/fiado.md
++++ b/project-docs/spec/domain/fiado.md
+@@ -40,6 +40,14 @@ Consequences that must be respected:
+ - Aging receivables order: `days_overdue` descending first and, on a tie of days, the same tie-break as `Debtors` — balance descending and, if that also ties, name ascending (`metrics.go:336`).
+ - `total_portfolio` of `GET /customers` (`CustomerRepository.TotalPortfolioBalance`, `internal/repository/customer.go:145`) uses the same per-customer aggregated formula (`customerBalanceExpr`/`customerBalanceFrom`) and excludes balances `≤ 0`, summing only the positive ones — not a global subtraction of all credit sales minus all payments (that was the R-44 bug, fixed in US-064).
+ 
++## Rule: customer deletion
++
++Deleting a customer is a **logical delete**: `customers.active = 0` (`CustomerRepository.Delete`, `internal/repository/customer.go`). The row is never physically deleted, because sales and payments reference it.
++
++- `DELETE /customers/{id}` returns 409 if the balance is `> 0`, 404 if the id is unknown or the customer is already inactive, 200 otherwise.
++- Inactive customers are hidden from `GET /customers` (list and search). `GET /customers/{id}` and the sales, payments and dashboard views still return them with their name.
++- Deactivation does not change balances, `total_portfolio`, receivables or aging: the balance formula does not filter on `active`.
++
+ ## Rule: debt age
+ 
+ ```

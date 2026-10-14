@@ -1,0 +1,121 @@
+diff --git a/internal/database/migrate.go b/internal/database/migrate.go
+index ae972b7..ca5d35c 100644
+--- a/internal/database/migrate.go
++++ b/internal/database/migrate.go
+@@ -39,6 +39,7 @@ var dbMigrations = []migration{
+ 	{version: 16, up: migration16},
+ 	{version: 17, up: migration17},
+ 	{version: 18, up: migration18},
++	{version: 19, up: migration19},
+ }
+ 
+ // migrate creates the schema_migrations table, detects pending migrations,
+@@ -547,3 +548,9 @@ CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+ `
++
++// migration19 adds the logical-delete flag to customers (US-079). Customers
++// with history cannot be physically deleted; existing rows stay active.
++const migration19 = `
++ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
++`
+diff --git a/internal/database/migrate_test.go b/internal/database/migrate_test.go
+index 532de33..f39d131 100644
+--- a/internal/database/migrate_test.go
++++ b/internal/database/migrate_test.go
+@@ -17,8 +17,8 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+ 	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+ 		t.Fatalf("max version: %v", err)
+ 	}
+-	if v != 18 {
+-		t.Errorf("MAX(version) = %d, want 18", v)
++	if v != 19 {
++		t.Errorf("MAX(version) = %d, want 19", v)
+ 	}
+ 
+ 	for _, name := range []string{
+diff --git a/internal/handler/dashboard.go b/internal/handler/dashboard.go
+index 81710f3..827d784 100644
+--- a/internal/handler/dashboard.go
++++ b/internal/handler/dashboard.go
+@@ -169,13 +169,13 @@ func (h *Handler) getDashboard(w http.ResponseWriter, r *http.Request) {
+ 
+ 	// ── Portfolio snapshot ───────────────────────────────────────────────────
+ 	var portfolio portfolioSnap
+-	customers, err := h.customers.List(ctx, "")
++	// Debtors covers every customer with balance > 0, including logically
++	// deleted ones, so the portfolio total does not depend on the active flag.
++	debtors, err := h.metrics.Debtors(ctx, 0)
+ 	if err == nil {
+-		for _, c := range customers {
+-			if c.Balance > 0 {
+-				portfolio.Total += c.Balance
+-				portfolio.Count++
+-			}
++		for _, d := range debtors {
++			portfolio.Total += d.Balance
++			portfolio.Count++
+ 		}
+ 	}
+ 
+diff --git a/internal/repository/customer.go b/internal/repository/customer.go
+index 5f3ab66..9e447d3 100644
+--- a/internal/repository/customer.go
++++ b/internal/repository/customer.go
+@@ -18,18 +18,19 @@ func NewCustomerRepository(db *sql.DB) CustomerRepository {
+ 	return &customerRepo{db: db}
+ }
+ 
+-// List returns all customers with their on-the-fly credit balance.
+-// Optional search filters by name or phone (LIKE).
++// List returns all active customers with their on-the-fly credit balance.
++// Optional search filters by name or phone (LIKE). Inactive (logically
++// deleted) customers are hidden here but still resolve through GetByID.
+ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+ 	query := `
+ 		SELECT
+ 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
+ 			` + customerBalanceExpr + ` AS balance,
+-			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
++			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom + ` WHERE c.active = 1`
+ 
+ 	args := []any{}
+ 	if strings.TrimSpace(search) != "" {
+-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
++		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
+ 		like := "%" + search + "%"
+ 		args = append(args, like, like)
+ 	}
+@@ -99,8 +100,10 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
+ 	return r.GetByID(ctx, c.ID)
+ }
+ 
++// Delete is a logical delete (active = 0). The row and its sales and payments
++// are kept so history keeps showing the customer name (CLAUDE.md conventions).
+ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
++	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
+ 	if err != nil {
+ 		return fmt.Errorf("customer delete: %w", err)
+ 	}
+diff --git a/project-docs/spec/domain/fiado.md b/project-docs/spec/domain/fiado.md
+index 0076f9b..188a1bf 100644
+--- a/project-docs/spec/domain/fiado.md
++++ b/project-docs/spec/domain/fiado.md
+@@ -62,6 +62,15 @@ If it is ever decided that it should block, that is a product change Andrey must
+ 
+ An *abono* is a row in `customer_payments`. It is not tied to a specific sale — it is applied to the customer's total balance, not to an invoice. That is how the notebook the system replaces works, and changing it to per-invoice allocation would be a redesign, not an adjustment.
+ 
++## Rule: customer deletion (logical)
++
++Deleting a customer sets `customers.active = 0` (US-079, migration 19). The row is never physically deleted, because its sales and payments keep referencing it.
++
++- A customer with balance `> 0` cannot be deleted (HTTP `409`). An unknown id, or one already inactive, is `404`.
++- An inactive customer is hidden from `GET /customers` and its search (`CustomerRepository.List`). It still resolves through `GetByID`, so sales, payments and reports keep showing the name.
++- Receivables, `total_portfolio` and the dashboard portfolio include inactive customers with balance `> 0`, so business totals do not change when a customer is deleted.
++- Source: `internal/repository/customer.go` (`Delete`, `List`), `internal/service/customer.go:Delete`, `internal/handler/dashboard.go` (portfolio snapshot).
++
+ ---
+ 
+ ## What does NOT exist yet

@@ -1,0 +1,81 @@
+diff --git a/internal/database/database.go b/internal/database/database.go
+index b95e6b4..3b2cf1f 100644
+--- a/internal/database/database.go
++++ b/internal/database/database.go
+@@ -11,7 +11,7 @@ type DB struct {
+ }
+ 
+ func New(path string) (*DB, error) {
+-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_time_format=sqlite")
++	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)&_time_format=sqlite")
+ 	if err != nil {
+ 		return nil, err
+ 	}
+diff --git a/internal/database/migrate_test.go b/internal/database/migrate_test.go
+index f144d17..b4a2a33 100644
+--- a/internal/database/migrate_test.go
++++ b/internal/database/migrate_test.go
+@@ -35,6 +35,11 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+ 		}
+ 	}
+ 
++	// order_items.product_id is a foreign key: seed its parent (user 1 is the migration-seeded admin).
++	if _, err := db.Exec(`INSERT INTO products(id, name, sale_price) VALUES(1, 'Bandeja', 1000)`); err != nil {
++		t.Fatalf("seed product: %v", err)
++	}
++
+ 	if _, err := db.Exec(`INSERT INTO orders(type, user_id) VALUES('bogus', 1)`); err == nil {
+ 		t.Error("orders.type 'bogus' should violate CHECK")
+ 	}
+diff --git a/internal/handler/assistant_test.go b/internal/handler/assistant_test.go
+index 2cf22ca..0e7b571 100644
+--- a/internal/handler/assistant_test.go
++++ b/internal/handler/assistant_test.go
+@@ -194,6 +194,16 @@ func TestAskAssistant_T21_UserIDAlwaysFromJWTNeverFromBody(t *testing.T) {
+ 	db := setupTestDB(t)
+ 	h := New(db)
+ 
++	// assistant_queries.user_id references users(id): seed the two users the tokens carry.
++	for _, u := range []string{
++		`INSERT INTO users (id, username, password_hash, role) VALUES (3, 'u3', 'h', 'admin')`,
++		`INSERT INTO users (id, username, password_hash, role) VALUES (7, 'u7', 'h', 'admin')`,
++	} {
++		if _, err := db.DB.ExecContext(context.Background(), u); err != nil {
++			t.Fatalf("seed user: %v", err)
++		}
++	}
++
+ 	token3 := tokenFor(t, 3, "admin")
+ 	token7 := tokenFor(t, 7, "admin")
+ 
+diff --git a/internal/repository/metrics_test.go b/internal/repository/metrics_test.go
+index cd770b0..4f80893 100644
+--- a/internal/repository/metrics_test.go
++++ b/internal/repository/metrics_test.go
+@@ -356,6 +356,9 @@ func TestMetricsRepo_T11_LowStock(t *testing.T) {
+ 	db := openMetricsDB(t)
+ 	ctx := context.Background()
+ 
++	// sales.customer_id is a foreign key: seed its parent (user 1 is the migration-seeded admin).
++	metricsExec(t, db, `INSERT INTO customers (id, name) VALUES (1, 'Cliente')`)
++
+ 	// Products
+ 	// P1: stock 5, min 10. Avg daily = 2.5. Days remaining = 2. (Critical)
+ 	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (1, 'P1', 'P1', 1000, 500, 'unit', 1, 5, 10)`)
+diff --git a/internal/service/purchase_test.go b/internal/service/purchase_test.go
+index 0d74fcc..c77168c 100644
+--- a/internal/service/purchase_test.go
++++ b/internal/service/purchase_test.go
+@@ -17,6 +17,12 @@ func newPurchaseTestEnv(t *testing.T) *PurchaseService {
+ 	}
+ 	t.Cleanup(func() { db.Close() })
+ 
++	// purchases.user_id is a foreign key: seed the cashier the success test creates purchases with
++	// (user 1 is the migration-seeded admin).
++	if _, err := db.DB.ExecContext(context.Background(),
++		`INSERT INTO users (id, username, password_hash, role) VALUES (7, 'cashier', 'h', 'cashier')`); err != nil {
++		t.Fatalf("seed user: %v", err)
++	}
+ 	if _, err := db.DB.ExecContext(context.Background(),
+ 		`INSERT INTO suppliers (id, name) VALUES (1, 'Lácteos El Establo')`); err != nil {
+ 		t.Fatalf("seed supplier: %v", err)

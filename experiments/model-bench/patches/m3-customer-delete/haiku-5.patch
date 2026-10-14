@@ -1,0 +1,95 @@
+diff --git a/internal/database/migrate.go b/internal/database/migrate.go
+index ae972b7..6380a68 100644
+--- a/internal/database/migrate.go
++++ b/internal/database/migrate.go
+@@ -39,6 +39,7 @@ var dbMigrations = []migration{
+ 	{version: 16, up: migration16},
+ 	{version: 17, up: migration17},
+ 	{version: 18, up: migration18},
++	{version: 19, up: migration19},
+ }
+ 
+ // migrate creates the schema_migrations table, detects pending migrations,
+@@ -547,3 +548,9 @@ CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+ `
++
++// migration19 adds the logical-delete flag to customers (US-079). Customers with
++// history are deactivated (active = 0) instead of physically deleted.
++const migration19 = `
++ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
++`
+diff --git a/internal/database/migrate_test.go b/internal/database/migrate_test.go
+index 532de33..c73c5c1 100644
+--- a/internal/database/migrate_test.go
++++ b/internal/database/migrate_test.go
+@@ -17,8 +17,8 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+ 	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+ 		t.Fatalf("max version: %v", err)
+ 	}
+-	if v != 18 {
+-		t.Errorf("MAX(version) = %d, want 18", v)
++	if v < 18 {
++		t.Errorf("MAX(version) = %d, want >= 18", v)
+ 	}
+ 
+ 	for _, name := range []string{
+diff --git a/internal/repository/customer.go b/internal/repository/customer.go
+index 5f3ab66..59573d1 100644
+--- a/internal/repository/customer.go
++++ b/internal/repository/customer.go
+@@ -18,18 +18,19 @@ func NewCustomerRepository(db *sql.DB) CustomerRepository {
+ 	return &customerRepo{db: db}
+ }
+ 
+-// List returns all customers with their on-the-fly credit balance.
++// List returns the active customers with their on-the-fly credit balance.
++// Deactivated (logically deleted) customers are excluded.
+ // Optional search filters by name or phone (LIKE).
+ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+ 	query := `
+ 		SELECT
+ 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
+ 			` + customerBalanceExpr + ` AS balance,
+-			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
++			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom + ` WHERE c.active = 1`
+ 
+ 	args := []any{}
+ 	if strings.TrimSpace(search) != "" {
+-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
++		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
+ 		like := "%" + search + "%"
+ 		args = append(args, like, like)
+ 	}
+@@ -99,8 +100,11 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
+ 	return r.GetByID(ctx, c.ID)
+ }
+ 
++// Delete is a logical delete (active = 0): the row and its sales and payments
++// stay, so history keeps showing the customer name. An unknown or already
++// inactive id returns ErrNotFound.
+ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
++	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
+ 	if err != nil {
+ 		return fmt.Errorf("customer delete: %w", err)
+ 	}
+diff --git a/project-docs/spec/domain/fiado.md b/project-docs/spec/domain/fiado.md
+index 0076f9b..694bb5a 100644
+--- a/project-docs/spec/domain/fiado.md
++++ b/project-docs/spec/domain/fiado.md
+@@ -62,6 +62,13 @@ If it is ever decided that it should block, that is a product change Andrey must
+ 
+ An *abono* is a row in `customer_payments`. It is not tied to a specific sale — it is applied to the customer's total balance, not to an invoice. That is how the notebook the system replaces works, and changing it to per-invoice allocation would be a redesign, not an adjustment.
+ 
++## Rule: deleting a customer
++
++- Deleting a customer is a **logical delete**: `customers.active = 0` (migration 19, `internal/repository/customer.go` `Delete`). The row is never physically removed, so sales and payments keep their `customer_id`.
++- A deactivated customer is hidden from `GET /customers` and its search. Their history (sales, payments, dashboard recent sales) still shows the name: `GetByID` and the sales joins do not filter on `active`.
++- A customer with balance `> 0` cannot be deleted: HTTP `409`. An unknown id, or an already deactivated one, is HTTP `404`.
++- Deactivation does not change balances: `total_portfolio`, `Debtors` and `AgingReceivables` keep the same formula and do not filter on `active`.
++
+ ---
+ 
+ ## What does NOT exist yet

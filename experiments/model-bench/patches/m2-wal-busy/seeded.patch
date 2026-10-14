@@ -1,0 +1,14 @@
+diff --git a/internal/database/database.go b/internal/database/database.go
+index 3b2cf1f..0f3ec41 100644
+--- a/internal/database/database.go
++++ b/internal/database/database.go
+@@ -18,6 +18,9 @@ func New(path string) (*DB, error) {
+ 	if err := db.Ping(); err != nil {
+ 		return nil, err
+ 	}
++	if _, err := db.Exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON"); err != nil {
++		return nil, err
++	}
+ 	d := &DB{DB: db, path: path}
+ 	if err := d.migrate(); err != nil {
+ 		return nil, err

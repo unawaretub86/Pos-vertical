@@ -463,3 +463,99 @@ Real cost of setting up the environment: the first pass was empty without knowin
 ### What to measure in run 10
 - If the test-author runs its tests against the real migrations, how many test rounds are avoided.
 - Cost of the separate smoke when the port is taken.
+
+## Experiment M-1 — model comparison on US-078 (real FK enforcement)
+
+Not a `/us` run. Same task, same base commit (`bench/us078/base`, 6f3ff47), same prompt, one git worktree per arm (`bench/us078/<arm>`), rollback tag `pipeline-v1`. Agent: `general-purpose` (not `implementer`, which forbids editing tests). Grader: 6 hidden tests plus per-test failure listing, no-skip and no-removed-assertion checks.
+
+| Arm | Hidden tests | Own failures | Skips / removed asserts | Diff | Tokens | Tools | Duration |
+|---|---|---|---|---|---|---|---|
+| opus-1 | 6/6 | 0 | 0 / 0 | +13 −1 | 65,455 | 18 | 120 s |
+| sonnet-1 | 6/6 | 0 | 0 / 0 | +16 −1 | 65,426 | 13 | 109 s |
+| haiku-1 | 6/6 | 0 | 0 / 0 | +15 −1 | 90,806 | 27 | 161 s |
+| haiku-2 | 6/6 | 0 | 0 / 0 | +17 −1 | 93,812 | 32 | 200 s |
+| haiku-3 | 6/6 | 0 | 0 / 0 | +17 −1 | 95,896 | 28 | 250 s |
+| haiku-4 | 6/6 | 0 | 0 / 0 | +18 −1 | 82,583 | 19 | 125 s |
+| haiku-5 | 6/6 | 0 | 0 / 0 | +25 −1 | 88,595 | 29 | 194 s |
+
+**Result.** All 7 arms made the same change (DSN `_foreign_keys=on` → `_pragma=foreign_keys(1)`, plus the same 4 fixture seeds). The task did not discriminate between models. Haiku matched Opus/Sonnet on quality but used more tokens and tool calls. Best-of-N never mattered because every arm passed.
+
+**Cost.** Only a combined token total per agent is available (no input/output split), so cost is a bound at list prices: Opus $0.26–$1.31, Sonnet $0.13–$0.65, one Haiku $0.01–$0.05.
+
+**Gemini (Antigravity `agy`, read-only plan mode, full context inline).** Review of the haiku-5 diff: CLEAN, agreeing with the grader. Earlier test: 2 of 5 findings were false positives because the diff was truncated. Treated as a suspect generator, never as the judge.
+
+**Side findings (verified).** The DSN options `_journal_mode=WAL` and `_busy_timeout=5000` are mattn syntax, ignored by `modernc.org/sqlite`: a fresh DB reports `journal_mode=delete busy_timeout=0` (probable cause of the pre-existing flaky `TestOrder_T3_ConcurrentOpenSingleWinner`). Physical `DELETE` remains in `internal/repository/customer.go:104`, `supplier.go:89`, `category.go:118`.
+
+**Caveats.** n=1 for Opus and Sonnet; `effort` not equalized (defaults differ per model); aliases `haiku`/`sonnet`/`opus` assumed to be the 5.5 family, unverified; agent changes are uncommitted in the worktrees.
+
+## Experiment M-2 — model comparison on US-078b (WAL + busy_timeout) and Gemini tests
+
+Not a `/us` run. Base `bench/us078/r2-base` (a108316 = M-1 base + opus-1's FK fix + visible test `pragmas_test.go`), one worktree per arm (`bench/r2/<arm>`). Prompt identical for all arms. Agent `general-purpose`, model set per call. Grader: 8 hidden pragma tests + backup-contains-data test + the 6 M-1 FK tests, full suite, `TestOrder_T3_ConcurrentOpenSingleWinner` x30, no-skip / no-removed-test-line checks. On the base, T3 failed 1 of 30 runs and 5 of the 8 pragma tests were red.
+
+| Arm | Hidden + visible (17) | T3 x30 fails | Diff | Tokens | Tools | Duration |
+|---|---|---|---|---|---|---|
+| opus-1 | 17/17 | 0 | +4 −1 | 56,649 | 11 | 102 s |
+| opus-2 | 17/17 | 0 | +3 −1 | 55,573 | 11 | 94 s |
+| sonnet-1 | 17/17 | 0 | +2 −1 | 52,555 | 6 | 63 s |
+| sonnet-2 | 17/17 | 0 | +1 −1 | 51,337 | 5 | 63 s |
+| haiku-1 | 17/17 | 0 | +4 −1 | 65,718 | 18 | 140 s |
+| haiku-2 | 17/17 | 0 | +3 −1 | 63,140 | 13 | 104 s |
+| haiku-3 | 17/17 | 0 | +3 −1 | 61,833 | 13 | 105 s |
+| haiku-4 | 17/17 | 0 | +3 −1 | 63,878 | 13 | 105 s |
+| haiku-5 | 17/17 | 0 | +3 −1 | 62,103 | 13 | 109 s |
+
+**Result.** All 9 arms changed only `internal/database/database.go`, to the same DSN (`_pragma=busy_timeout(5000)`, `journal_mode(WAL)`, `foreign_keys(1)`, `_time_format=sqlite`; haiku-2 orders journal_mode first, harmless because the driver sorts busy_timeout first, `sqlite.go:141-150`). The only failing test in the suite is the known `TestDashboardToday_T20_Golden`. The task again did not discriminate between models. Each model read the driver source (`applyQueryParams`, `sqlite.go:136`) instead of guessing. Haiku used 18-25% more tokens and 2-3x more tool calls than Sonnet.
+
+**Cost bounds** (combined tokens only; list prices): Opus $0.22-$1.13, Sonnet $0.10-$0.53, Haiku $0.01-$0.03 per arm.
+
+**Gemini (Antigravity `agy`, plan mode, read-only; allowed reads: repo, scratchpad and, added for M-2, `go/pkg/mod/modernc.org`).** Four tests on the same task:
+| Test | Gemini | Verified against |
+|---|---|---|
+| Code: rewrite `New` | Correct, identical to the Claude arms; stated "Confidence: 100"; output ended with garbled trailing text | grader (same DSN as opus-1) |
+| Research: DSN keys of modernc v1.46.1 | Essentials correct (`_pragma` only, mattn keys ignored, per-connection scope). Did not read the source although allowed; marked the function name UNSURE (real: `applyQueryParams`, `sqlite.go:136`); doubted that v1.46.1 exists (it is in `go.mod:9`); omitted that busy_timeout runs first | driver source |
+| Review of a diff with a seeded bug (pragmas set by one `db.Exec`, so only one pooled connection gets `busy_timeout`/`foreign_keys`; hidden tests `BusyTimeoutOnEveryConnection` and `ConcurrentWritersNoBusy` catch it) | **CLEAN: missed the bug.** Its reasoning assumed the ignored `_journal_mode`/`_busy_timeout` keys work, contradicting its own research answer | hidden tests |
+| Review of the correct diff (control) | CLEAN (correct) | grader |
+
+Same seeded-bug prompt to Claude, no tools: Haiku found the bug (flagged `_busy_timeout`/`_journal_mode` as unverified); Sonnet found it, named the root cause (mattn keys ignored) and the exact fix, and added the `db.Close()` leak on error. n=1 per reviewer.
+
+**Side findings (agent reports; the reset-password one verified by `grep`).** `New` does not close `db` when `Ping` or `migrate` fails (`database.go`). `cmd/reset-password/main.go:24` opens SQLite with no pragmas (reported by haiku-1; verified). `New(":memory:")` gives each pooled connection its own database (pre-existing). No test covers `backup.go`; the grader's backup test passes on all arms.
+
+**Caveats.** n=2 for Opus and Sonnet, n=5 for Haiku; `effort` not equalized; aliases assumed to be the 5.5 family; Gemini's code test had no write or exec rights by design (patch applied by the grader); the agent changes are uncommitted in the worktrees.
+
+## Experiment M-3 — model comparison on customer logical delete (design task)
+
+Not a `/us` run, and not numbered US-079: that number is already taken by "Fix 42 Lint Errors (R-35)" (`SPRINT-18-Estabilizacion-Produccion.md:28`, `:168`), which an agent noticed. Base `bench/r3/base` (34ea6f6 = M-2 base + sonnet-2's WAL/FK DSN fix + visible test `customer_delete_test.go`, red with `FOREIGN KEY constraint failed`), one worktree per arm (`bench/r3/<arm>`), tag `bench-r3-base`. Prompt identical for all arms and deliberately silent on several points (double delete, customer without history, selling to an inactive customer, spec updates), which each agent had to decide and report. Grader: 9 hidden handler tests (6 red on the base), visible test, full suite, test-line diff, spec diff.
+
+| Arm | Hidden (9) | Visible | Suite besides T20 | Diff | Existing-test edit | Spec | Tokens | Tools | Duration |
+|---|---|---|---|---|---|---|---|---|---|
+| opus-1 | 9/9 | pass | green | +24 −5 | `== 18` → `== 19` | fiado.md | 78,579 | 21 | 170 s |
+| opus-2 | 9/9 | pass | green | +118 −9 | `MAX == 18` → "row for version 18 exists once" | fiado.md | 86,476 | 25 | 253 s |
+| sonnet-1 | 9/9 | pass | green | +14 −5 | `== 19` | fiado.md | 64,591 | 10 | 69 s |
+| sonnet-2 | 9/9 | pass | green | +13 −5 | `== 19` | none | 62,676 | 8 | 65 s |
+| haiku-1 | 9/9 | pass | green | +32 −13 | `== 19` | fiado.md | 88,205 | 22 | 152 s |
+| haiku-2 | 9/9 | pass | green | +18 −6 | `== 19` | fiado.md | 97,127 | 25 | 182 s |
+| haiku-3 | 9/9 | pass | **`TestMigration18_T1` fails** | +21 −2 | none (left failing, asked for permission) | fiado.md | 88,120 | 16 | 145 s |
+| haiku-4 | 9/9 | pass | green | +24 −7 | `== 19` | fiado.md | 84,855 | 21 | 191 s |
+| haiku-5 | 9/9 | pass | green | +24 −6 | `!= 18` → `< 18` (weakened: accepts anything ≥ 18) | fiado.md | 83,558 | 25 | 155 s |
+
+**Result.** All 9 arms chose the same core design: migration 19 `ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1`, `Delete` = `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, `List` and its search filtered by `c.active = 1`, `GetByID`/history/reports unfiltered, second delete = 404. The hidden tests did not separate them. The differences were in judgement:
+- **Test edit.** The existing `TestMigration18_T1` pins the latest migration to 18 and breaks with any new migration. 6 arms moved it to 19; opus-2 re-expressed it (still checks that migration 18 ran, no longer pins the head); haiku-5 weakened it to `< 18` (it would no longer detect a missing new migration); haiku-3 left the suite red and asked for permission instead of using the exception the prompt gave.
+- **Scope.** opus-2 also changed `handler/customer.go` and `service/customer.go` (typed `ErrCustomerHasBalance`; any other error now returns a generic 500 instead of leaking raw SQL text as 409) and added a handler test: +118 lines, the only arm that fixed the raw-error leak. haiku-1 changed `dashboard.go` so the dashboard portfolio sums `Debtors` instead of `List`, removing a divergence the Sonnets flagged (verified: base `dashboard.go:172` sums `customers.List`).
+- **Spec (Rule 2).** 8 arms added a deletion rule to `fiado.md`; sonnet-2 added nothing, saying the spec did not cover it.
+- **Verification.** opus-1, opus-2 and haiku-2 wrote throwaway HTTP tests (409 with balance, 404, totals stable); opus-1 got the search param wrong (`search` vs `q`), haiku-2 noticed the same symptom.
+
+**Gap nobody closed (verified).** `internal/service/sale.go:131-144` only requires a customer id for credit; an inactive customer can still receive credit sales or payments, and the customer-list-based dashboard figure then diverges from `total_portfolio`. All arms flagged it; none changed it (product decision).
+
+**Stale spec (verified).** `spec/domain/restaurante.md:85` says "The declared foreign keys are not enforced at runtime (roadmap R-56)"; with the DSN fix they are.
+
+**Caveats.** `effort` not equalized; one design task; the hidden tests encode my own reading of the open points (double delete accepts 200 or 404); agent changes are uncommitted in the worktrees.
+
+**Gemini in M-3 (Antigravity `agy`, plan mode, read-only, everything inline).**
+| Use | Result |
+|---|---|
+| Implementer (`gemini-1`: files inline, asked for a unified diff, applied with `git apply`, graded like the other arms) | Applied cleanly. Hidden 9/9, visible pass, suite green, +9 −5, same design as the 9 Claude arms (migration 19, `UPDATE … AND active = 1`, filtered `List`, test moved to `== 19`). Smallest diff of all; no spec update (like sonnet-2). Decisions on open points reported correctly. |
+| Reviewer of the haiku-5 diff (test weakened to `v < 18`) | **Found it**, quoting the violated requirement ("never weaken any other test"). Only real defect in that diff. |
+| Reviewer of the haiku-1 diff | No result: the call asked to read a file and headless mode auto-denied it (reproduced on retry). |
+| Reviewer of the opus-2 diff | No result: no output within 280 s (also empty in the first run). |
+
+Together with M-2 (code correct; research mostly correct but did not read the source; seeded bug missed, control diff CLEAN), Gemini is useful as an implementer for a well-specified change and caught a weakened test here, but it has produced one clear review miss, two unusable runs, and wrong reasoning in M-2. n is small.

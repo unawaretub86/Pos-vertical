@@ -1,0 +1,15 @@
+diff --git a/internal/database/database.go b/internal/database/database.go
+index 3b2cf1f..0805e36 100644
+--- a/internal/database/database.go
++++ b/internal/database/database.go
+@@ -11,7 +11,9 @@ type DB struct {
+ }
+ 
+ func New(path string) (*DB, error) {
+-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)&_time_format=sqlite")
++	// modernc.org/sqlite ignores _journal_mode and _busy_timeout; only _pragma
++	// is applied, and it runs on every pooled connection when it is opened.
++	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_time_format=sqlite")
+ 	if err != nil {
+ 		return nil, err
+ 	}

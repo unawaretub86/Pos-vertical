@@ -1,0 +1,74 @@
+diff --git a/internal/database/database.go b/internal/database/database.go
+index b95e6b4..3b2cf1f 100644
+--- a/internal/database/database.go
++++ b/internal/database/database.go
+@@ -11,7 +11,7 @@ type DB struct {
+ }
+ 
+ func New(path string) (*DB, error) {
+-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_time_format=sqlite")
++	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)&_time_format=sqlite")
+ 	if err != nil {
+ 		return nil, err
+ 	}
+diff --git a/internal/database/migrate_test.go b/internal/database/migrate_test.go
+index f144d17..a3c4219 100644
+--- a/internal/database/migrate_test.go
++++ b/internal/database/migrate_test.go
+@@ -41,6 +41,9 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+ 	if _, err := db.Exec(`INSERT INTO orders(id, type, user_id) VALUES(1, 'table', 1)`); err != nil {
+ 		t.Fatalf("valid order insert: %v", err)
+ 	}
++	if _, err := db.Exec(`INSERT INTO products(id, name, sale_price, cost, stock) VALUES(1, 'Arroz', 3000, 2500, 5)`); err != nil {
++		t.Fatalf("insert product: %v", err)
++	}
+ 	if _, err := db.Exec(`INSERT INTO order_items(order_id, product_id, quantity, unit_price, status) VALUES(1, 1, 1, 1000, 'cooking')`); err == nil {
+ 		t.Error("order_items.status 'cooking' should violate CHECK")
+ 	}
+diff --git a/internal/handler/assistant_test.go b/internal/handler/assistant_test.go
+index 2cf22ca..c7d5f57 100644
+--- a/internal/handler/assistant_test.go
++++ b/internal/handler/assistant_test.go
+@@ -194,6 +194,15 @@ func TestAskAssistant_T21_UserIDAlwaysFromJWTNeverFromBody(t *testing.T) {
+ 	db := setupTestDB(t)
+ 	h := New(db)
+ 
++	for _, u := range []struct {
++		id   int
++		name string
++	}{{3, "user3"}, {7, "user7"}} {
++		if _, err := db.DB.ExecContext(context.Background(),
++			`INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, 'h', 'admin')`, u.id, u.name); err != nil {
++			t.Fatalf("seed user %d: %v", u.id, err)
++		}
++	}
+ 	token3 := tokenFor(t, 3, "admin")
+ 	token7 := tokenFor(t, 7, "admin")
+ 
+diff --git a/internal/repository/metrics_test.go b/internal/repository/metrics_test.go
+index cd770b0..aa1901d 100644
+--- a/internal/repository/metrics_test.go
++++ b/internal/repository/metrics_test.go
+@@ -371,6 +371,7 @@ func TestMetricsRepo_T11_LowStock(t *testing.T) {
+ 	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (6, 'P6', 'P6', 1000, 500, 'unit', 1, 5, 10)`)
+ 
+ 	// Sales
++	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Ana', '', '')`)
+ 	// P1 sold 17.5 in total over 7 days -> 17.5 / 7 = 2.5/day.
+ 	metricsExec(t, db, `INSERT INTO sales (id, customer_id, user_id, payment_method, status, subtotal, total, created_at) VALUES (1, 1, 1, 'cash', 'completed', 0, 0, datetime('now', 'localtime', '-1 day'))`)
+ 	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 17.5, 1000, 17500)`)
+diff --git a/internal/service/purchase_test.go b/internal/service/purchase_test.go
+index 0d74fcc..1712581 100644
+--- a/internal/service/purchase_test.go
++++ b/internal/service/purchase_test.go
+@@ -25,6 +25,10 @@ func newPurchaseTestEnv(t *testing.T) *PurchaseService {
+ 		`INSERT INTO products (id, name, sale_price, cost, stock) VALUES (1, 'Leche', 3000, 7500, 5)`); err != nil {
+ 		t.Fatalf("seed product: %v", err)
+ 	}
++	if _, err := db.DB.ExecContext(context.Background(),
++		`INSERT INTO users (id, username, password_hash, role) VALUES (7, 'buyer', 'h', 'admin')`); err != nil {
++		t.Fatalf("seed user: %v", err)
++	}
+ 
+ 	purchaseRepo := repository.NewPurchaseRepository(db.DB)
+ 	supplierRepo := repository.NewSupplierRepository(db.DB)

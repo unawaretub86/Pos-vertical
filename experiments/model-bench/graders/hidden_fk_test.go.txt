@@ -1,0 +1,126 @@
+package database
+
+import (
+	"context"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func hfkOpen(t *testing.T) (*DB, string) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "h.db")
+	db, err := New(p)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return db, p
+}
+
+func hfkSeed(t *testing.T, db *DB) {
+	t.Helper()
+	for _, q := range []string{
+		`INSERT INTO users (username, password_hash, role) VALUES ('hfk', 'h', 'admin')`,
+		`INSERT INTO registers (id, user_id, opening_amount) VALUES (500, (SELECT id FROM users WHERE username='hfk'), 0)`,
+		`INSERT INTO products (id, name, sale_price) VALUES (500, 'p', 10)`,
+		`INSERT INTO sales (id, user_id, register_id, subtotal, total, payment_method) VALUES (500, (SELECT id FROM users WHERE username='hfk'), 500, 10, 10, 'cash')`,
+		`INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (500, 500, 1, 10, 10)`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("seed %q: %v", q, err)
+		}
+	}
+}
+
+func hfkIsFK(err error) bool {
+	return err != nil && strings.Contains(strings.ToUpper(err.Error()), "FOREIGN KEY")
+}
+
+// H1: enforcement must hold on EVERY pooled connection, not only the first.
+func TestHidden_FK_AllPooledConnections(t *testing.T) {
+	db, _ := hfkOpen(t)
+	defer db.Close()
+	ctx := context.Background()
+	var conns []interface{ Close() error }
+	for i := 0; i < 4; i++ {
+		c, err := db.Conn(ctx)
+		if err != nil {
+			t.Fatalf("conn %d: %v", i, err)
+		}
+		conns = append(conns, c)
+		var on int
+		if err := c.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&on); err != nil {
+			t.Fatalf("pragma on conn %d: %v", i, err)
+		}
+		if on != 1 {
+			t.Fatalf("conn %d: foreign_keys=%d, want 1", i, on)
+		}
+	}
+	for _, c := range conns {
+		c.Close()
+	}
+}
+
+// H2: deleting a product referenced by sale_items fails.
+func TestHidden_FK_DeleteProductWithSalesFails(t *testing.T) {
+	db, _ := hfkOpen(t)
+	defer db.Close()
+	hfkSeed(t, db)
+	if _, err := db.Exec(`DELETE FROM products WHERE id = 500`); !hfkIsFK(err) {
+		t.Fatalf("want FK error, got %v", err)
+	}
+}
+
+// H3: orphan insert is rejected.
+func TestHidden_FK_OrphanInsertRejected(t *testing.T) {
+	db, _ := hfkOpen(t)
+	defer db.Close()
+	hfkSeed(t, db)
+	_, err := db.Exec(`INSERT INTO sales (user_id, register_id, subtotal, total, payment_method) VALUES (1, 99999, 1, 1, 'cash')`)
+	if !hfkIsFK(err) {
+		t.Fatalf("want FK error for orphan register_id, got %v", err)
+	}
+}
+
+// H4: logical delete keeps working under FK enforcement.
+func TestHidden_FK_LogicalDeleteStillWorks(t *testing.T) {
+	db, _ := hfkOpen(t)
+	defer db.Close()
+	hfkSeed(t, db)
+	if _, err := db.Exec(`UPDATE products SET active = 0 WHERE id = 500`); err != nil {
+		t.Fatalf("logical delete: %v", err)
+	}
+}
+
+// H5: reopening an existing DB with data (migrations re-run) still works with FKs on.
+func TestHidden_FK_ReopenExistingDBWithData(t *testing.T) {
+	db, p := hfkOpen(t)
+	hfkSeed(t, db)
+	db.Close()
+	db2, err := New(p)
+	if err != nil {
+		t.Fatalf("reopen with data: %v", err)
+	}
+	defer db2.Close()
+	var n int
+	if err := db2.QueryRow(`SELECT COUNT(*) FROM sale_items`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("data lost after reopen: n=%d err=%v", n, err)
+	}
+	if _, err := db2.Exec(`DELETE FROM registers WHERE id = 500`); !hfkIsFK(err) {
+		t.Fatalf("FK not enforced after reopen: %v", err)
+	}
+}
+
+// H6: no pre-existing orphan rows after migrations on a fresh DB.
+func TestHidden_FK_NoViolationsAfterMigrate(t *testing.T) {
+	db, _ := hfkOpen(t)
+	defer db.Close()
+	rows, err := db.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		t.Fatalf("foreign_key_check: %v", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		t.Fatal("foreign_key_check reports violations on a fresh migrated DB")
+	}
+}
