@@ -1,0 +1,247 @@
+diff --git a/internal/database/migrate.go b/internal/database/migrate.go
+index ae972b7..33f1737 100644
+--- a/internal/database/migrate.go
++++ b/internal/database/migrate.go
+@@ -39,6 +39,7 @@ var dbMigrations = []migration{
+ 	{version: 16, up: migration16},
+ 	{version: 17, up: migration17},
+ 	{version: 18, up: migration18},
++	{version: 19, up: migration19},
+ }
+ 
+ // migrate creates the schema_migrations table, detects pending migrations,
+@@ -547,3 +548,10 @@ CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+ `
++
++// migration19 adds logical deletion to customers (US-079). Customers are
++// referenced by sales and payments, so deleting one sets active = 0 instead of
++// removing the row. Existing customers stay active.
++const migration19 = `
++ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
++`
+diff --git a/internal/database/migrate_test.go b/internal/database/migrate_test.go
+index 532de33..85b2ff7 100644
+--- a/internal/database/migrate_test.go
++++ b/internal/database/migrate_test.go
+@@ -14,11 +14,11 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+ 	defer db.Close()
+ 
+ 	var v int
+-	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+-		t.Fatalf("max version: %v", err)
++	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = 18`).Scan(&v); err != nil {
++		t.Fatalf("version 18: %v", err)
+ 	}
+-	if v != 18 {
+-		t.Errorf("MAX(version) = %d, want 18", v)
++	if v != 1 {
++		t.Errorf("schema_migrations rows with version 18 = %d, want 1", v)
+ 	}
+ 
+ 	for _, name := range []string{
+diff --git a/internal/handler/customer.go b/internal/handler/customer.go
+index d57b280..5127d30 100644
+--- a/internal/handler/customer.go
++++ b/internal/handler/customer.go
+@@ -6,6 +6,7 @@ import (
+ 	"strconv"
+ 
+ 	"github.com/andreyo/pos/internal/repository"
++	"github.com/andreyo/pos/internal/service"
+ 	"github.com/go-chi/chi/v5"
+ )
+ 
+@@ -117,10 +118,14 @@ func (h *Handler) deleteCustomer(w http.ResponseWriter, r *http.Request) {
+ 		respondError(w, http.StatusNotFound, "cliente no encontrado")
+ 		return
+ 	}
+-	if err != nil {
++	if errors.Is(err, service.ErrCustomerHasBalance) {
+ 		respondError(w, http.StatusConflict, err.Error())
+ 		return
+ 	}
++	if err != nil {
++		respondError(w, http.StatusInternalServerError, "error eliminando cliente")
++		return
++	}
+ 	respond(w, http.StatusOK, map[string]string{"message": "cliente eliminado"})
+ }
+ 
+diff --git a/internal/handler/customer_test.go b/internal/handler/customer_test.go
+index 7e8f417..eb4238b 100644
+--- a/internal/handler/customer_test.go
++++ b/internal/handler/customer_test.go
+@@ -5,6 +5,7 @@ import (
+ 	"encoding/json"
+ 	"net/http"
+ 	"net/http/httptest"
++	"strings"
+ 	"testing"
+ 
+ 	"github.com/andreyo/pos/internal/database"
+@@ -119,3 +120,82 @@ func TestListCustomers_T5_TotalPortfolioMatchesPositiveBalances(t *testing.T) {
+ 		t.Errorf("total_portfolio (%v) != sum of customers[].balance > 0 (%v)", body.TotalPortfolio, sumPositive)
+ 	}
+ }
++
++// ─── US-079: logical delete ─────────────────────────────────────────────────
++
++func TestDeleteCustomer_US079_LogicalDelete(t *testing.T) {
++	db := setupTestDB(t)
++	h := seedCustomersT5(t, db)
++
++	del := func(id string) int {
++		req := withURLParam(httptest.NewRequest(http.MethodDelete, "/api/customers/"+id, nil), "id", id)
++		w := httptest.NewRecorder()
++		h.deleteCustomer(w, req)
++		return w.Code
++	}
++
++	// Fer (saldo $0) and Gus (saldo -$20.000) have history and are deactivated.
++	if code := del("3"); code != http.StatusOK {
++		t.Errorf("delete Fer = %d, want 200", code)
++	}
++	if code := del("4"); code != http.StatusOK {
++		t.Errorf("delete Gus = %d, want 200", code)
++	}
++	// Dora owes $30.000 → 409; unknown and already inactive ids → 404.
++	if code := del("1"); code != http.StatusConflict {
++		t.Errorf("delete Dora = %d, want 409", code)
++	}
++	if code := del("999"); code != http.StatusNotFound {
++		t.Errorf("delete 999 = %d, want 404", code)
++	}
++	if code := del("3"); code != http.StatusNotFound {
++		t.Errorf("delete Fer twice = %d, want 404", code)
++	}
++
++	var rows, sales int
++	if err := db.QueryRow(`SELECT COUNT(*) FROM customers`).Scan(&rows); err != nil || rows != 4 {
++		t.Errorf("customer rows = %d (err %v), want 4", rows, err)
++	}
++	if err := db.QueryRow(`SELECT COUNT(*) FROM sales WHERE customer_id IN (3, 4)`).Scan(&sales); err != nil || sales != 2 {
++		t.Errorf("sales kept = %d (err %v), want 2", sales, err)
++	}
++
++	// List keeps Dora and Eli only; portfolio stays $30.000 + $15.000 = $45.000.
++	w := httptest.NewRecorder()
++	h.listCustomers(w, httptest.NewRequest(http.MethodGet, "/api/customers", nil))
++	var resp struct {
++		Data struct {
++			Customers []struct {
++				ID int64 `json:"id"`
++			} `json:"customers"`
++			TotalPortfolio float64 `json:"total_portfolio"`
++		} `json:"data"`
++	}
++	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
++		t.Fatalf("decode list: %v", err)
++	}
++	if len(resp.Data.Customers) != 2 || resp.Data.Customers[0].ID != 1 || resp.Data.Customers[1].ID != 2 {
++		t.Errorf("list = %+v, want ids [1 2]", resp.Data.Customers)
++	}
++	if resp.Data.TotalPortfolio != 45000 {
++		t.Errorf("total_portfolio = %v, want 45000", resp.Data.TotalPortfolio)
++	}
++
++	// Search does not find the inactive customer.
++	w = httptest.NewRecorder()
++	h.listCustomers(w, httptest.NewRequest(http.MethodGet, "/api/customers?q=Fer", nil))
++	resp.Data.Customers = nil
++	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
++		t.Fatalf("decode search: %v", err)
++	}
++	if len(resp.Data.Customers) != 0 {
++		t.Errorf("search Fer = %+v, want none", resp.Data.Customers)
++	}
++
++	// History still resolves the name of the inactive customer.
++	w = httptest.NewRecorder()
++	h.getCustomer(w, withURLParam(httptest.NewRequest(http.MethodGet, "/api/customers/3", nil), "id", "3"))
++	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"Fer"`) {
++		t.Errorf("get Fer = %d %s, want 200 with name", w.Code, w.Body.String())
++	}
++}
+diff --git a/internal/repository/customer.go b/internal/repository/customer.go
+index 5f3ab66..64eccde 100644
+--- a/internal/repository/customer.go
++++ b/internal/repository/customer.go
+@@ -18,7 +18,7 @@ func NewCustomerRepository(db *sql.DB) CustomerRepository {
+ 	return &customerRepo{db: db}
+ }
+ 
+-// List returns all customers with their on-the-fly credit balance.
++// List returns all active customers with their on-the-fly credit balance.
+ // Optional search filters by name or phone (LIKE).
+ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+ 	query := `
+@@ -27,9 +27,10 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
+ 			` + customerBalanceExpr + ` AS balance,
+ 			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
+ 
++	query += ` WHERE c.active = 1`
+ 	args := []any{}
+ 	if strings.TrimSpace(search) != "" {
+-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
++		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
+ 		like := "%" + search + "%"
+ 		args = append(args, like, like)
+ 	}
+@@ -99,8 +100,11 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
+ 	return r.GetByID(ctx, c.ID)
+ }
+ 
++// Delete deactivates an active customer (active = 0). The row is kept because
++// sales and payments reference it; an unknown or already inactive id is
++// ErrNotFound.
+ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
++	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
+ 	if err != nil {
+ 		return fmt.Errorf("customer delete: %w", err)
+ 	}
+diff --git a/internal/service/customer.go b/internal/service/customer.go
+index ea102ad..13d8135 100644
+--- a/internal/service/customer.go
++++ b/internal/service/customer.go
+@@ -10,6 +10,9 @@ import (
+ 	"github.com/andreyo/pos/internal/repository"
+ )
+ 
++// ErrCustomerHasBalance is returned when deleting a customer that still owes money.
++var ErrCustomerHasBalance = errors.New("no se puede eliminar un cliente con saldo pendiente")
++
+ type CustomerService struct {
+ 	repo repository.CustomerRepository
+ }
+@@ -61,7 +64,7 @@ func (s *CustomerService) Delete(ctx context.Context, id int64) error {
+ 		return err
+ 	}
+ 	if balance > 0 {
+-		return errors.New("no se puede eliminar un cliente con saldo pendiente")
++		return ErrCustomerHasBalance
+ 	}
+ 	return s.repo.Delete(ctx, id)
+ }
+diff --git a/project-docs/spec/domain/fiado.md b/project-docs/spec/domain/fiado.md
+index 0076f9b..9bc0796 100644
+--- a/project-docs/spec/domain/fiado.md
++++ b/project-docs/spec/domain/fiado.md
+@@ -62,6 +62,15 @@ If it is ever decided that it should block, that is a product change Andrey must
+ 
+ An *abono* is a row in `customer_payments`. It is not tied to a specific sale — it is applied to the customer's total balance, not to an invoice. That is how the notebook the system replaces works, and changing it to per-invoice allocation would be a redesign, not an adjustment.
+ 
++## Rule: deleting a customer
++
++`DELETE /customers/{id}` (admin) is a **logical delete**: it sets `customers.active = 0` (migration 19, US-079) and never removes the row, because sales and payments reference it.
++
++- A customer with balance `> 0` cannot be deleted → 409. Balance `0` or negative (overpaid) → deactivated, 200. Unknown or already inactive id → 404.
++- Inactive customers are hidden from `GET /customers` and its search (`q`). Everything else keeps resolving them by id: customer detail, balance, payments, sale detail, the dashboard's recent sales, and the receivables metrics (`Debtors`, `AgingReceivables`, `total_portfolio`), which do not filter by `active`. Totals therefore do not change when a customer is deleted.
++
++Source: `internal/service/customer.go:61`, `internal/repository/customer.go:30,106`, `internal/handler/customer.go:110`.
++
+ ---
+ 
+ ## What does NOT exist yet

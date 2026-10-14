@@ -1,0 +1,131 @@
+package handler
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/go-chi/chi/v5"
+)
+
+func custRouter(h *Handler) http.Handler {
+	r := chi.NewRouter()
+	r.Get("/customers", h.listCustomers)
+	r.Delete("/customers/{id}", h.deleteCustomer)
+	r.Get("/dashboard", h.getDashboard)
+	return r
+}
+
+func do(r http.Handler, method, path string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(method, path, nil))
+	return w
+}
+
+func TestHiddenC_SettledCustomerDeletedLogically(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	if w := do(r, http.MethodDelete, "/customers/3"); w.Code != http.StatusOK {
+		t.Fatalf("delete Fer: %d %s", w.Code, w.Body.String())
+	}
+	var active, sales int
+	if err := db.QueryRow(`SELECT active FROM customers WHERE id = 3`).Scan(&active); err != nil || active != 0 {
+		t.Fatalf("Fer row must exist with active=0: active=%d err=%v", active, err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sales WHERE customer_id = 3`).Scan(&sales); err != nil || sales != 1 {
+		t.Fatalf("sale kept = %d err=%v", sales, err)
+	}
+}
+
+func TestHiddenC_ExistingCustomersDefaultActive(t *testing.T) {
+	db := setupTestDB(t)
+	seedCustomersT5(t, db)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM customers WHERE active = 1`).Scan(&n); err != nil || n != 4 {
+		t.Fatalf("active customers = %d err=%v, want 4", n, err)
+	}
+}
+
+func TestHiddenC_ListExcludesInactive(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	do(r, http.MethodDelete, "/customers/3")
+	body := do(r, http.MethodGet, "/customers").Body.String()
+	if strings.Contains(body, `"Fer"`) {
+		t.Errorf("inactive Fer still listed: %s", body)
+	}
+	for _, n := range []string{"Dora", "Eli", "Gus"} {
+		if !strings.Contains(body, `"`+n+`"`) {
+			t.Errorf("%s missing from list", n)
+		}
+	}
+}
+
+func TestHiddenC_BalanceStillBlocksWith409(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	if w := do(r, http.MethodDelete, "/customers/1"); w.Code != http.StatusConflict {
+		t.Fatalf("delete Dora (balance 30000): %d, want 409", w.Code)
+	}
+	var active int
+	db.QueryRow(`SELECT active FROM customers WHERE id = 1`).Scan(&active)
+	if active != 1 {
+		t.Errorf("Dora active = %d, want 1", active)
+	}
+}
+
+func TestHiddenC_HistoryStillShowsNameOnDashboard(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	do(r, http.MethodDelete, "/customers/3")
+	w := do(r, http.MethodGet, "/dashboard")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"customer_name":"Fer"`) {
+		t.Fatalf("dashboard lost historical customer name: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHiddenC_PortfolioUnchangedAfterDelete(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	do(r, http.MethodDelete, "/customers/3")
+	if body := do(r, http.MethodGet, "/customers").Body.String(); !strings.Contains(body, `"total_portfolio":45000`) {
+		t.Errorf("portfolio changed: %s", body)
+	}
+}
+
+func TestHiddenC_DeleteNonexistentIs404(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	if w := do(r, http.MethodDelete, "/customers/999"); w.Code != http.StatusNotFound {
+		t.Errorf("code %d, want 404", w.Code)
+	}
+}
+
+func TestHiddenC_DeleteTwiceNoServerError(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	do(r, http.MethodDelete, "/customers/3")
+	if w := do(r, http.MethodDelete, "/customers/3"); w.Code != http.StatusOK && w.Code != http.StatusNotFound {
+		t.Errorf("second delete code %d, want 200 or 404", w.Code)
+	}
+	var active int
+	db.QueryRow(`SELECT active FROM customers WHERE id = 3`).Scan(&active)
+	if active != 0 {
+		t.Errorf("active = %d, want 0", active)
+	}
+}
+
+func TestHiddenC_CustomerWithoutHistoryRemovedFromList(t *testing.T) {
+	db := setupTestDB(t)
+	r := custRouter(seedCustomersT5(t, db))
+	if _, err := db.Exec(`INSERT INTO customers (id, name, phone, address) VALUES (5, 'Zoe', '', '')`); err != nil {
+		t.Fatal(err)
+	}
+	if w := do(r, http.MethodDelete, "/customers/5"); w.Code != http.StatusOK {
+		t.Fatalf("delete Zoe: %d", w.Code)
+	}
+	if body := do(r, http.MethodGet, "/customers").Body.String(); strings.Contains(body, `"Zoe"`) {
+		t.Errorf("Zoe still listed")
+	}
+}

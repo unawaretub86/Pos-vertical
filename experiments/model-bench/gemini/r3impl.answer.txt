@@ -1,0 +1,60 @@
+```diff
+diff --git a/internal/database/migrate.go b/internal/database/migrate.go
+--- a/internal/database/migrate.go
++++ b/internal/database/migrate.go
+@@ -39,4 +39,5 @@ var dbMigrations = []migration{
+ 	{version: 16, up: migration16},
+ 	{version: 17, up: migration17},
+ 	{version: 18, up: migration18},
++	{version: 19, up: migration19},
+ }
+@@ -628,3 +629,5 @@ CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+ `
++
++const migration19 = `ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;`
+diff --git a/internal/database/migrate_test.go b/internal/database/migrate_test.go
+--- a/internal/database/migrate_test.go
++++ b/internal/database/migrate_test.go
+@@ -17,8 +17,8 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+ 	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+ 		t.Fatalf("max version: %v", err)
+ 	}
+-	if v != 18 {
+-		t.Errorf("MAX(version) = %d, want 18", v)
++	if v != 19 {
++		t.Errorf("MAX(version) = %d, want 19", v)
+ 	}
+ 
+ 	for _, name := range []string{
+diff --git a/internal/repository/customer.go b/internal/repository/customer.go
+--- a/internal/repository/customer.go
++++ b/internal/repository/customer.go
+@@ -25,12 +25,13 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custo
+ 		SELECT
+ 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
+ 			` + customerBalanceExpr + ` AS balance,
+-			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
++			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom + `
++		WHERE c.active = 1`
+ 
+ 	args := []any{}
+ 	if strings.TrimSpace(search) != "" {
+-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
++		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
+ 		like := "%" + search + "%"
+ 		args = append(args, like, like)
+ 	}
+ 	query += ` GROUP BY c.id ORDER BY c.name`
+@@ -98,7 +99,7 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
+ 
+ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
++	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
+ 	if err != nil {
+ 		return fmt.Errorf("customer delete: %w", err)
+ 	}
+```
+
+Decisions on open points: `repo.Delete` updates `active = 0 WHERE id = ? AND active = 1` so attempting to delete an already inactive customer returns `ErrNotFound` (HTTP 404, preserving original non-existent delete semantics); `GetByID` continues to return inactive customers so historical sales, payments, and dashboards display customer data; `TestMigration18_T1_TablesIndexesAndChecks` was updated to expect `MAX(version) == 19`.

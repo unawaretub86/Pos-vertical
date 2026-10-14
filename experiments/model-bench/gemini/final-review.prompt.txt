@@ -1,0 +1,399 @@
+Go project (POS, modernc.org/sqlite pure-Go driver, chi router). No tools available; everything is inline.
+
+TASK: Review this diff as an independent QA. Requirements: (1) WAL, busy_timeout 5000 and foreign keys active on EVERY pooled connection via _pragma DSN; (2) customer delete is logical (migration 19 adds customers.active), balance>0 -> 409, unknown or already-inactive -> 404, other errors -> 500 generic; list hides inactive; (3) credit sales to a missing or inactive customer are rejected; (4) reset-password waits on busy_timeout; (5) no existing test weakened. List only real defects with a concrete failing scenario, or CLEAN. Max 12 lines.
+
+DIFF:
+diff --git a/cmd/reset-password/main.go b/cmd/reset-password/main.go
+--- a/cmd/reset-password/main.go
++++ b/cmd/reset-password/main.go
+@@ -14,21 +14,21 @@ import (
+ )
+ 
+ func main() {
+ 	dbPath := flag.String("db", "data.db", "ruta al archivo data.db")
+ 	password := flag.String("password", "", "nueva contraseña para admin (requerido)")
+ 	flag.Parse()
+ 
+ 	if *password == "" {
+ 		log.Fatal("debes especificar --password")
+ 	}
+-	db, err := sql.Open("sqlite", *dbPath)
++	db, err := sql.Open("sqlite", *dbPath+"?_pragma=busy_timeout(5000)") // wait for the running POS instead of failing with SQLITE_BUSY
+ 	if err != nil {
+ 		log.Fatalf("no se pudo abrir la base de datos: %v", err)
+ 	}
+ 	defer db.Close()
+ 
+ 	hash, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
+ 	if err != nil {
+ 		log.Fatalf("error generando hash: %v", err)
+ 	}
+ 
+diff --git a/internal/database/database.go b/internal/database/database.go
+--- a/internal/database/database.go
++++ b/internal/database/database.go
+@@ -1,26 +1,55 @@
+ package database
+ 
+ import (
+ 	"database/sql"
++	"fmt"
++	"log"
++
+ 	_ "modernc.org/sqlite"
+ )
+ 
+ type DB struct {
+ 	*sql.DB
+ 	path string
+ }
+ 
+ func New(path string) (*DB, error) {
+-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on&_time_format=sqlite")
++	// modernc.org/sqlite only honours _pragma=name(value), which it runs on every
++	// new pooled connection (busy_timeout first). The mattn-style _journal_mode,
++	// _busy_timeout and _foreign_keys keys are silently ignored.
++	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_time_format=sqlite")
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 	if err := db.Ping(); err != nil {
++		db.Close()
+ 		return nil, err
+ 	}
+ 	d := &DB{DB: db, path: path}
+ 	if err := d.migrate(); err != nil {
++		db.Close()
+ 		return nil, err
+ 	}
++	// Foreign keys are enforced, so rows that violate them in an existing
++	// database (written while they were not) are reported instead of hidden.
++	if n, err := d.foreignKeyViolations(); err != nil {
++		log.Printf("[database] foreign_key_check failed: %v", err)
++	} else if n > 0 {
++		log.Printf("[database] WARNING: %d foreign key violation(s) in existing data; run PRAGMA foreign_key_check", n)
++	}
+ 	return d, nil
+ }
++
++// foreignKeyViolations returns how many rows currently violate a foreign key.
++func (d *DB) foreignKeyViolations() (int, error) {
++	rows, err := d.Query("PRAGMA foreign_key_check")
++	if err != nil {
++		return 0, fmt.Errorf("foreign_key_check: %w", err)
++	}
++	defer rows.Close()
++	n := 0
++	for rows.Next() {
++		n++
++	}
++	return n, rows.Err()
++}
+diff --git a/internal/database/migrate.go b/internal/database/migrate.go
+--- a/internal/database/migrate.go
++++ b/internal/database/migrate.go
+@@ -32,20 +32,21 @@ var dbMigrations = []migration{
+ 	{version: 9, up: migration9},
+ 	{version: 10, up: migration10},
+ 	{version: 11, up: migration11},
+ 	{version: 12, up: migration12},
+ 	{version: 13, up: migration13},
+ 	{version: 14, up: migration14},
+ 	{version: 15, up: migration15},
+ 	{version: 16, up: migration16},
+ 	{version: 17, up: migration17},
+ 	{version: 18, up: migration18},
++	{version: 19, up: migration19},
+ }
+ 
+ // migrate creates the schema_migrations table, detects pending migrations,
+ // backs up the database if needed, and runs each migration in a transaction.
+ // Any failure causes the binary to refuse to start.
+ func (db *DB) migrate() error {
+ 	// The tracking table must always exist before we query it.
+ 	if _, err := db.Exec(`
+ 		CREATE TABLE IF NOT EXISTS schema_migrations (
+ 			version    INTEGER PRIMARY KEY,
+@@ -540,10 +541,17 @@ CREATE TABLE IF NOT EXISTS order_items (
+ 	status TEXT NOT NULL DEFAULT 'pending'
+ 		CHECK (status IN ('pending','preparing','ready','delivered','void')),
+ 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+ 	ready_at DATETIME
+ );
+ CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+ CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+ `
++
++// migration19 adds logical deletion to customers. Customers are
++// referenced by sales and payments, so deleting one sets active = 0 instead of
++// removing the row. Existing customers stay active.
++const migration19 = `
++ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
++`
+diff --git a/internal/handler/customer.go b/internal/handler/customer.go
+--- a/internal/handler/customer.go
++++ b/internal/handler/customer.go
+@@ -1,18 +1,19 @@
+ package handler
+ 
+ import (
+ 	"errors"
+ 	"net/http"
+ 	"strconv"
+ 
+ 	"github.com/andreyo/pos/internal/repository"
++	"github.com/andreyo/pos/internal/service"
+ 	"github.com/go-chi/chi/v5"
+ )
+ 
+ func (h *Handler) listCustomers(w http.ResponseWriter, r *http.Request) {
+ 	search := r.URL.Query().Get("q")
+ 	customers, err := h.customers.List(r.Context(), search)
+ 	if err != nil {
+ 		respondError(w, http.StatusInternalServerError, "error listando clientes")
+ 		return
+ 	}
+@@ -110,24 +111,28 @@ func (h *Handler) deleteCustomer(w http.ResponseWriter, r *http.Request) {
+ 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+ 	if err != nil {
+ 		respondError(w, http.StatusBadRequest, "id inválido")
+ 		return
+ 	}
+ 	err = h.customers.Delete(r.Context(), id)
+ 	if errors.Is(err, repository.ErrNotFound) {
+ 		respondError(w, http.StatusNotFound, "cliente no encontrado")
+ 		return
+ 	}
+-	if err != nil {
++	if errors.Is(err, service.ErrCustomerHasBalance) {
+ 		respondError(w, http.StatusConflict, err.Error())
+ 		return
+ 	}
++	if err != nil {
++		respondError(w, http.StatusInternalServerError, "error eliminando cliente")
++		return
++	}
+ 	respond(w, http.StatusOK, map[string]string{"message": "cliente eliminado"})
+ }
+ 
+ func (h *Handler) getCustomerBalance(w http.ResponseWriter, r *http.Request) {
+ 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+ 	if err != nil {
+ 		respondError(w, http.StatusBadRequest, "id inválido")
+ 		return
+ 	}
+ 	// Verify customer exists
+diff --git a/internal/repository/customer.go b/internal/repository/customer.go
+--- a/internal/repository/customer.go
++++ b/internal/repository/customer.go
+@@ -11,32 +11,33 @@ import (
+ )
+ 
+ type customerRepo struct {
+ 	db *sql.DB
+ }
+ 
+ func NewCustomerRepository(db *sql.DB) CustomerRepository {
+ 	return &customerRepo{db: db}
+ }
+ 
+-// List returns all customers with their on-the-fly credit balance.
++// List returns all active customers with their on-the-fly credit balance.
+ // Optional search filters by name or phone (LIKE).
+ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+ 	query := `
+ 		SELECT
+ 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
+ 			` + customerBalanceExpr + ` AS balance,
+ 			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
+ 
++	query += ` WHERE c.active = 1`
+ 	args := []any{}
+ 	if strings.TrimSpace(search) != "" {
+-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
++		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
+ 		like := "%" + search + "%"
+ 		args = append(args, like, like)
+ 	}
+ 	query += ` GROUP BY c.id ORDER BY c.name`
+ 
+ 	rows, err := r.db.QueryContext(ctx, query, args...)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("customer list: %w", err)
+ 	}
+ 	defer rows.Close()
+@@ -92,22 +93,25 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
+ 	if err != nil {
+ 		return nil, fmt.Errorf("customer update: %w", err)
+ 	}
+ 	n, _ := res.RowsAffected()
+ 	if n == 0 {
+ 		return nil, ErrNotFound
+ 	}
+ 	return r.GetByID(ctx, c.ID)
+ }
+ 
++// Delete deactivates an active customer (active = 0). The row is kept because
++// sales and payments reference it; an unknown or already inactive id is
++// ErrNotFound.
+ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
++	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
+ 	if err != nil {
+ 		return fmt.Errorf("customer delete: %w", err)
+ 	}
+ 	n, _ := res.RowsAffected()
+ 	if n == 0 {
+ 		return ErrNotFound
+ 	}
+ 	return nil
+ }
+ 
+diff --git a/internal/repository/errors.go b/internal/repository/errors.go
+--- a/internal/repository/errors.go
++++ b/internal/repository/errors.go
+@@ -1,16 +1,19 @@
+ package repository
+ 
+ import "errors"
+ 
+ // ErrNotFound is returned when a requested resource does not exist.
+ var ErrNotFound = errors.New("not found")
+ 
++// ErrCustomerInactive is returned when a credit sale targets a customer that does not exist or was deleted (active = 0).
++var ErrCustomerInactive = errors.New("el cliente no existe o está inactivo; no se le puede fiar")
++
+ // ErrRequiresCreditNote is returned when voiding a sale that has an accepted electronic document.
+ type ErrRequiresCreditNote struct {
+ 	DocumentID string
+ 	CUDE       string
+ }
+ 
+ func (e *ErrRequiresCreditNote) Error() string {
+ 	return "la venta tiene un documento electrónico aceptado; se requiere nota crédito para anular"
+ }
+diff --git a/internal/repository/sale.go b/internal/repository/sale.go
+--- a/internal/repository/sale.go
++++ b/internal/repository/sale.go
+@@ -1,15 +1,16 @@
+ package repository
+ 
+ import (
+ 	"context"
+ 	"database/sql"
++	"errors"
+ 	"fmt"
+ 	"time"
+ 
+ 	"github.com/andreyo/pos/internal/model"
+ )
+ 
+ // SaleFilter controls listing behavior.
+ type SaleFilter struct {
+ 	From          *time.Time
+ 	To            *time.Time
+@@ -34,20 +35,32 @@ func NewSaleRepository(db *sql.DB) SaleRepository {
+ 	return &saleRepo{db: db}
+ }
+ 
+ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, error) {
+ 	tx, err := r.db.BeginTx(ctx, nil)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("sale create begin tx: %w", err)
+ 	}
+ 	defer tx.Rollback() //nolint:errcheck
+ 
++	// A credit sale (fiado) cannot be charged to a customer that is missing or was deleted.
++	if sale.CustomerID != nil && hasCreditPayment(sale.Payments) {
++		var active int
++		err := tx.QueryRowContext(ctx, `SELECT active FROM customers WHERE id = ?`, *sale.CustomerID).Scan(&active)
++		if errors.Is(err, sql.ErrNoRows) || (err == nil && active == 0) {
++			return nil, ErrCustomerInactive
++		}
++		if err != nil {
++			return nil, fmt.Errorf("sale customer check: %w", err)
++		}
++	}
++
+ 	// Insert sale
+ 	res, err := tx.ExecContext(ctx, `
+ 		INSERT INTO sales (user_id, customer_id, register_id, subtotal, discount, tax, total, payment_method, cash_tendered, change_amount, reference, status)
+ 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+ 		sale.UserID, sale.CustomerID, sale.RegisterID,
+ 		sale.Subtotal, sale.Discount, sale.Tax, sale.Total,
+ 		sale.PaymentMethod, sale.CashTendered, sale.ChangeAmount,
+ 		sale.Reference, sale.Status,
+ 	)
+ 	if err != nil {
+@@ -349,10 +362,19 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
+ 
+ func scanSale(s scanner) (*model.Sale, error) {
+ 	sale := &model.Sale{}
+ 	return sale, s.Scan(
+ 		&sale.ID, &sale.UserID, &sale.CustomerID, &sale.RegisterID,
+ 		&sale.Subtotal, &sale.Discount, &sale.Tax, &sale.Total,
+ 		&sale.PaymentMethod, &sale.CashTendered, &sale.ChangeAmount,
+ 		&sale.Reference, &sale.Status, &sale.VoidedBy, &sale.VoidedAt, &sale.CreatedAt,
+ 	)
+ }
++
++func hasCreditPayment(payments []model.Payment) bool {
++	for _, p := range payments {
++		if p.Method == "credit" {
++			return true
++		}
++	}
++	return false
++}
+diff --git a/internal/service/customer.go b/internal/service/customer.go
+--- a/internal/service/customer.go
++++ b/internal/service/customer.go
+@@ -3,20 +3,23 @@ package service
+ import (
+ 	"context"
+ 	"errors"
+ 	"fmt"
+ 	"strings"
+ 
+ 	"github.com/andreyo/pos/internal/model"
+ 	"github.com/andreyo/pos/internal/repository"
+ )
+ 
++// ErrCustomerHasBalance is returned when deleting a customer that still owes money.
++var ErrCustomerHasBalance = errors.New("no se puede eliminar un cliente con saldo pendiente")
++
+ type CustomerService struct {
+ 	repo repository.CustomerRepository
+ }
+ 
+ func NewCustomerService(repo repository.CustomerRepository) *CustomerService {
+ 	return &CustomerService{repo: repo}
+ }
+ 
+ func (s *CustomerService) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+ 	return s.repo.List(ctx, search)
+@@ -54,21 +57,21 @@ func (s *CustomerService) Update(ctx context.Context, id int64, name, phone, add
+ 		CreditLimit: creditLimit,
+ 	})
+ }
+ 
+ func (s *CustomerService) Delete(ctx context.Context, id int64) error {
+ 	balance, err := s.repo.Balance(ctx, id)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	if balance > 0 {
+-		return errors.New("no se puede eliminar un cliente con saldo pendiente")
++		return ErrCustomerHasBalance
+ 	}
+ 	return s.repo.Delete(ctx, id)
+ }
+ 
+ func (s *CustomerService) Balance(ctx context.Context, id int64) (float64, error) {
+ 	return s.repo.Balance(ctx, id)
+ }
+ 
+ func (s *CustomerService) TotalPortfolioBalance(ctx context.Context) (float64, error) {
+ 	return s.repo.TotalPortfolioBalance(ctx)

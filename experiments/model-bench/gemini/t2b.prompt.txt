@@ -1,0 +1,49 @@
+You are reviewing/implementing Go code. No tools are available; everything you need is inline. Go module modernc.org/sqlite v1.46.1 (pure Go driver, NOT mattn/go-sqlite3).
+
+TASK: Review this diff. Requirement: WAL journal mode, busy_timeout 5000 ms and foreign_keys ON must be active on EVERY pooled database/sql connection; New(":memory:") must keep working. List only real defects with a concrete failing scenario, or say "CLEAN". Be concise (max 8 lines).
+
+FILE before the change (internal/database/database.go):
+package database
+
+import (
+	"database/sql"
+	_ "modernc.org/sqlite"
+)
+
+type DB struct {
+	*sql.DB
+	path string
+}
+
+func New(path string) (*DB, error) {
+	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)&_time_format=sqlite")
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+	d := &DB{DB: db, path: path}
+	if err := d.migrate(); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+DIFF:
+diff --git a/internal/database/database.go b/internal/database/database.go
+index 3b2cf1f..606deaf 100644
+--- a/internal/database/database.go
++++ b/internal/database/database.go
+@@ -11,7 +11,10 @@ type DB struct {
+ }
+ 
+ func New(path string) (*DB, error) {
+-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)&_time_format=sqlite")
++	// modernc.org/sqlite only honours _pragma=... (run on every new pooled
++	// connection, busy_timeout first); mattn-style _journal_mode/_busy_timeout
++	// are silently ignored.
++	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_time_format=sqlite")
+ 	if err != nil {
+ 		return nil, err
+ 	}

@@ -1,0 +1,18 @@
+```go
+func New(path string) (*DB, error) {
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_time_format=sqlite")
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+	d := &DB{DB: db, path: path}
+	if err := d.migrate(); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+```
+Confidence: 100. modernc.org/sqlite parses `_pragma` query parameters and executes each on every pooled connection (internally prioritizing `busy_timeout` first), whereas `_journal_mode` and `_busy_timeout` are mattn/go-sqlite3-specific options ignored by modernc, and SQLite safely ignores WAL mode on `:memory:` without error.
+ while SQLite and the driver safely accept `journal_mode(WAL)` on `:memory:` as a harmless no-op without error.

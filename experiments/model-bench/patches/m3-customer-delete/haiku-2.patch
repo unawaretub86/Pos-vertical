@@ -1,0 +1,88 @@
+diff --git a/internal/database/migrate.go b/internal/database/migrate.go
+index ae972b7..1828280 100644
+--- a/internal/database/migrate.go
++++ b/internal/database/migrate.go
+@@ -39,6 +39,7 @@ var dbMigrations = []migration{
+ 	{version: 16, up: migration16},
+ 	{version: 17, up: migration17},
+ 	{version: 18, up: migration18},
++	{version: 19, up: migration19},
+ }
+ 
+ // migrate creates the schema_migrations table, detects pending migrations,
+@@ -547,3 +548,10 @@ CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+ `
++
++// migration19 adds soft delete for customers (US-079). Customers with history
++// are deactivated (active = 0) instead of being physically deleted, so their
++// sales and payments keep their name.
++const migration19 = `
++ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
++`
+diff --git a/internal/database/migrate_test.go b/internal/database/migrate_test.go
+index 532de33..f39d131 100644
+--- a/internal/database/migrate_test.go
++++ b/internal/database/migrate_test.go
+@@ -17,8 +17,8 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+ 	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+ 		t.Fatalf("max version: %v", err)
+ 	}
+-	if v != 18 {
+-		t.Errorf("MAX(version) = %d, want 18", v)
++	if v != 19 {
++		t.Errorf("MAX(version) = %d, want 19", v)
+ 	}
+ 
+ 	for _, name := range []string{
+diff --git a/internal/repository/customer.go b/internal/repository/customer.go
+index 5f3ab66..1744f00 100644
+--- a/internal/repository/customer.go
++++ b/internal/repository/customer.go
+@@ -19,17 +19,18 @@ func NewCustomerRepository(db *sql.DB) CustomerRepository {
+ }
+ 
+ // List returns all customers with their on-the-fly credit balance.
+-// Optional search filters by name or phone (LIKE).
++// Optional search filters by name or phone (LIKE). Inactive (deleted) customers are excluded.
+ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+ 	query := `
+ 		SELECT
+ 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
+ 			` + customerBalanceExpr + ` AS balance,
+-			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
++			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom + `
++		WHERE c.active = 1`
+ 
+ 	args := []any{}
+ 	if strings.TrimSpace(search) != "" {
+-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
++		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
+ 		like := "%" + search + "%"
+ 		args = append(args, like, like)
+ 	}
+@@ -99,8 +100,10 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
+ 	return r.GetByID(ctx, c.ID)
+ }
+ 
++// Delete is a logical delete (active = 0): customers have sales and payments
++// that must keep their name. Already inactive customers are not found.
+ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
++	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
+ 	if err != nil {
+ 		return fmt.Errorf("customer delete: %w", err)
+ 	}
+diff --git a/project-docs/spec/domain/fiado.md b/project-docs/spec/domain/fiado.md
+index 0076f9b..4ce3039 100644
+--- a/project-docs/spec/domain/fiado.md
++++ b/project-docs/spec/domain/fiado.md
+@@ -35,6 +35,7 @@ Consequences that must be respected:
+ - **A voided sale stops counting automatically**, because the filter is `status='completed'`. There is no need to "reverse" the debt by hand.
+ - **There is no such thing as a stale balance.** Any screen that shows a balance reads it from the same query. If two screens ever show different balances, it is a query bug, not a synchronization bug.
+ - A customer with balance `0` or negative is **not in receivables**. Receivables filter `balance > 0`.
++- **Deleting a customer is logical** (US-079): `DELETE /customers/{id}` sets `customers.active = 0` (`CustomerRepository.Delete`, `internal/repository/customer.go`). A customer with a balance `> 0` is refused (HTTP 409); an unknown or already inactive id is 404. Inactive customers are hidden from `GET /customers` and its search, but their row, sales, payments and name remain for history, reports and receivables.
+ - Receivables order: balance descending and, on a tie, name ascending. Source: `MetricsRepository.Debtors` (`internal/repository/metrics.go:286`, ordering at `:297`), same balance formula as `customer.go:24-40`.
+ - The dashboard's aging receivables (`MetricsRepository.AgingReceivables`, `internal/repository/metrics.go:326`) use the same balance formula as `Debtors`: both build the balance with `customerBalanceExpr` (`metrics.go:265`) over `customerBalanceFrom` (`metrics.go:270`), which aggregates credit sales and payments per customer before joining, so each payment counts exactly once. Filters `balance > 0`.
+ - Aging receivables order: `days_overdue` descending first and, on a tie of days, the same tie-break as `Debtors` — balance descending and, if that also ties, name ascending (`metrics.go:336`).

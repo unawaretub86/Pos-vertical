@@ -1,0 +1,714 @@
+REQUIREMENTS: Customer delete must be a logical delete using an `active` column added by a NEW numbered migration (existing customers stay active). Inactive customers disappear from the customer list and its search; their history (sales, payments, dashboards showing the customer name) keeps working. A customer with balance > 0 still cannot be deleted (HTTP 409); unknown id is 404; no physical DELETE on customers; portfolio/receivables totals must not change. Existing tests may be adjusted only if they encode the OLD physical-delete behaviour; never skip or weaken any other test. Go project, modernc sqlite, no tools available: everything is inline.
+
+TASK: Implement it. Output a single unified diff (git format, paths relative to repo root) that I can apply with git apply. Minimal changes. Do not add tests beyond adjusting the one that breaks. Then one line listing decisions on points the requirements left open.
+
+=== FILE internal/repository/customer.go
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/andreyo/pos/internal/model"
+)
+
+type customerRepo struct {
+	db *sql.DB
+}
+
+func NewCustomerRepository(db *sql.DB) CustomerRepository {
+	return &customerRepo{db: db}
+}
+
+// List returns all customers with their on-the-fly credit balance.
+// Optional search filters by name or phone (LIKE).
+func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+	query := `
+		SELECT
+			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
+			` + customerBalanceExpr + ` AS balance,
+			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
+
+	args := []any{}
+	if strings.TrimSpace(search) != "" {
+		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
+		like := "%" + search + "%"
+		args = append(args, like, like)
+	}
+	query += ` GROUP BY c.id ORDER BY c.name`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("customer list: %w", err)
+	}
+	defer rows.Close()
+
+	var customers []*model.CustomerWithBalance
+	for rows.Next() {
+		var cwb model.CustomerWithBalance
+		var oldestDebt sql.NullString
+		if err := rows.Scan(
+			&cwb.ID, &cwb.Name, &cwb.Phone, &cwb.Address, &cwb.Notes, &cwb.CreditLimit, &cwb.CreatedAt,
+			&cwb.Balance, &oldestDebt,
+		); err != nil {
+			return nil, fmt.Errorf("customer scan: %w", err)
+		}
+		cwb.OldestDebtAt = parseOldestDebt(oldestDebt)
+		customers = append(customers, &cwb)
+	}
+	return customers, rows.Err()
+}
+
+func (r *customerRepo) GetByID(ctx context.Context, id int64) (*model.Customer, error) {
+	c := &model.Customer{}
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, name, COALESCE(phone,''), COALESCE(address,''), COALESCE(notes,''), credit_limit, created_at FROM customers WHERE id = ?`, id).
+		Scan(&c.ID, &c.Name, &c.Phone, &c.Address, &c.Notes, &c.CreditLimit, &c.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("customer get: %w", err)
+	}
+	return c, nil
+}
+
+func (r *customerRepo) Create(ctx context.Context, c *model.Customer) (*model.Customer, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO customers (name, phone, address, notes, credit_limit) VALUES (?, ?, ?, ?, ?)`,
+		c.Name, c.Phone, c.Address, c.Notes, c.CreditLimit)
+	if err != nil {
+		return nil, fmt.Errorf("customer create: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("customer last id: %w", err)
+	}
+	return r.GetByID(ctx, id)
+}
+
+func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Customer, error) {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE customers SET name = ?, phone = ?, address = ?, notes = ?, credit_limit = ? WHERE id = ?`,
+		c.Name, c.Phone, c.Address, c.Notes, c.CreditLimit, c.ID)
+	if err != nil {
+		return nil, fmt.Errorf("customer update: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, ErrNotFound
+	}
+	return r.GetByID(ctx, c.ID)
+}
+
+func (r *customerRepo) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("customer delete: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Balance calculates the on-the-fly balance:
+// SUM(credit sales total) - SUM(customer_payments amount)
+func (r *customerRepo) Balance(ctx context.Context, id int64) (float64, error) {
+	var balance float64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE((
+				SELECT SUM(sp.amount) FROM sale_payments sp
+				JOIN sales s ON s.id = sp.sale_id
+				WHERE s.customer_id = ? AND sp.method = 'credit' AND s.status = 'completed'
+			), 0)
+			- COALESCE((SELECT SUM(amount) FROM customer_payments WHERE customer_id = ?), 0)
+	`, id, id).Scan(&balance)
+	if err != nil {
+		return 0, fmt.Errorf("customer balance: %w", err)
+	}
+	return balance, nil
+}
+
+// TotalPortfolioBalance returns the sum of the outstanding balances of
+// customers whose balance is > 0 (spec/domain/glosario.md: cartera). It
+// aggregates the same per-customer formula as List/Balance/Debtors/
+// AgingReceivables (customerBalanceExpr/customerBalanceFrom in metrics.go),
+// so a customer who overpaid (negative balance) never reduces what the
+// others owe.
+func (r *customerRepo) TotalPortfolioBalance(ctx context.Context) (float64, error) {
+	var total float64
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(balance), 0) FROM (
+			SELECT `+customerBalanceExpr+` AS balance`+customerBalanceFrom+`
+		) balances
+		WHERE balance > 0
+	`).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("portfolio balance: %w", err)
+	}
+	return total, nil
+}
+
+// ListPayments returns all payments for a given customer, ordered by most recent first.
+func (r *customerRepo) ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, customer_id, amount, COALESCE(note,''), created_at
+		 FROM customer_payments WHERE customer_id = ? ORDER BY created_at DESC`, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("list payments: %w", err)
+	}
+	defer rows.Close()
+
+	var payments []*model.CustomerPayment
+	for rows.Next() {
+		p := &model.CustomerPayment{}
+		if err := rows.Scan(&p.ID, &p.CustomerID, &p.Amount, &p.Note, &p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan payment: %w", err)
+		}
+		payments = append(payments, p)
+	}
+	return payments, rows.Err()
+}
+
+// CreatePayment inserts a new customer payment (abono).
+func (r *customerRepo) CreatePayment(ctx context.Context, p *model.CustomerPayment) (*model.CustomerPayment, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO customer_payments (customer_id, amount, note) VALUES (?, ?, ?)`,
+		p.CustomerID, p.Amount, p.Note)
+	if err != nil {
+		return nil, fmt.Errorf("create payment: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("payment last id: %w", err)
+	}
+	created := &model.CustomerPayment{}
+	err = r.db.QueryRowContext(ctx,
+		`SELECT id, customer_id, amount, COALESCE(note,''), created_at FROM customer_payments WHERE id = ?`, id).
+		Scan(&created.ID, &created.CustomerID, &created.Amount, &created.Note, &created.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("get created payment: %w", err)
+	}
+	return created, nil
+}
+
+// ListCreditSales returns all credit sales for a customer (completed only), most recent first.
+func (r *customerRepo) ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, user_id, customer_id, COALESCE(register_id, 0), subtotal, discount, tax, total,
+		        payment_method, status, created_at
+		 FROM sales
+		 WHERE customer_id = ? AND status = 'completed'
+		   AND id IN (SELECT sale_id FROM sale_payments WHERE method = 'credit')
+		 ORDER BY created_at DESC`, customerID)
+	if err != nil {
+		return nil, fmt.Errorf("list credit sales: %w", err)
+	}
+	defer rows.Close()
+
+	var sales []*model.Sale
+	for rows.Next() {
+		s := &model.Sale{}
+		var regID int64
+		if err := rows.Scan(&s.ID, &s.UserID, &s.CustomerID, &regID,
+			&s.Subtotal, &s.Discount, &s.Tax, &s.Total,
+			&s.PaymentMethod, &s.Status, &s.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan credit sale: %w", err)
+		}
+		if regID != 0 {
+			s.RegisterID = &regID
+		}
+		sales = append(sales, s)
+	}
+	return sales, rows.Err()
+}
+=== FILE internal/service/customer.go
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/andreyo/pos/internal/model"
+	"github.com/andreyo/pos/internal/repository"
+)
+
+type CustomerService struct {
+	repo repository.CustomerRepository
+}
+
+func NewCustomerService(repo repository.CustomerRepository) *CustomerService {
+	return &CustomerService{repo: repo}
+}
+
+func (s *CustomerService) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
+	return s.repo.List(ctx, search)
+}
+
+func (s *CustomerService) GetByID(ctx context.Context, id int64) (*model.Customer, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
+func (s *CustomerService) Create(ctx context.Context, name, phone, address, notes string, creditLimit *int64) (*model.Customer, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("el nombre es requerido")
+	}
+	return s.repo.Create(ctx, &model.Customer{
+		Name:        name,
+		Phone:       strings.TrimSpace(phone),
+		Address:     strings.TrimSpace(address),
+		Notes:       strings.TrimSpace(notes),
+		CreditLimit: creditLimit,
+	})
+}
+
+func (s *CustomerService) Update(ctx context.Context, id int64, name, phone, address, notes string, creditLimit *int64) (*model.Customer, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("el nombre es requerido")
+	}
+	return s.repo.Update(ctx, &model.Customer{
+		ID:          id,
+		Name:        name,
+		Phone:       strings.TrimSpace(phone),
+		Address:     strings.TrimSpace(address),
+		Notes:       strings.TrimSpace(notes),
+		CreditLimit: creditLimit,
+	})
+}
+
+func (s *CustomerService) Delete(ctx context.Context, id int64) error {
+	balance, err := s.repo.Balance(ctx, id)
+	if err != nil {
+		return err
+	}
+	if balance > 0 {
+		return errors.New("no se puede eliminar un cliente con saldo pendiente")
+	}
+	return s.repo.Delete(ctx, id)
+}
+
+func (s *CustomerService) Balance(ctx context.Context, id int64) (float64, error) {
+	return s.repo.Balance(ctx, id)
+}
+
+func (s *CustomerService) TotalPortfolioBalance(ctx context.Context) (float64, error) {
+	return s.repo.TotalPortfolioBalance(ctx)
+}
+
+func (s *CustomerService) ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error) {
+	return s.repo.ListPayments(ctx, customerID)
+}
+
+func (s *CustomerService) CreatePayment(ctx context.Context, customerID int64, amount float64, note string) (*model.CustomerPayment, error) {
+	if amount <= 0 {
+		return nil, errors.New("el monto del abono debe ser mayor a cero")
+	}
+
+	// Verify customer exists
+	if _, err := s.repo.GetByID(ctx, customerID); err != nil {
+		return nil, errors.New("cliente no encontrado")
+	}
+
+	// Validate amount does not exceed current balance
+	balance, err := s.repo.Balance(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	if amount > balance {
+		return nil, fmt.Errorf("el pago ($%.0f) supera la deuda actual ($%.0f)", amount, balance)
+	}
+
+	return s.repo.CreatePayment(ctx, &model.CustomerPayment{
+		CustomerID: customerID,
+		Amount:     amount,
+		Note:       strings.TrimSpace(note),
+	})
+}
+
+func (s *CustomerService) ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error) {
+	return s.repo.ListCreditSales(ctx, customerID)
+}
+=== FILE internal/handler/customer.go
+package handler
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/andreyo/pos/internal/repository"
+	"github.com/go-chi/chi/v5"
+)
+
+func (h *Handler) listCustomers(w http.ResponseWriter, r *http.Request) {
+	search := r.URL.Query().Get("q")
+	customers, err := h.customers.List(r.Context(), search)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error listando clientes")
+		return
+	}
+
+	// Filter to only customers with balance > 0 when has_balance=true
+	if r.URL.Query().Get("has_balance") == "true" {
+		filtered := customers[:0]
+		for _, c := range customers {
+			if c.Balance > 0 {
+				filtered = append(filtered, c)
+			}
+		}
+		customers = filtered
+	}
+
+	total, err := h.customers.TotalPortfolioBalance(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error calculando cartera")
+		return
+	}
+	respond(w, http.StatusOK, map[string]any{
+		"customers":       customers,
+		"total_portfolio": total,
+	})
+}
+
+func (h *Handler) createCustomer(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name        string `json:"name"`
+		Phone       string `json:"phone"`
+		Address     string `json:"address"`
+		Notes       string `json:"notes"`
+		CreditLimit *int64 `json:"credit_limit"`
+	}
+	if err := decode(r, &body); err != nil {
+		respondError(w, http.StatusBadRequest, "request inválido")
+		return
+	}
+	c, err := h.customers.Create(r.Context(), body.Name, body.Phone, body.Address, body.Notes, body.CreditLimit)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respond(w, http.StatusCreated, c)
+}
+
+func (h *Handler) getCustomer(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	c, err := h.customers.GetByID(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo cliente")
+		return
+	}
+	respond(w, http.StatusOK, c)
+}
+
+func (h *Handler) updateCustomer(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var body struct {
+		Name        string `json:"name"`
+		Phone       string `json:"phone"`
+		Address     string `json:"address"`
+		Notes       string `json:"notes"`
+		CreditLimit *int64 `json:"credit_limit"`
+	}
+	if err := decode(r, &body); err != nil {
+		respondError(w, http.StatusBadRequest, "request inválido")
+		return
+	}
+	c, err := h.customers.Update(r.Context(), id, body.Name, body.Phone, body.Address, body.Notes, body.CreditLimit)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, c)
+}
+
+func (h *Handler) deleteCustomer(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	err = h.customers.Delete(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusConflict, err.Error())
+		return
+	}
+	respond(w, http.StatusOK, map[string]string{"message": "cliente eliminado"})
+}
+
+func (h *Handler) getCustomerBalance(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	// Verify customer exists
+	if _, err := h.customers.GetByID(r.Context(), id); errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	} else if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo cliente")
+		return
+	}
+	balance, err := h.customers.Balance(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error calculando saldo")
+		return
+	}
+	respond(w, http.StatusOK, map[string]float64{"balance": balance})
+}
+
+func (h *Handler) listCustomerPayments(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	if _, err := h.customers.GetByID(r.Context(), id); errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	} else if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo cliente")
+		return
+	}
+	payments, err := h.customers.ListPayments(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error listando pagos")
+		return
+	}
+	respond(w, http.StatusOK, payments)
+}
+
+func (h *Handler) createCustomerPayment(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	var body struct {
+		Amount float64 `json:"amount"`
+		Note   string  `json:"note"`
+	}
+	if err := decode(r, &body); err != nil {
+		respondError(w, http.StatusBadRequest, "request inválido")
+		return
+	}
+	payment, err := h.customers.CreatePayment(r.Context(), id, body.Amount, body.Note)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respond(w, http.StatusCreated, payment)
+}
+
+func (h *Handler) getCustomerDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	customer, err := h.customers.GetByID(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	} else if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo cliente")
+		return
+	}
+	balance, err := h.customers.Balance(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error calculando saldo")
+		return
+	}
+	payments, err := h.customers.ListPayments(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error listando pagos")
+		return
+	}
+	creditSales, err := h.customers.ListCreditSales(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error listando ventas a crédito")
+		return
+	}
+	respond(w, http.StatusOK, map[string]any{
+		"customer":     customer,
+		"balance":      balance,
+		"payments":     payments,
+		"credit_sales": creditSales,
+	})
+}
+=== FILE internal/database/migrate.go (relevant parts)
+package database
+
+import (
+	"fmt"
+	"os"
+	"time"
+)
+
+// migration represents a single versioned database migration.
+type migration struct {
+	version int
+	up      string   // SQL executed inside a transaction; failure stops the binary
+	fixup   []string // SQL run after commit with errors silently ignored (idempotent ops)
+}
+
+var dbMigrations = []migration{
+	{
+		version: 1,
+		up:      migration1,
+		// For databases that pre-date the description column (created before this project added it).
+		fixup: []string{
+			`ALTER TABLE categories ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
+		},
+	},
+	{version: 2, up: migration2},
+	{version: 3, up: migration3},
+	{version: 4, up: migration4},
+	{version: 5, up: migration5},
+	{version: 6, up: migration6},
+	{version: 7, up: migration7},
+	{version: 8, up: migration8},
+	{version: 9, up: migration9},
+	{version: 10, up: migration10},
+	{version: 11, up: migration11},
+	{version: 12, up: migration12},
+	{version: 13, up: migration13},
+	{version: 14, up: migration14},
+	{version: 15, up: migration15},
+	{version: 16, up: migration16},
+	{version: 17, up: migration17},
+	{version: 18, up: migration18},
+}
+
+// migrate creates the schema_migrations table, detects pending migrations,
+// backs up the database if needed, and runs each migration in a transaction.
+...
+	unit_price REAL NOT NULL,
+	note TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'pending'
+		CHECK (status IN ('pending','preparing','ready','delivered','void')),
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	ready_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
+ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+`
+=== internal/database/migrate_test.go lines 1-40
+package database
+
+// Contrato US-055 §4, T-1 y T-2.
+
+import (
+	"testing"
+)
+
+func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
+	db, err := New(":memory:")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+
+	var v int
+	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+		t.Fatalf("max version: %v", err)
+	}
+	if v != 18 {
+		t.Errorf("MAX(version) = %d, want 18", v)
+	}
+
+	for _, name := range []string{
+		"dining_tables", "orders", "order_items",
+		"idx_orders_status", "idx_orders_table", "idx_orders_updated",
+		"idx_order_items_order", "idx_order_items_status",
+	} {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, name).Scan(&n); err != nil {
+			t.Fatalf("sqlite_master %s: %v", name, err)
+		}
+		if n != 1 {
+			t.Errorf("sqlite_master count for %q = %d, want 1", name, n)
+		}
+	}
+
+	if _, err := db.Exec(`INSERT INTO products(id, name, sale_price) VALUES(1, 'P1', 1000)`); err != nil {
+		t.Fatalf("seed product: %v", err)
+	}
+=== visible test that must pass: internal/repository/customer_delete_test.go
+package repository
+
+import (
+	"context"
+	"testing"
+)
+
+// US-079: deleting a customer that has settled history must deactivate it
+// (logical delete), keep its sales, and hide it from the customer list.
+func TestCustomerRepo_Delete_SettledCustomerIsDeactivated(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Fer', '', '')`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 20000, 20000, 'completed', 'credit', datetime('now','-3 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 20000)`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (1, 20000, datetime('now','-1 days'))`)
+
+	repo := NewCustomerRepository(db.DB)
+	if err := repo.Delete(ctx, 1); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	var active, sales int
+	if err := db.QueryRow(`SELECT active FROM customers WHERE id = 1`).Scan(&active); err != nil {
+		t.Fatalf("customer row must still exist: %v", err)
+	}
+	if active != 0 {
+		t.Errorf("active = %d, want 0", active)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sales WHERE customer_id = 1`).Scan(&sales); err != nil || sales != 1 {
+		t.Errorf("sales kept = %d (err %v), want 1", sales, err)
+	}
+	list, err := repo.List(ctx, "")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 0 {
+		t.Errorf("List returned %d customers, want 0", len(list))
+	}
+}

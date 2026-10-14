@@ -1,0 +1,6 @@
+CLEAN.
+
+- **Pool-wide enforcement**: `modernc.org/sqlite` parses `_pragma` parameters and executes them on every newly opened pooled connection, ensuring `busy_timeout(5000)` and connection-scoped `foreign_keys(1)` are active across all connections.
+- **Ordering**: The driver prioritizes `busy_timeout` first so the busy handler is armed before subsequent pragmas run.
+- **WAL mode**: `journal_mode(WAL)` sets and maintains WAL mode on file databases without contention across pooled connections.
+- **In-memory compatibility**: SQLite treats `PRAGMA journal_mode(WAL)` on `:memory:` as a harmless no-op (it returns `"memory"` without error), so `New(":memory:")` continues to work.

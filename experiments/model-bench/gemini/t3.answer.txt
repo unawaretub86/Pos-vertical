@@ -1,0 +1,62 @@
+### Overview
+
+Unlike `mattn/go-sqlite3`, the pure-Go driver **`modernc.org/sqlite` does not support dedicated, driver-specific query keys** such as `_foreign_keys`, `_journal_mode`, or `_busy_timeout`. 
+
+Instead, `modernc.org/sqlite` provides a single generic query key: **`_pragma`**. Any SQLite `PRAGMA` is passed through this mechanism and executed when the connection is established.
+
+---
+
+### 1. DSN Keys & Exact Syntax
+
+| Setting | Driver DSN Key | Exact Syntax Example |
+| :--- | :--- | :--- |
+| **(a) Foreign Keys** | `_pragma` | `file:app.db?_pragma=foreign_keys(1)`<br>*(or `_pragma=foreign_keys%3DON` / `_pragma=foreign_keys=ON`)* |
+| **(b) Journal Mode WAL** | `_pragma` | `file:app.db?_pragma=journal_mode(WAL)`<br>*(or `_pragma=journal_mode%3DWAL` / `_pragma=journal_mode=WAL`)* |
+| **(c) Busy Timeout** | `_pragma` | `file:app.db?_pragma=busy_timeout(5000)`<br>*(or `_pragma=busy_timeout%3D5000` / `_pragma=busy_timeout=5000`, in milliseconds)* |
+
+#### Combined DSN Example
+```text
+file:app.db?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)
+```
+*(Note: Parentheses syntax `foreign_keys(1)` is preferred in DSNs because it avoids URL-encoding `=` characters).*
+
+---
+
+### 2. Are Mattn-Style Keys Honoured?
+
+* **`_foreign_keys` / `_fk`**: **NO** (silently ignored).
+* **`_journal_mode`**: **NO** (silently ignored).
+* **`_busy_timeout`**: **NO** (silently ignored).
+
+If passed in the DSN without `_pragma`, SQLite will treat them as unrecognised URI parameters or ignore them, and the requested behavior will **not** be activated.
+
+---
+
+### 3. Does Each Setting Apply Per Pooled Connection?
+
+In Go's `database/sql`, connections are pooled. When configured via `_pragma` in the DSN, `Driver.Open` executes the specified pragmas **every time a new physical connection is opened for the pool**:
+
+* **(a) Foreign Keys (`foreign_keys`)**:
+  * **Engine scope**: **Per connection** (in-memory state on the SQLite connection handle).
+  * **Pool behavior**: Because the DSN executes on connection creation, **every pooled connection gets foreign keys enabled**. *(Note: Executing `PRAGMA foreign_keys = ON` via `db.Exec()` only affects the single checked-out connection, whereas setting it in the DSN applies it across the pool).*
+* **(b) Journal Mode WAL (`journal_mode`)**:
+  * **Engine scope**: **Database-wide & persistent**. WAL mode is written to the SQLite database header.
+  * **Pool behavior**: Once set, it applies to the entire database file across **all pooled connections** (and persists across restarts).
+* **(c) Busy Timeout (`busy_timeout`)**:
+  * **Engine scope**: **Per connection** (connection-local state).
+  * **Pool behavior**: Because the DSN pragma runs on connection initialization, **every pooled connection receives the busy timeout**.
+
+---
+
+### 4. Source File & Function Citation
+
+* **Source File**: `sqlite.go` in the root of the `modernc.org/sqlite` repository.
+* **Function**: `Driver.Open` / `newConn` [UNSURE: whether the loop executing `_pragma` values is inline in `Driver.Open` or factored into an unexported helper such as `newConn` or `(*conn).init` in v1.46.1].
+  * *Mechanism*: The driver parses the DSN using `url.Parse`, extracts `query["_pragma"]` as a `[]string` slice, and iterates over each entry executing `PRAGMA <value>;` on the newly initialized connection handle.
+
+---
+
+### 5. Uncertainty Disclosures
+
+* **Module Version [UNSURE]**: Modernc releases follow semver tags `v1.x.y` (e.g., `v1.34.x`), whereas SQLite upstream releases include `3.46.1`. It is uncertain whether `v1.46.1` refers to a specific module tag or conflates the C SQLite amalgamation version `3.46.1` with the Go module version; however, `_pragma` handling in `sqlite.go` is consistent across versions.
+* **Helper Function Identifier [UNSURE]**: The exact unexported helper function name (`newConn` vs `open` vs inline in `Driver.Open`) responsible for iterating over `q["_pragma"]`.

@@ -1,0 +1,4 @@
+# Keep patches byte-exact and scripts runnable on Windows checkouts.
+patches/** -text
+gemini/** -text
+graders/*.sh text eol=lf

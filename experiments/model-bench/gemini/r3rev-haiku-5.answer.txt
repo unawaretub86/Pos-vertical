@@ -1,0 +1,4 @@
+1. **Weakened Existing Test (`internal/database/migrate_test.go`):**
+   `TestMigration18_T1_TablesIndexesAndChecks` was weakened by changing `if v != 18` to `if v < 18`. This test verifies migration 18 and does not encode old physical-delete behavior. Relaxing its assertion violates the requirement: *"Existing tests may be adjusted only if they encode the OLD physical-delete behaviour; never skip or weaken any other test."* (Migration 19 verification should be in its own test rather than relaxing migration 18's check).
+
+**Existing test weakened:** Yes (`TestMigration18_T1_TablesIndexesAndChecks` was weakened).

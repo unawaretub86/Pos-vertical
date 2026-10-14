@@ -1,0 +1,31 @@
+You are reviewing/implementing Go code. No tools are available; everything you need is inline. Go module modernc.org/sqlite v1.46.1 (pure Go driver, NOT mattn/go-sqlite3).
+
+TASK: Rewrite the New function below so the connection really runs in WAL journal mode with busy_timeout 5000 ms and foreign_keys ON on EVERY pooled connection (database/sql opens several). Today it reports journal_mode=delete, busy_timeout=0. New(":memory:") must keep working. Smallest diff. Output ONLY the full replacement New function in a go code block, then one line: "Confidence (0-100) that this is correct for modernc v1.46.1 and why."
+
+FILE internal/database/database.go:
+package database
+
+import (
+	"database/sql"
+	_ "modernc.org/sqlite"
+)
+
+type DB struct {
+	*sql.DB
+	path string
+}
+
+func New(path string) (*DB, error) {
+	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_pragma=foreign_keys(1)&_time_format=sqlite")
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+	d := &DB{DB: db, path: path}
+	if err := d.migrate(); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
