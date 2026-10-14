@@ -21,7 +21,7 @@
 
 | US | Name | Status | Date |
 |----|------|--------|------|
-| US-075 | Binary serves the Next.js SPA correctly (R-55) | ⬜ Pending | |
+| US-075 | Binary serves the Next.js SPA correctly (R-55) | [x] Complete | |
 | US-076 | Hide the email App password in GET (R-57) | ⬜ Pending | |
 | US-077 | Forced redirect when the session expires (R-49) | ⬜ Pending | |
 | US-078 | Enable Foreign Keys in SQLite (R-56) | ⬜ Pending | |
@@ -70,9 +70,9 @@
 - Modifying the login flow.
 
 **Acceptance Criteria:**
-- [ ] Build the binary (`make build` or equivalent), run it and open `http://localhost:8080/login`.
-- [ ] The login screen loads without 404 errors for CSS or JS files.
-- [ ] Log in and see that the redirect to `/dashboard` works and calls the API.
+- [x] Build the binary (`make build` or equivalent), run it and open `http://localhost:8080/login`.
+- [x] The login screen loads without 404 errors for CSS or JS files.
+- [x] Log in and see that the redirect to `/dashboard` works and calls the API.
 
 **DoD:**
 - Adjust `frontendFS.Open` in `web/static.go` trying `.html` if the base path fails.
