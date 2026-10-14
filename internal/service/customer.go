@@ -110,3 +110,7 @@ func (s *CustomerService) CreatePayment(ctx context.Context, customerID int64, a
 func (s *CustomerService) ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error) {
 	return s.repo.ListCreditSales(ctx, customerID)
 }
+
+func (s *CustomerService) GetPOSSummary(ctx context.Context, customerID int64) (*model.CustomerPosSummary, error) {
+	return s.repo.GetPOSSummary(ctx, customerID)
+}

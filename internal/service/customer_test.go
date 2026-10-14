@@ -55,6 +55,9 @@ func (m *mockCustomerRepo) CreatePayment(_ context.Context, p *model.CustomerPay
 func (m *mockCustomerRepo) ListCreditSales(_ context.Context, _ int64) ([]*model.Sale, error) {
 	return m.creditSales, nil
 }
+func (m *mockCustomerRepo) GetPOSSummary(_ context.Context, _ int64) (*model.CustomerPosSummary, error) {
+	return nil, nil
+}
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

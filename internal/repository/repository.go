@@ -79,6 +79,7 @@ type CustomerRepository interface {
 	ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error)
 	CreatePayment(ctx context.Context, p *model.CustomerPayment) (*model.CustomerPayment, error)
 	ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error)
+	GetPOSSummary(ctx context.Context, id int64) (*model.CustomerPosSummary, error)
 }
 
 // SupplierRepository defines CRUD operations for suppliers.

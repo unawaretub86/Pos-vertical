@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"context"
@@ -267,6 +267,7 @@ func (h *Handler) Routes() http.Handler {
 		// Customers (all authenticated users can read; admin to write)
 		r.Get("/customers", h.listCustomers)
 		r.Get("/customers/{id}", h.getCustomer)
+		r.Get("/customers/{id}/pos-summary", h.getCustomerPOSSummary)
 		r.Get("/customers/{id}/detail", h.getCustomerDetail)
 		r.Get("/customers/{id}/balance", h.getCustomerBalance)
 		r.Get("/customers/{id}/payments", h.listCustomerPayments)

@@ -234,3 +234,20 @@ func (h *Handler) getCustomerDetail(w http.ResponseWriter, r *http.Request) {
 		"credit_sales": creditSales,
 	})
 }
+
+func (h *Handler) getCustomerPOSSummary(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	summary, err := h.customers.GetPOSSummary(r.Context(), id)
+	if errors.Is(err, repository.ErrNotFound) {
+		respondError(w, http.StatusNotFound, "cliente no encontrado")
+		return
+	} else if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo cliente")
+		return
+	}
+	respond(w, http.StatusOK, summary)
+}

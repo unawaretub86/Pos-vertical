@@ -111,6 +111,20 @@ type CustomerPayment struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type CustomerTopProduct struct {
+	ProductID   int64  `json:"product_id"`
+	Name        string `json:"name"`
+	TimesBought int    `json:"times_bought"`
+}
+
+type CustomerPosSummary struct {
+	LastVisitAt *string              `json:"last_visit_at"`
+	TopProducts []CustomerTopProduct `json:"top_products"`
+	Balance     float64              `json:"balance"`
+	DaysOverdue *int                 `json:"days_overdue"`
+	CreditLimit *int64               `json:"credit_limit"`
+}
+
 type Sale struct {
 	ID            int64      `json:"id"`
 	UserID        int64      `json:"user_id"`

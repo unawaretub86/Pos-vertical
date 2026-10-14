@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/andreyo/pos/internal/model"
 )
@@ -226,4 +227,66 @@ func (r *customerRepo) ListCreditSales(ctx context.Context, customerID int64) ([
 		sales = append(sales, s)
 	}
 	return sales, rows.Err()
+}
+
+// GetPOSSummary returns the customer context for the POS checkout.
+func (r *customerRepo) GetPOSSummary(ctx context.Context, id int64) (*model.CustomerPosSummary, error) {
+	summary := &model.CustomerPosSummary{}
+
+	c, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	summary.CreditLimit = c.CreditLimit
+
+	var balance float64
+	var oldestDebt sql.NullString
+	err = r.db.QueryRowContext(ctx, `
+		SELECT
+			`+customerBalanceExpr+` AS balance,
+			sp_sum.oldest_at AS oldest_debt_at
+		`+customerBalanceFrom+`
+		WHERE c.id = ?`, id).Scan(&balance, &oldestDebt)
+	if err != nil {
+		return nil, fmt.Errorf("customer summary balance: %w", err)
+	}
+	summary.Balance = balance
+	oldest := parseOldestDebt(oldestDebt)
+	if balance > 0 && oldest != nil {
+		days := int(time.Since(*oldest).Hours() / 24)
+		summary.DaysOverdue = &days
+	}
+
+	var lastVisit sql.NullString
+	err = r.db.QueryRowContext(ctx, `
+		SELECT MAX(created_at) FROM sales WHERE customer_id = ? AND status = 'completed'`, id).Scan(&lastVisit)
+	if err == nil && lastVisit.Valid {
+		summary.LastVisitAt = &lastVisit.String
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			p.id, p.name, COUNT(DISTINCT si.sale_id) AS times_bought
+		FROM sale_items si
+		JOIN sales s ON s.id = si.sale_id
+		JOIN products p ON p.id = si.product_id
+		WHERE s.customer_id = ? AND s.status = 'completed'
+		GROUP BY p.id, p.name
+		ORDER BY times_bought DESC, p.name ASC
+		LIMIT 3`, id)
+	if err != nil {
+		return nil, fmt.Errorf("customer summary top products: %w", err)
+	}
+	defer rows.Close()
+
+	summary.TopProducts = []model.CustomerTopProduct{}
+	for rows.Next() {
+		var tp model.CustomerTopProduct
+		if err := rows.Scan(&tp.ProductID, &tp.Name, &tp.TimesBought); err != nil {
+			return nil, fmt.Errorf("scan top product: %w", err)
+		}
+		summary.TopProducts = append(summary.TopProducts, tp)
+	}
+
+	return summary, nil
 }
