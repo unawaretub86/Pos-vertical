@@ -25,6 +25,10 @@ func newPurchaseTestEnv(t *testing.T) *PurchaseService {
 		`INSERT INTO products (id, name, sale_price, cost, stock) VALUES (1, 'Leche', 3000, 7500, 5)`); err != nil {
 		t.Fatalf("seed product: %v", err)
 	}
+	if _, err := db.DB.ExecContext(context.Background(),
+		`INSERT INTO users (id, username, password_hash, role) VALUES (7, 'u7', 'h', 'admin')`); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
 
 	purchaseRepo := repository.NewPurchaseRepository(db.DB)
 	supplierRepo := repository.NewSupplierRepository(db.DB)

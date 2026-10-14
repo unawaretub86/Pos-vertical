@@ -192,6 +192,10 @@ func TestAskAssistant_T14_DebtorsTruncatesAtFiveWithRemainder(t *testing.T) {
 
 func TestAskAssistant_T21_UserIDAlwaysFromJWTNeverFromBody(t *testing.T) {
 	db := setupTestDB(t)
+	if _, err := db.DB.ExecContext(context.Background(),
+		`INSERT INTO users (id, username, password_hash, role) VALUES (3, 'u3', 'h', 'admin'), (7, 'u7', 'h', 'admin')`); err != nil {
+		t.Fatalf("seed users: %v", err)
+	}
 	h := New(db)
 
 	token3 := tokenFor(t, 3, "admin")

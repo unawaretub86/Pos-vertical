@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -39,6 +40,7 @@ var dbMigrations = []migration{
 	{version: 16, up: migration16},
 	{version: 17, up: migration17},
 	{version: 18, up: migration18},
+	{version: 19, up: migration19},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -86,24 +88,40 @@ func (db *DB) migrate() error {
 }
 
 func (db *DB) runMigration(m migration) error {
-	tx, err := db.Begin()
+	ctx := context.Background()
+	// Migrations that rebuild a table (DROP TABLE + rename) fail with enforced
+	// foreign keys while child rows exist, and PRAGMA foreign_keys is a no-op
+	// inside a transaction. So pin one connection, switch them off for the
+	// migration and restore them before the connection returns to the pool.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return err
+	}
+	defer conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`) //nolint:errcheck
+
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if _, err := tx.Exec(m.up); err != nil {
+	if _, err := tx.ExecContext(ctx, m.up); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`INSERT INTO schema_migrations (version) VALUES (?)`, m.version); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES (?)`, m.version); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 
+	// Same connection: with ":memory:" every pooled connection is its own database.
 	for _, stmt := range m.fixup {
-		_, _ = db.Exec(stmt)
+		_, _ = conn.ExecContext(ctx, stmt)
 	}
 	return nil
 }
@@ -546,4 +564,11 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_status ON order_items(status);
 ALTER TABLE business_config ADD COLUMN restaurant_mode INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAULT 0;
+`
+
+// migration19 adds logical deletion to customers. Customers are
+// referenced by sales and payments, so deleting one sets active = 0 instead of
+// removing the row. Existing customers stay active.
+const migration19 = `
+ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
 `

@@ -10,6 +10,9 @@ import (
 	"github.com/andreyo/pos/internal/repository"
 )
 
+// ErrCustomerHasBalance is returned when deleting a customer that still owes money.
+var ErrCustomerHasBalance = errors.New("no se puede eliminar un cliente con saldo pendiente")
+
 type CustomerService struct {
 	repo repository.CustomerRepository
 }
@@ -61,7 +64,7 @@ func (s *CustomerService) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 	if balance > 0 {
-		return errors.New("no se puede eliminar un cliente con saldo pendiente")
+		return ErrCustomerHasBalance
 	}
 	return s.repo.Delete(ctx, id)
 }
