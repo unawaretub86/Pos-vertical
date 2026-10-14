@@ -18,7 +18,7 @@ func NewCustomerRepository(db *sql.DB) CustomerRepository {
 	return &customerRepo{db: db}
 }
 
-// List returns all customers with their on-the-fly credit balance.
+// List returns all active customers with their on-the-fly credit balance.
 // Optional search filters by name or phone (LIKE).
 func (r *customerRepo) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
 	query := `
@@ -27,9 +27,10 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
 			` + customerBalanceExpr + ` AS balance,
 			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
 
+	query += ` WHERE c.active = 1`
 	args := []any{}
 	if strings.TrimSpace(search) != "" {
-		query += ` WHERE (c.name LIKE ? OR c.phone LIKE ?)`
+		query += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
 		like := "%" + search + "%"
 		args = append(args, like, like)
 	}
@@ -99,8 +100,11 @@ func (r *customerRepo) Update(ctx context.Context, c *model.Customer) (*model.Cu
 	return r.GetByID(ctx, c.ID)
 }
 
+// Delete deactivates an active customer (active = 0). The row is kept because
+// sales and payments reference it; an unknown or already inactive id is
+// ErrNotFound.
 func (r *customerRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM customers WHERE id = ?`, id)
+	res, err := r.db.ExecContext(ctx, `UPDATE customers SET active = 0 WHERE id = ? AND active = 1`, id)
 	if err != nil {
 		return fmt.Errorf("customer delete: %w", err)
 	}

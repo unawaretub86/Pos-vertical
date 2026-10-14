@@ -14,11 +14,11 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
 	defer db.Close()
 
 	var v int
-	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
-		t.Fatalf("max version: %v", err)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = 18`).Scan(&v); err != nil {
+		t.Fatalf("version 18: %v", err)
 	}
-	if v != 18 {
-		t.Errorf("MAX(version) = %d, want 18", v)
+	if v != 1 {
+		t.Errorf("schema_migrations rows with version 18 = %d, want 1", v)
 	}
 
 	for _, name := range []string{
@@ -35,6 +35,9 @@ func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
 		}
 	}
 
+	if _, err := db.Exec(`INSERT INTO products(id, name, sale_price) VALUES(1, 'P1', 1000)`); err != nil {
+		t.Fatalf("seed product: %v", err)
+	}
 	if _, err := db.Exec(`INSERT INTO orders(type, user_id) VALUES('bogus', 1)`); err == nil {
 		t.Error("orders.type 'bogus' should violate CHECK")
 	}

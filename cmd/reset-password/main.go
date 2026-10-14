@@ -21,7 +21,7 @@ func main() {
 	if *password == "" {
 		log.Fatal("debes especificar --password")
 	}
-	db, err := sql.Open("sqlite", *dbPath)
+	db, err := sql.Open("sqlite", *dbPath+"?_pragma=busy_timeout(5000)") // wait for the running POS instead of failing with SQLITE_BUSY
 	if err != nil {
 		log.Fatalf("no se pudo abrir la base de datos: %v", err)
 	}

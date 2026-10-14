@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/andreyo/pos/internal/repository"
+	"github.com/andreyo/pos/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -117,8 +118,12 @@ func (h *Handler) deleteCustomer(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "cliente no encontrado")
 		return
 	}
-	if err != nil {
+	if errors.Is(err, service.ErrCustomerHasBalance) {
 		respondError(w, http.StatusConflict, err.Error())
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error eliminando cliente")
 		return
 	}
 	respond(w, http.StatusOK, map[string]string{"message": "cliente eliminado"})

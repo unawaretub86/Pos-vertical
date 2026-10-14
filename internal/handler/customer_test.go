@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/andreyo/pos/internal/database"
@@ -117,5 +118,84 @@ func TestListCustomers_T5_TotalPortfolioMatchesPositiveBalances(t *testing.T) {
 	}
 	if body.TotalPortfolio != sumPositive {
 		t.Errorf("total_portfolio (%v) != sum of customers[].balance > 0 (%v)", body.TotalPortfolio, sumPositive)
+	}
+}
+
+// ─── Customer logical delete ────────────────────────────────────────────────
+
+func TestDeleteCustomer_LogicalDelete(t *testing.T) {
+	db := setupTestDB(t)
+	h := seedCustomersT5(t, db)
+
+	del := func(id string) int {
+		req := withURLParam(httptest.NewRequest(http.MethodDelete, "/api/customers/"+id, nil), "id", id)
+		w := httptest.NewRecorder()
+		h.deleteCustomer(w, req)
+		return w.Code
+	}
+
+	// Fer (saldo $0) and Gus (saldo -$20.000) have history and are deactivated.
+	if code := del("3"); code != http.StatusOK {
+		t.Errorf("delete Fer = %d, want 200", code)
+	}
+	if code := del("4"); code != http.StatusOK {
+		t.Errorf("delete Gus = %d, want 200", code)
+	}
+	// Dora owes $30.000 → 409; unknown and already inactive ids → 404.
+	if code := del("1"); code != http.StatusConflict {
+		t.Errorf("delete Dora = %d, want 409", code)
+	}
+	if code := del("999"); code != http.StatusNotFound {
+		t.Errorf("delete 999 = %d, want 404", code)
+	}
+	if code := del("3"); code != http.StatusNotFound {
+		t.Errorf("delete Fer twice = %d, want 404", code)
+	}
+
+	var rows, sales int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM customers`).Scan(&rows); err != nil || rows != 4 {
+		t.Errorf("customer rows = %d (err %v), want 4", rows, err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sales WHERE customer_id IN (3, 4)`).Scan(&sales); err != nil || sales != 2 {
+		t.Errorf("sales kept = %d (err %v), want 2", sales, err)
+	}
+
+	// List keeps Dora and Eli only; portfolio stays $30.000 + $15.000 = $45.000.
+	w := httptest.NewRecorder()
+	h.listCustomers(w, httptest.NewRequest(http.MethodGet, "/api/customers", nil))
+	var resp struct {
+		Data struct {
+			Customers []struct {
+				ID int64 `json:"id"`
+			} `json:"customers"`
+			TotalPortfolio float64 `json:"total_portfolio"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(resp.Data.Customers) != 2 || resp.Data.Customers[0].ID != 1 || resp.Data.Customers[1].ID != 2 {
+		t.Errorf("list = %+v, want ids [1 2]", resp.Data.Customers)
+	}
+	if resp.Data.TotalPortfolio != 45000 {
+		t.Errorf("total_portfolio = %v, want 45000", resp.Data.TotalPortfolio)
+	}
+
+	// Search does not find the inactive customer.
+	w = httptest.NewRecorder()
+	h.listCustomers(w, httptest.NewRequest(http.MethodGet, "/api/customers?q=Fer", nil))
+	resp.Data.Customers = nil
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode search: %v", err)
+	}
+	if len(resp.Data.Customers) != 0 {
+		t.Errorf("search Fer = %+v, want none", resp.Data.Customers)
+	}
+
+	// History still resolves the name of the inactive customer.
+	w = httptest.NewRecorder()
+	h.getCustomer(w, withURLParam(httptest.NewRequest(http.MethodGet, "/api/customers/3", nil), "id", "3"))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"Fer"`) {
+		t.Errorf("get Fer = %d %s, want 200 with name", w.Code, w.Body.String())
 	}
 }

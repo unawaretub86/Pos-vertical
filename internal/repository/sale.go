@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,6 +41,18 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		return nil, fmt.Errorf("sale create begin tx: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
+
+	// A credit sale (fiado) cannot be charged to a customer that is missing or was deleted.
+	if sale.CustomerID != nil && hasCreditPayment(sale.Payments) {
+		var active int
+		err := tx.QueryRowContext(ctx, `SELECT active FROM customers WHERE id = ?`, *sale.CustomerID).Scan(&active)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && active == 0) {
+			return nil, ErrCustomerInactive
+		}
+		if err != nil {
+			return nil, fmt.Errorf("sale customer check: %w", err)
+		}
+	}
 
 	// Insert sale
 	res, err := tx.ExecContext(ctx, `
@@ -355,4 +368,13 @@ func scanSale(s scanner) (*model.Sale, error) {
 		&sale.PaymentMethod, &sale.CashTendered, &sale.ChangeAmount,
 		&sale.Reference, &sale.Status, &sale.VoidedBy, &sale.VoidedAt, &sale.CreatedAt,
 	)
+}
+
+func hasCreditPayment(payments []model.Payment) bool {
+	for _, p := range payments {
+		if p.Method == "credit" {
+			return true
+		}
+	}
+	return false
 }

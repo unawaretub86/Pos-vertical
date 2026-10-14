@@ -371,6 +371,7 @@ func TestMetricsRepo_T11_LowStock(t *testing.T) {
 	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (6, 'P6', 'P6', 1000, 500, 'unit', 1, 5, 10)`)
 
 	// Sales
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Ana', '', '')`)
 	// P1 sold 17.5 in total over 7 days -> 17.5 / 7 = 2.5/day.
 	metricsExec(t, db, `INSERT INTO sales (id, customer_id, user_id, payment_method, status, subtotal, total, created_at) VALUES (1, 1, 1, 'cash', 'completed', 0, 0, datetime('now', 'localtime', '-1 day'))`)
 	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 17.5, 1000, 17500)`)

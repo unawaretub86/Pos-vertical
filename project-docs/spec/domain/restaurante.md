@@ -82,4 +82,4 @@ Rules:
 
 ## Schema (migration 18)
 
-`dining_tables`, `orders` (`type` `table|takeaway`, `status` `open|closed|cancelled`) and `order_items` (`status` `pending|preparing|ready|delivered|void`) are created at once; the `orders`/`order_items` endpoints were introduced by US-056 (see Orders). The declared foreign keys are not enforced at runtime (roadmap R-56), so integrity depends on logical deletion and service validations.
+`dining_tables`, `orders` (`type` `table|takeaway`, `status` `open|closed|cancelled`) and `order_items` (`status` `pending|preparing|ready|delivered|void`) are created at once; the `orders`/`order_items` endpoints were introduced by US-056 (see Orders). Foreign keys are enforced at runtime (roadmap R-56, closed), so deleting a referenced row fails; integrity also relies on logical deletion and service validations.
