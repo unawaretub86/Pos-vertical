@@ -19,7 +19,7 @@ OUTDIR="$WT/changes/$ID"; mkdir -p "$OUTDIR"
 if [[ $MODE == diff ]]; then OUT="$OUTDIR/gemini-diff-round-$ROUND.md"; else OUT="$OUTDIR/gemini-contract.md"; fi
 PACKET="$OUTDIR/gemini-$MODE-input.md"
 MAX_INLINE=24000   # Windows argv limit is ~32K; above this the packet is read from a file
-TIMEOUT=300
+TIMEOUT=420   # per attempt; one retry on empty output or timeout (worst case ~14 min)
 
 finish() { # status, body
   { echo "STATUS: $1"; echo "MODE: $MODE  ROUND: $ROUND  DATE: $(date -u +%FT%TZ)"
@@ -74,7 +74,10 @@ ADDDIR=$(cygpath -m "$OUTDIR" 2>/dev/null || echo "$OUTDIR")
 ANSWER=""
 for attempt in 1 2; do
   ANSWER=$(timeout "$TIMEOUT" "$AGY" --mode plan --add-dir "$ADDDIR" --print-timeout "${TIMEOUT}s" --print "$PROMPT" 2>&1); rc=$?
-  [[ $rc -eq 124 ]] && finish TIMEOUT "agy exceeded ${TIMEOUT}s (attempt $attempt)."
+  if [[ $rc -eq 124 ]]; then
+    [[ $attempt -eq 2 ]] && finish TIMEOUT "agy exceeded ${TIMEOUT}s twice."
+    ANSWER=""; continue
+  fi
   [[ -n ${ANSWER//[[:space:]]/} && $ANSWER != *"no output produced"* ]] && break
   ANSWER=""
 done

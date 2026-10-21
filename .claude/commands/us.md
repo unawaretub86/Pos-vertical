@@ -33,7 +33,7 @@ If the analyst touched the sprint (US registration from the roadmap), make that 
 
 ### Gemini second opinion on the contract (advisory)
 
-Right after verifying `contract.md`, run `bash scripts/gemini-review.sh contract "$ID" "$WT"` (Bash tool, `run_in_background`; takes about 1-4 minutes, never fails the pipeline). It writes `$WT/changes/$ID/gemini-contract.md` with `STATUS: OK | EMPTY | TIMEOUT | NO_AGY`. Do not wait for it more than a few minutes: if it is not ready when you present GATE 1, present without it and say so.
+Right after verifying `contract.md`, run `bash scripts/gemini-review.sh contract "$ID" "$WT"` (Bash tool, `run_in_background`; takes about 2-5 minutes, up to ~14 with a retry, never fails the pipeline). It writes `$WT/changes/$ID/gemini-contract.md` with `STATUS: OK | EMPTY | TIMEOUT | NO_AGY`. Do not wait for it more than a few minutes: if it is not ready when you present GATE 1, present without it and say so.
 
 If `STATUS: OK` and not `CLEAN`, **verify each line yourself** against the contract and the code (`file:line`). Show Andrey only the ones that hold up, under a "Gemini (verified)" heading, and list the discarded ones with the reason. Gemini never changes the contract: only the `analyst` does, after Andrey decides.
 
@@ -67,7 +67,7 @@ Checkpoint: `git -C "$WT" commit -am "feat($ID): implementation"` (add new files
 1. Snapshot: `git -C "$WT" status --porcelain` and `git -C "$WT" rev-parse HEAD`.
 2. Launch `qa` and give it the round number and the `RED` hash. **In the same turn**, start Gemini in parallel: `bash scripts/gemini-review.sh diff "$ID" "$WT" <round> "$RED"` (Bash tool, `run_in_background`). It writes `$WT/changes/$ID/gemini-diff-round-<round>.md`. Gemini only reads the diff and writes under `changes/`; it cannot edit code.
 3. Snapshot again. If QA changed anything outside `changes/`, revert with `git -C "$WT" checkout -- .` (and `git -C "$WT" clean -fd -e changes/` for new files) and note the violation in `qa.md`.
-4. Wait for both (Gemini's `STATUS` may be `EMPTY`/`TIMEOUT`; that is not a failure, record it). **Verify every Gemini finding** against the code with `file:line`. A verified finding Claude's QA missed is added to the round's BLOCKER/MINOR list (note `found by Gemini` in `qa.md`); one that does not hold up is discarded and counted as a false positive. A Gemini `CLEAN` never overrides a QA BLOCKER, and never turns a BLOCKER into OK.
+4. Wait for QA. Give Gemini until about 10 minutes after launch; if it has not finished, proceed without it and record `no answer` (its `STATUS` may be `EMPTY`/`TIMEOUT`; that is not a failure, record it). **Verify every Gemini finding** against the code with `file:line`. A verified finding Claude's QA missed is added to the round's BLOCKER/MINOR list (note `found by Gemini` in `qa.md`); one that does not hold up is discarded and counted as a false positive. A Gemini `CLEAN` never overrides a QA BLOCKER, and never turns a BLOCKER into OK.
 5. Read the verdict (QA's, plus any verified Gemini BLOCKER):
    - **BLOCKER** and it is round 1 or 2 → go back to step 3, passing the implementer only that round's BLOCKERs.
    - **BLOCKER** in round 3 → **stop and escalate to Andrey**. Two rounds without converging indicate the problem is in the contract.
