@@ -34,7 +34,7 @@ const ask = (msg) => {
 
 function bashPre(input) {
   const cmd = input?.tool_input?.command ?? '';
-  if (/\b(npm|yarn)\s+(install|i|ci|add|uninstall|remove)\b/.test(cmd)) {
+  if (/(?:^|[;&|(]\s*|\bthen\s+|\bdo\s+)(?:npm|yarn)\s+(?:install|i|ci|add|uninstall|remove)\b/.test(cmd.trim())) {
     block('this project uses pnpm, never npm/yarn (CLAUDE.md > Stack). Use `pnpm add|install|remove` inside frontend/.');
   }
   if (!/\bgit\b[^|;&]*\bcommit\b/.test(cmd)) return;
