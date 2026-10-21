@@ -117,3 +117,19 @@ Before planning a feature, read `project-docs/README.md` to know which document 
 - `project-docs/archive/2026-05-plan-mvp.md` (formerly `PLAN.md`) and `project-docs/archive/2026-04-17-arquitectura.md` (formerly `ARQUITECTURA.md`) describe the April–May 2026 code. They are history, not current state. Example: `2026-05-plan-mvp.md:1135` reports a `cash_in` bug in the register close that is **already fixed** (`internal/service/register.go:113`).
 - Iterating a Go `map` is random by design. If order matters (rule evaluation, priorities), use an ordered slice or tests will fail intermittently.
 - The documents in `project-docs/research/` (formerly `find-pos.md`, `finds-betters.md`, `better-pos.md`, `better-finds-pos.md`, `facElect-finds.md`) are dated market research, not a code inventory. Their "this does not exist" claims are verified before use.
+
+## Enforced by hooks and scripts
+
+Rules that a script can check are enforced in `.claude/settings.json` through `.claude/hooks/pos-guard.js`; do not work around a block, fix the cause.
+
+| Rule | Behavior |
+|---|---|
+| pnpm only | Blocks `npm`/`yarn` install, add, ci, remove |
+| No commit on `master`/`main` | Blocks `git commit` |
+| Behavior change updates `spec/` (Rule 2) | Asks before a commit that stages `internal/{service,repository,handler}` code with no `project-docs/spec/` change |
+| Never edit an applied migration | Blocks edits that remove lines from an existing `migrationN` function in `internal/database/migrate.go` |
+| Never skip or weaken a test | Blocks a new `t.Skip`; warns when assertion lines are removed from a test |
+| No CGO | Blocks `go-sqlite3`/cgo additions in `go.mod` |
+| Half-open dates, `?` parameters, CSS variables, English docs | Warns on `BETWEEN`, `fmt.Sprintf` SQL, hard-coded colors in `frontend/`, Spanish prose in `project-docs/`, `.claude/`, `CLAUDE.md` |
+
+`scripts/gemini-review.sh` gives the `/us` pipeline an advisory second review from Gemini (`diff` mode in every QA round, `contract` mode at GATE 1). Its output is unverified: check each finding with `file:line` before acting, and never treat it as the only review.

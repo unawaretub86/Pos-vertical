@@ -31,6 +31,12 @@ Launch `analyst`. If `$ID` comes from the roadmap (step 0.2), also tell it to re
 
 If the analyst touched the sprint (US registration from the roadmap), make that checkpoint separately, **before** `RED`: `git -C "$WT" commit -am "docs($ID): register US"`.
 
+### Gemini second opinion on the contract (advisory)
+
+Right after verifying `contract.md`, run `bash scripts/gemini-review.sh contract "$ID" "$WT"` (Bash tool, `run_in_background`; takes about 1-4 minutes, never fails the pipeline). It writes `$WT/changes/$ID/gemini-contract.md` with `STATUS: OK | EMPTY | TIMEOUT | NO_AGY`. Do not wait for it more than a few minutes: if it is not ready when you present GATE 1, present without it and say so.
+
+If `STATUS: OK` and not `CLEAN`, **verify each line yourself** against the contract and the code (`file:line`). Show Andrey only the ones that hold up, under a "Gemini (verified)" heading, and list the discarded ones with the reason. Gemini never changes the contract: only the `analyst` does, after Andrey decides.
+
 ### ◆ GATE 1 — Andrey approves the contract
 
 Show the analyst's summary, the DISCREPANCIES and the questions for the PO, with the path to the contract. **Stop and wait.** If Andrey asks for changes, relaunch `analyst` with his corrections.
@@ -59,9 +65,10 @@ Checkpoint: `git -C "$WT" commit -am "feat($ID): implementation"` (add new files
 ## 4. QA — agent `qa`
 
 1. Snapshot: `git -C "$WT" status --porcelain` and `git -C "$WT" rev-parse HEAD`.
-2. Launch `qa` and give it the round number and the `RED` hash.
+2. Launch `qa` and give it the round number and the `RED` hash. **In the same turn**, start Gemini in parallel: `bash scripts/gemini-review.sh diff "$ID" "$WT" <round> "$RED"` (Bash tool, `run_in_background`). It writes `$WT/changes/$ID/gemini-diff-round-<round>.md`. Gemini only reads the diff and writes under `changes/`; it cannot edit code.
 3. Snapshot again. If QA changed anything outside `changes/`, revert with `git -C "$WT" checkout -- .` (and `git -C "$WT" clean -fd -e changes/` for new files) and note the violation in `qa.md`.
-4. Read the verdict:
+4. Wait for both (Gemini's `STATUS` may be `EMPTY`/`TIMEOUT`; that is not a failure, record it). **Verify every Gemini finding** against the code with `file:line`. A verified finding Claude's QA missed is added to the round's BLOCKER/MINOR list (note `found by Gemini` in `qa.md`); one that does not hold up is discarded and counted as a false positive. A Gemini `CLEAN` never overrides a QA BLOCKER, and never turns a BLOCKER into OK.
+5. Read the verdict (QA's, plus any verified Gemini BLOCKER):
    - **BLOCKER** and it is round 1 or 2 → go back to step 3, passing the implementer only that round's BLOCKERs.
    - **BLOCKER** in round 3 → **stop and escalate to Andrey**. Two rounds without converging indicate the problem is in the contract.
    - **OK** → step 5.
@@ -99,11 +106,14 @@ Before the merge commit, add to `project-docs/pipeline-bench.md`:
 - a row in the "Runs" table;
 - a "Run N — $ID" section with: per-agent table (invocations, last-value tokens, sum of tools and duration), what it found, unplanned stops and why, operational friction and what to measure next.
 
+For Gemini, record per round: STATUS, duration, findings raised, verified true, false positives, and anything it caught that QA missed (this is the data that decides how far to trust it).
+
 Include it in the same merge commit. If you spot an adjustment to the pipeline, **propose it to Andrey**; do not apply it without his "yes".
 
 ## Orchestrator rules
 
 - Never skip a gate. Never merge without the GATE 2 "yes".
+- Gemini is advisory. Never act on a Gemini finding you have not verified, and never let it be the only reviewer.
 - Do not fix an agent's work with your own hands: relaunch it with the reason.
 - If an agent reports something the contract does not resolve, ask Andrey; do not decide scope.
 - Report faithfully: if a step was skipped or failed, say so.
