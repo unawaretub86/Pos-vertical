@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-10-01 · Verified against the code on 2026-09-30 (US-071: transactional opening, US-053: email at close).
+> **Updated:** 2026-10-13 · Verified against the code on 2026-10-13 (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -63,6 +63,15 @@ Source: `internal/service/expense.go:17-19`. Closed list, validated in the servi
 ```
 net profit = gross profit − expenses of the same range
 ```
+
+---
+
+## Rule: email at close (US-053)
+
+- The owner's email address (`owner_email`) and Gmail App Password (`owner_email_app_password`) live in `business_config`.
+- `GET /api/setup` and the `PUT /api/setup` response never include `owner_email_app_password`; they expose `has_email_app_password` (bool). The password is write-only from the API; it is used server-side only (close summary, manual summary, email test via `POST /api/settings/email/test`, admin only).
+- `PUT /api/setup` with an omitted or empty `owner_email_app_password` keeps the stored one; a non-empty value replaces it (`internal/repository/setup.go`, `Upsert`). There is no way to clear a saved password (roadmap R-70).
+- Changing `owner_email` without retyping the password keeps the old password; the email then fails at SMTP and the "Probar" button shows the error.
 
 ---
 

@@ -1,7 +1,7 @@
 # Domain — Restaurant (restaurant mode and tables)
 
 > **Type:** spec · **Current:** yes · **Rules over:** restaurant mode, tables and table state
-> **Updated:** 2026-10-01 · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
+> **Updated:** 2026-10-13 (US-076: `PUT /api/setup` password exception) · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
 
 Module for cafeterías and restaurants: tables, orders and a bar screen (SPRINT-13). Today table management, the switch and per-table orders (open, items, void, cancel) exist; checkout and the bar arrive in US-057 and US-058 and will add their rules here.
 
@@ -15,7 +15,7 @@ Enum values below (`libre`, `ocupada`, `por_cobrar`, route names like `/mesas`) 
 - Off: the tables section is not shown in Settings, nor "Mesas" (`/mesas`, tables) and "Barra" (`/barra`, bar) in the sidebar.
 - On: the tables section appears in Settings and the sidebar shows "Mesas" and "Barra" to both `admin` and `cashier`. In addition the POS hides the parked carts kept in `localStorage` (mobile chip, desktop chip and "Dejar en espera": `showParked = !restaurant_mode`, `frontend/app/pos/page.tsx:622,1030,1141,1155`); when off, the POS does not change.
 - `business_config.lan_access_enabled` (0/1, default 0) is created together with this migration but belongs to US-054 (LAN access); see `servidor.md`.
-- `PUT /api/setup` replaces the whole row. The Settings form must always resend `restaurant_mode` and `lan_access_enabled` (read from `GET /setup`) so that saving another field does not turn them off.
+- `PUT /api/setup` replaces the whole row, except `owner_email_app_password`: an omitted or empty value keeps the stored one (US-076; see `caja.md`). The Settings form must always resend `restaurant_mode` and `lan_access_enabled` (read from `GET /setup`) so that saving another field does not turn them off.
 
 ## Tables
 

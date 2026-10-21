@@ -7,13 +7,26 @@ import (
 	"github.com/andreyo/pos/internal/repository"
 )
 
+// setupResponse is the API representation of the business config. The shallower
+// OwnerEmailAppPassword (always nil, omitted) shadows the embedded one so the
+// secret never leaves the server; HasEmailAppPassword says whether one is saved.
+type setupResponse struct {
+	repository.BusinessConfig
+	OwnerEmailAppPassword *string `json:"owner_email_app_password,omitempty"`
+	HasEmailAppPassword   bool    `json:"has_email_app_password"`
+}
+
+func newSetupResponse(cfg *repository.BusinessConfig) setupResponse {
+	return setupResponse{BusinessConfig: *cfg, HasEmailAppPassword: cfg.OwnerEmailAppPassword != ""}
+}
+
 func (h *Handler) getSetup(w http.ResponseWriter, r *http.Request) {
 	cfg, err := h.setup.Get()
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Error al obtener configuración")
 		return
 	}
-	respond(w, http.StatusOK, cfg)
+	respond(w, http.StatusOK, newSetupResponse(cfg))
 }
 
 func (h *Handler) updateSetup(w http.ResponseWriter, r *http.Request) {
@@ -33,8 +46,12 @@ func (h *Handler) updateSetup(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Error al guardar configuración")
 		return
 	}
-	cfg, _ := h.setup.Get()
-	respond(w, http.StatusOK, cfg)
+	cfg, err := h.setup.Get()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Error al obtener configuración")
+		return
+	}
+	respond(w, http.StatusOK, newSetupResponse(cfg))
 }
 
 func (h *Handler) testEmailConfig(w http.ResponseWriter, r *http.Request) {

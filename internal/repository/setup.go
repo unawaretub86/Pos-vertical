@@ -98,7 +98,7 @@ func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 			default_opening_amount=excluded.default_opening_amount,
 			allow_global_discount=excluded.allow_global_discount,
 			owner_email=excluded.owner_email,
-			owner_email_app_password=excluded.owner_email_app_password,
+			owner_email_app_password=CASE WHEN excluded.owner_email_app_password = '' THEN business_config.owner_email_app_password ELSE excluded.owner_email_app_password END,
 			catalog_enabled=excluded.catalog_enabled,
 			catalog_token=excluded.catalog_token,
 			restaurant_mode=excluded.restaurant_mode,

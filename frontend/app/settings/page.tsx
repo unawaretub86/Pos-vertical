@@ -28,6 +28,7 @@ interface BusinessConfig {
   allow_global_discount: boolean;
   owner_email: string;
   owner_email_app_password: string;
+  has_email_app_password?: boolean;
   catalog_enabled: boolean;
   catalog_token: string;
   restaurant_mode: boolean;
@@ -215,6 +216,7 @@ function SettingsContent() {
   const [saving, setSaving] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [lanUrl, setLanUrl] = useState('');
+  const [hasEmailPassword, setHasEmailPassword] = useState(false);
 
   useEffect(() => {
     api.get<{ ip: string; url: string }>('/setup/lan-info')
@@ -244,12 +246,13 @@ function SettingsContent() {
           default_opening_amount: cfg.default_opening_amount ?? 0,
           allow_global_discount: cfg.allow_global_discount ?? false,
           owner_email: cfg.owner_email ?? '',
-          owner_email_app_password: cfg.owner_email_app_password ?? '',
+          owner_email_app_password: '',
           catalog_enabled: cfg.catalog_enabled ?? false,
           catalog_token: cfg.catalog_token ?? '',
           restaurant_mode: cfg.restaurant_mode ?? false,
           lan_access_enabled: cfg.lan_access_enabled ?? false,
         });
+        setHasEmailPassword(cfg.has_email_app_password ?? false);
         if (cfg.logo) setLogoPreview(cfg.logo);
       })
       .catch(() => toast('Error al cargar configuración', 'error'))
@@ -290,6 +293,10 @@ function SettingsContent() {
     setSaving(true);
     try {
       await api.put('/setup', form);
+      if (form.owner_email_app_password) {
+        setHasEmailPassword(true);
+        setForm(f => ({ ...f, owner_email_app_password: '' }));
+      }
       invalidateConfig();
       toast('Configuración guardada', 'success');
     } catch (err: unknown) {
@@ -541,7 +548,7 @@ function SettingsContent() {
                     <input
                       className="input"
                       type="password"
-                      placeholder="•••• •••• •••• ••••"
+                      placeholder={hasEmailPassword ? 'Guardada (escriba para cambiar)' : '•••• •••• •••• ••••'}
                       autoComplete="new-password"
                       value={form.owner_email_app_password}
                       onChange={e => setForm(f => ({ ...f, owner_email_app_password: e.target.value }))}
@@ -550,7 +557,7 @@ function SettingsContent() {
                     <button
                       type="button"
                       className="btn btn-sm"
-                      disabled={testingEmail || !form.owner_email || !form.owner_email_app_password}
+                      disabled={testingEmail || !form.owner_email || !(hasEmailPassword || form.owner_email_app_password)}
                       onClick={handleTestEmail}
                     >
                       {testingEmail ? 'Probando...' : 'Probar'}

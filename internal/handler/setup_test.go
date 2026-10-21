@@ -115,3 +115,153 @@ func TestSetup_US054_T5_LanInfo(t *testing.T) {
 		t.Errorf("cashier status = %d, want 403", code)
 	}
 }
+
+// US-076: the email App Password is write-only from the API.
+
+const (
+	us076Secret    = "abcd efgh ijkl mnop"
+	us076NewSecret = "wxyz wxyz wxyz wxyz"
+)
+
+func putSetup(t *testing.T, h *Handler, body string) string {
+	t.Helper()
+	w := doAuth(h, tokenFor(t, 1, "admin"), http.MethodPut, "/setup", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PUT /setup status = %d, body %s", w.Code, w.Body.String())
+	}
+	return w.Body.String()
+}
+
+func getSetupRaw(t *testing.T, h *Handler, token string) string {
+	t.Helper()
+	w := doAuth(h, token, http.MethodGet, "/setup", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /setup status = %d, body %s", w.Code, w.Body.String())
+	}
+	return w.Body.String()
+}
+
+type setupView struct {
+	Data struct {
+		OwnerEmail        string `json:"owner_email"`
+		Address           string `json:"address"`
+		HasEmailAppPasswd *bool  `json:"has_email_app_password"`
+	} `json:"data"`
+}
+
+func decodeSetupView(t *testing.T, raw string) setupView {
+	t.Helper()
+	var v setupView
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		t.Fatalf("decode: %v\n%s", err, raw)
+	}
+	return v
+}
+
+func storedPassword(t *testing.T, h *Handler) string {
+	t.Helper()
+	cfg, err := h.setup.Get()
+	if err != nil {
+		t.Fatalf("setup.Get: %v", err)
+	}
+	return cfg.OwnerEmailAppPassword
+}
+
+func TestSetup_US076_T1_CashierGetDoesNotLeakPassword(t *testing.T) {
+	h := New(setupTestDB(t))
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com","owner_email_app_password":"`+us076Secret+`"}`)
+
+	raw := getSetupRaw(t, h, tokenFor(t, 2, "cashier"))
+	if strings.Contains(raw, "owner_email_app_password") {
+		t.Errorf("GET body contains key owner_email_app_password: %s", raw)
+	}
+	if strings.Contains(raw, us076Secret) {
+		t.Errorf("GET body leaks the secret: %s", raw)
+	}
+	v := decodeSetupView(t, raw)
+	if v.Data.HasEmailAppPasswd == nil || !*v.Data.HasEmailAppPasswd {
+		t.Errorf("has_email_app_password = %v, want true", v.Data.HasEmailAppPasswd)
+	}
+	if v.Data.OwnerEmail != "dueno@gmail.com" {
+		t.Errorf("owner_email = %q, want dueno@gmail.com", v.Data.OwnerEmail)
+	}
+}
+
+func TestSetup_US076_T2_NoPasswordStoredReportsFalse(t *testing.T) {
+	h := New(setupTestDB(t))
+	putSetup(t, h, `{"name":"Tienda Uno"}`)
+
+	raw := getSetupRaw(t, h, tokenFor(t, 2, "cashier"))
+	v := decodeSetupView(t, raw)
+	if v.Data.HasEmailAppPasswd == nil || *v.Data.HasEmailAppPasswd {
+		t.Errorf("has_email_app_password = %v, want false (present in body: %s)", v.Data.HasEmailAppPasswd, raw)
+	}
+}
+
+func TestSetup_US076_T3_OmittedOrEmptyPasswordKeepsStored(t *testing.T) {
+	h := New(setupTestDB(t))
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com","owner_email_app_password":"`+us076Secret+`"}`)
+
+	putSetup(t, h, `{"name":"Tienda Uno","address":"Cra 7 # 10-20","owner_email":"dueno@gmail.com"}`)
+	if got := storedPassword(t, h); got != us076Secret {
+		t.Errorf("password after omitted key = %q, want %q", got, us076Secret)
+	}
+	if v := decodeSetupView(t, getSetupRaw(t, h, tokenFor(t, 1, "admin"))); v.Data.Address != "Cra 7 # 10-20" {
+		t.Errorf("address = %q, want Cra 7 # 10-20", v.Data.Address)
+	}
+
+	putSetup(t, h, `{"name":"Tienda Uno","address":"Cra 7 # 10-20","owner_email":"dueno@gmail.com","owner_email_app_password":""}`)
+	if got := storedPassword(t, h); got != us076Secret {
+		t.Errorf("password after empty string = %q, want %q", got, us076Secret)
+	}
+}
+
+func TestSetup_US076_T4_NonEmptyPasswordReplacesStored(t *testing.T) {
+	h := New(setupTestDB(t))
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com","owner_email_app_password":"`+us076Secret+`"}`)
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com"}`)
+
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com","owner_email_app_password":"`+us076NewSecret+`"}`)
+	if got := storedPassword(t, h); got != us076NewSecret {
+		t.Errorf("password after new value = %q, want %q", got, us076NewSecret)
+	}
+
+	// The replacement must also survive a later save that omits the password.
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com"}`)
+	if got := storedPassword(t, h); got != us076NewSecret {
+		t.Errorf("password after replacement then omitted save = %q, want %q", got, us076NewSecret)
+	}
+}
+
+func TestSetup_US076_T5_PutResponseDoesNotLeakPassword(t *testing.T) {
+	h := New(setupTestDB(t))
+	raw := putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com","owner_email_app_password":"`+us076Secret+`"}`)
+
+	if strings.Contains(raw, "owner_email_app_password") {
+		t.Errorf("PUT body contains key owner_email_app_password: %s", raw)
+	}
+	if strings.Contains(raw, us076Secret) {
+		t.Errorf("PUT body leaks the secret: %s", raw)
+	}
+	v := decodeSetupView(t, raw)
+	if v.Data.HasEmailAppPasswd == nil || !*v.Data.HasEmailAppPasswd {
+		t.Errorf("has_email_app_password = %v, want true", v.Data.HasEmailAppPasswd)
+	}
+}
+
+func TestSetup_US076_T6_InternalConsumersStillSeeSecret(t *testing.T) {
+	h := New(setupTestDB(t))
+
+	// Unconfigured: email test answers 400.
+	w := doAuth(h, tokenFor(t, 1, "admin"), http.MethodPost, "/settings/email/test", "")
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Credenciales de correo no configuradas") {
+		t.Errorf("unconfigured email test = %d %s, want 400 Credenciales de correo no configuradas", w.Code, w.Body.String())
+	}
+
+	// Saved, then re-saved with the password omitted: repo.Get still returns the real secret.
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com","owner_email_app_password":"`+us076Secret+`"}`)
+	putSetup(t, h, `{"name":"Tienda Uno","owner_email":"dueno@gmail.com"}`)
+	if got := storedPassword(t, h); got != us076Secret {
+		t.Errorf("setup.Get password = %q, want %q", got, us076Secret)
+	}
+}

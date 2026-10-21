@@ -22,7 +22,7 @@
 | US | Name | Status | Date |
 |----|------|--------|------|
 | US-075 | Binary serves the Next.js SPA correctly (R-55) | [x] Complete | |
-| US-076 | Hide the email App password in GET (R-57) | ⬜ Pending | |
+| US-076 | Hide the email App password in GET (R-57) | [x] Complete (AC-7 manual browser check pending from the PO) | 2026-10-13 |
 | US-077 | Forced redirect when the session expires (R-49) | ⬜ Pending | |
 | US-078 | Enable Foreign Keys in SQLite (R-56) | ⬜ Pending | |
 | US-079 | Fix 42 Lint Errors (R-35) | ⬜ Pending | |
@@ -99,13 +99,26 @@
 - The update `PUT /setup` (which uses upsert) must not erase the existing password if the payload omits it, unless that is explicitly intended.
 
 **Acceptance Criteria:**
-- [ ] A logged-in user with the `cashier` role inspects the network on `/setup` and does not see the `owner_email_app_password` field.
-- [ ] Updating the setup from the UI as admin does not destroy the previously saved password (the email configuration is kept).
+- [x] A logged-in user with the `cashier` role inspects the network on `/setup` and does not see the `owner_email_app_password` field.
+- [x] Updating the setup from the UI as admin does not destroy the previously saved password (the email configuration is kept).
 
 **DoD:**
 - Modify the response in `getSetup`.
 - Adjust logic in `updateSetup` or `repo.Upsert` to ignore overwriting the password with a blank.
 - 1 unit test that `GET /setup` does not leak the credential.
+
+**Verified criteria (closed 2026-10-13):**
+
+- AC-1: WHEN any authenticated user (admin or cashier) calls `GET /setup`, the system SHALL return a body without the key `owner_email_app_password` and with `has_email_app_password` (bool). Test: `TestSetup_US076_T1_CashierGetDoesNotLeakPassword` (`internal/handler/setup_test.go`).
+- AC-2: WHILE a non-empty App Password is stored, `GET /setup` SHALL return `has_email_app_password: true`; otherwise `false`. Tests: T1 and `TestSetup_US076_T2_NoPasswordStoredReportsFalse`.
+- AC-3: WHEN an admin calls `PUT /setup` omitting `owner_email_app_password` or sending `""`, the system SHALL keep the stored password. Test: `TestSetup_US076_T3_OmittedOrEmptyPasswordKeepsStored`.
+- AC-4: WHEN an admin calls `PUT /setup` with a non-empty password, the system SHALL store it. Test: `TestSetup_US076_T4_NonEmptyPasswordReplacesStored`.
+- AC-5: The `PUT /setup` response SHALL NOT contain `owner_email_app_password` and SHALL contain `has_email_app_password`. Test: `TestSetup_US076_T5_PutResponseDoesNotLeakPassword`.
+- AC-6: WHEN the close summary, manual summary or `POST /settings/email/test` need credentials, the system SHALL read the real stored password. Test: `TestSetup_US076_T6_InternalConsumersStillSeeSecret`.
+- AC-7: WHILE `has_email_app_password` is true and the admin has not typed a new password, `/settings` SHALL show the field as saved ("Guardada (escriba para cambiar)"), keep "Probar" enabled when `owner_email` is set, and send no password on save. Verified by code reading only (`frontend/app/settings/page.tsx:249,255,295,551,560`); there is no component-test setup. **Pending manual browser check by the PO:** as admin with a saved password, `/settings` shows the "saved" placeholder and "Probar" is enabled; saving with the field blank and reloading keeps it saved; typing a password and saving replaces it; as cashier, the Network tab of `GET /api/setup` shows no `owner_email_app_password`.
+- AC-8: IF `GET /setup` fails to read the config, THEN the system SHALL answer 500 `Error al obtener configuración` (unchanged; no dedicated test).
+
+QA: round 1 had one BLOCKER (spec delta not applied), resolved at close. `go test ./...` has one failure that also exists on clean `dev` (`TestDashboardToday_T20_Golden`, R-67). The smoke test was skipped because the binary hardcodes port 8080 (R-71). Lint: 0 new problems.
 
 ---
 
