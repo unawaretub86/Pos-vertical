@@ -23,7 +23,7 @@
 |----|------|--------|------|
 | US-075 | Binary serves the Next.js SPA correctly (R-55) | [x] Complete | |
 | US-076 | Hide the email App password in GET (R-57) | [x] Complete (AC-7 manual browser check pending from the PO) | 2026-10-13 |
-| US-077 | Forced redirect when the session expires (R-49) | ⬜ Pending | |
+| US-077 | Forced redirect when the session expires (R-49) | [x] Complete (manual PO check pending) | 2026-10-20 |
 | US-078 | Enable Foreign Keys in SQLite (R-56) | ⬜ Pending | |
 | US-079 | Fix 42 Lint Errors (R-35) | ⬜ Pending | |
 | US-080 | Native ESC/POS Printing 58/80mm | ⬜ Pending | |
@@ -139,15 +139,30 @@ QA: round 1 had one BLOCKER (spec delta not applied), resolved at close. `go tes
 - Redirect to `/login` on the client side (e.g. `window.location.href = '/login'`).
 
 **Acceptance Criteria:**
-- [ ] Enter the POS with an active session.
-- [ ] Delete the JWT from localStorage (or wait 24h).
-- [ ] Click any view (Inventory, Dashboard, etc.).
-- [ ] Be redirected instantly to `/login`.
-- [ ] The app must not enter an infinite loop if the `/login` page makes a fetch that returns 401.
+- [x] Enter the POS with an active session.
+- [x] Delete the JWT from localStorage (or wait 24h).
+- [x] Click any view (Inventory, Dashboard, etc.).
+- [x] Be redirected instantly to `/login`.
+- [x] The app must not enter an infinite loop if the `/login` page makes a fetch that returns 401.
 
 **DoD:**
 - `frontend/lib/api.ts` adjusted.
 - Verification that `window.location.pathname !== '/login'` before redirecting (optional but recommended).
+
+**Verified criteria (closed 2026-10-20):**
+
+- AC-1: WHEN any `api.*` request receives HTTP 401, the pathname is not `/login` or `/login/`, and the request path is not `/auth/login`, the system SHALL call `clearAuth()` (removes `pos_token`, `pos_user`, `pos_force_pw`) and navigate with `window.location.assign('/login')`. Tests: T-1, T-8 in `frontend/lib/api.test.ts`.
+- AC-2: WHEN a 401 qualifies for redirect, the system SHALL clear and navigate first, then parse the body in a try/catch and reject with the body `error`, or `HTTP 401` if the body is not JSON (never a `SyntaxError`). Tests: T-2, T-3.
+- AC-3: IF `/auth/login` answers 401 (wrong password), THEN the system SHALL NOT clear the session nor navigate, and SHALL reject with `credenciales inválidas`. Tests: T-4, T-5, T-8.
+- AC-4: IF the pathname is `/login` or `/login/`, THEN a 401 SHALL NOT clear nor navigate (no loop). Tests: T-5, T-6, T-8.
+- AC-5: WHEN the status is not 401 (200, 400, 403, 404, 500), behavior SHALL be unchanged and nothing is cleared or navigated. Test: T-7.
+- AC-6: WHEN several requests receive 401 at once, the system SHALL navigate at most once per page load. Test: T-9.
+- AC-7: WHILE `window` is undefined, a 401 SHALL NOT throw a `ReferenceError`; nothing is cleared or navigated. Test: T-10.
+- The redirect decision is the exported pure function `shouldRedirectOnUnauthorized` (`frontend/lib/api.ts`).
+
+Tests T-1..T-10 are all in `frontend/lib/api.test.ts` (63 vitest tests pass in total). The original manual checklist above (delete the token, click a view, land on `/login`) is **pending a manual check by the PO**: delete `pos_token` or set it to `x` (a missing token is already handled by `AppLayout`), click Inventory and expect `/login`; a wrong password on the login form must show `credenciales inválidas` without a page reload.
+
+QA: round 1 OK, 0 BLOCKER, 3 MINOR accepted without items (`redirecting` flag stays set if `assign` throws, not reachable in browsers; a non-JSON 401 on `/auth/login` or `/login` becomes `HTTP 401`; T-10 also skips `clearAuth()` by design). `go test ./...` has one failure that also exists on clean `dev` (`TestDashboardToday_T20_Golden`, R-67). `pnpm lint`: 48 problems on both `dev` and the worktree, none in the touched files. Smoke test skipped (frontend-only change). Spec: no change (client-side UX, no business rule).
 
 ---
 

@@ -47,6 +47,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 7 | 2026-09-29 | US-062 | L | ~538k (A 340k=135k+102k+75k+28k · T 65k · I 64k · Q 69k) | 168 | ~27.4 | 0 (plus 1 stop from the auto-mode classifier, unrelated to the contract) | 1 | 7 contract discrepancies (D-1..D-7) + 1 pre-existing out-of-scope finding | 7 new (R-49 to R-55) | 0 | +1,198 / −8, 9 files |
 | 8 | 2026-09-30 | US-054 | L | ~191k (A 79k=51k+55k+79k · T 32k · I 45k · Q 36k) | 51 | ~9.9 | 0 (one PASSES⚠️ shown to the PO by rule, not a stop) | 1 | 6 contract discrepancies (outdated sprint, dynamic routes, `go build` without `web/out`…) | 1 new (R-62) + 1 closed (R-55) | 0 | +452 / −55, 22 files |
 | 9 | 2026-09-30 | US-056 | L | ~514k (A 213k=82k+49k+83k · T 95k=82k+13k · I 114k · Q 92k=63k+29k) | 205 | ~22 | 1 (main checkout with a change in `.claude/`; plus one PASSES⚠️ shown to the PO by rule) | 1 (+ smoke 1b) | 8 contract discrepancies + 1 test defect (seed clashes with migration) | 5 new (R-63..R-67) + 1 closed (R-59) | 0 | +2,155 / −26, 26 files |
+| 10 | 2026-10-20 | US-077 | L | ~218k (A 128k=63k+26k+38k · T 29k · I 30k · Q 31k) | 70 | ~6.8 | 0 (one PASSES⚠️ shown to the PO by rule, not a stop) | 1 | 4 contract discrepancies (D-1..D-4) + 3 wording fixes from Gemini | 1 new (R-73) + 1 closed (R-49) | 0 | +249 / −11, 4 files |
 
 ### Trend
 
@@ -463,6 +464,36 @@ Real cost of setting up the environment: the first pass was empty without knowin
 ### What to measure in run 10
 - If the test-author runs its tests against the real migrations, how many test rounds are avoided.
 - Cost of the separate smoke when the port is taken.
+
+## Run 10 — US-077 (redirect to /login on 401, level L; first run with Gemini as second reviewer)
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract, GATE 1 wording adjustment, close; all cold, `ListAgents` showed none alive) | 128k (63k + 26k + 38k) | 48 | ~2.4 min |
+| test-author | 1 | 29k | 6 | ~0.7 min |
+| implementer | 1 | 30k | 9 | ~1.6 min |
+| qa | 1 | 31k | 7 | ~2.2 min |
+
+**What it found.** The sprint omitted the wrong-password 401 on `POST /auth/login` (a redirect there would reload the page and swallow the error); there is no `logout` function, the primitive is `clearAuth()` (`frontend/lib/auth.ts:36`); `api.ts` called `res.json()` before checking `res.ok`, so a non-JSON 401 body would have thrown a `SyntaxError`. QA: 0 BLOCKER, 3 MINOR accepted without items.
+
+**Unplanned stops:** 0. Seven tests passed before the implementation (negative and regression guards, T-2, T-4..T-7, T-10); shown to the PO by rule, accepted as regression guards.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~5 min | 4 | 3 (AC-1 vs AC-4 path set, AC-2 body read ambiguity, T-8 conditional) | 1 (asked for a spec update; the contract had grepped `spec/` and no rule changed) | n/a (no QA on contracts); 3 wording fixes applied by the analyst |
+| diff, round 1 | TIMEOUT at 300 s | 5 min | 0 | 0 | 0 | none (never answered) |
+
+The diff packet was 22 KB, smaller than the 57 KB packet that answered in 3m23s during script testing, so latency varies and size is not the cause. The script does not retry on TIMEOUT (it retries only on empty output).
+
+**Operational friction.**
+- `pnpm install` was needed in the new worktree before any vitest run; the contract was written without it, so nothing was executed during contract mode.
+- The pos-guard hook is active in this session (first run with it); no block fired.
+- `TestDashboardToday_T20_Golden` still fails on `dev` (R-67); `pnpm lint` is 48 problems on `dev` and the worktree.
+
+### What to measure in run 11
+- Gemini diff review with a longer timeout and one retry on TIMEOUT: does it finish, and does it find anything QA missed?
+- Whether the contract-mode review keeps paying off (3 of 4 findings valid) or only catches wording.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 
