@@ -21,6 +21,7 @@ Code and tests are done for these; only a human check on a real browser or devic
 | US | What to check | Where it is described |
 |---|---|---|
 | US-077 | In DevTools set `pos_token` to `x`, click any view: lands on `/login`. Wrong password on `/login`: shows "credenciales inválidas" without reloading. | `SPRINT-18-Estabilizacion-Produccion.md` (US-077), contract §4 |
+| US-076 | AC-7: as a cashier, inspect the network on `/setup` in a browser and confirm `owner_email_app_password` is absent; as admin, save Settings and confirm the stored email password is kept. | `SPRINT-18-Estabilizacion-Produccion.md` (US-076) |
 | US-078 | Confirm 3 product choices made by the Tech Lead: customers deleted logically (`active = 0`), delete answers 409 when the balance is above 0, credit sales (`fiado`) to inactive customers are rejected. Open the app on an existing database and check that migration 19 runs. | `roadmap.md` R-56 and decision log 2026-10-13 |
 | US-062 | M-1..M-9 on a real phone: visual, theme, 320 px, keyboard. | `workflow.md` SPRINT-14 row |
 | US-054 | Open `/login` from the compiled binary and from a phone or tablet over WiFi (AC-16). | `roadmap.md` R-55 |

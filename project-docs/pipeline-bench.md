@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-10-01
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-10-20
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -10,17 +10,22 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 9 (US-056, level L, 2026-09-30). Before: 8 (US-054, level L, 2026-09-30), 7 (US-062, level L, 2026-09-29). Run in progress: none, no `us/*` worktrees are open. **SPRINT-14 complete in code and tests** (US-059 to US-065); pending is the manual validation of the keyboard on a real phone (M-7 / AC-20) of US-062.
+**Last run:** 10 (US-077, level L, 2026-10-20; first run with Gemini as advisory second reviewer). Before: 9 (US-056), 8 (US-054), 7 (US-062). No `us/*` worktree is open. `dev` is at the US-077 merge plus tooling and docs commits (verify with `git log`).
 
-**Applied before this run:** the run 6 adjustment (checklist + declared time blocks in `implementer.md`, commit `37e5c10`). In run 7 the implementer finished in 3.9 min without hanging, but the orchestrator prompt also repeated the warning to chunk files and to report every ~20-25 min, so it cannot be separated which part of the result is due to the adjustment. A single sample: do not conclude yet.
+**SPRINT-18 (Production Stabilization):** US-075, US-076, US-077 and US-078 are done in code and tests and merged to `dev`; US-079 (lint, 48 problems on `dev`, not 42), US-080 (ESC/POS printing) and US-081 (LAN multi-register concurrency) are pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**Open, no adjustment applied:** (1) the pipeline has no way to verify UI in a browser: the `qa` agent has no browser tool and the orchestrator did not try one until the PO asked; verification with headless Edge (Playwright) found R-55 (see run 7). (2) The auto-mode classifier failed on Bash and PowerShell during close and stalled the pipeline at the `close` checkpoint.
+**Next US:** US-079, then US-080, US-081. Run `/us US-079 [M|L]`.
 
-**Next US:** next of SPRINT-13 (US-057 onward). Pending from the PO: manual test with two devices of US-054 (AC-16 / T-M).
+**Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
-**(obsolete, run 7)** none in SPRINT-14. What follows is defined by the roadmap (`project-docs/roadmap.md`), which now includes R-49 to R-55 originating in US-062.
+**Pipeline changes since run 9 (applied, with the PO's approval):**
+- Hooks in `.claude/settings.json` run `.claude/hooks/pos-guard.js`: pnpm only, no commit on `master`/`main`, applied migrations, `t.Skip`, CGO (blocks); `BETWEEN`, SQL concatenation, hard-coded colors, Spanish docs, missing spec (warn/ask). Documented in `CLAUDE.md`.
+- `scripts/gemini-review.sh` is called by `/us`: `contract` mode before GATE 1 and `diff` mode in every QA round, in parallel with `qa`. Advisory: the orchestrator verifies every finding. Timeout 420 s with one retry; the pipeline waits at most about 10 minutes.
+- Experiment M-1..M-3 (model comparison) did not change any agent's model: the recommendations (cheaper implementer when a red test defines done, QA on the strong model, Gemini never the only reviewer) wait for more data. See `experiments/model-bench/README.md` on branch `experiment/model-bench`.
 
-**How to resume:** in a new session, pick the next US and run `/us US-XXX [M|L]`.
+**Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
+
+**How to resume:** in a new session, run `/us US-079` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 

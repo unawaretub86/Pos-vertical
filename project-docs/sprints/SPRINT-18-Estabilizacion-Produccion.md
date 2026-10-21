@@ -24,7 +24,7 @@
 | US-075 | Binary serves the Next.js SPA correctly (R-55) | [x] Complete | |
 | US-076 | Hide the email App password in GET (R-57) | [x] Complete (AC-7 manual browser check pending from the PO) | 2026-10-13 |
 | US-077 | Forced redirect when the session expires (R-49) | [x] Complete (manual PO check pending) | 2026-10-20 |
-| US-078 | Enable Foreign Keys in SQLite (R-56) | ⬜ Pending | |
+| US-078 | Enable Foreign Keys in SQLite (R-56) | [x] Complete in code (PO validation pending) | 2026-10-13 |
 | US-079 | Fix 42 Lint Errors (R-35) | ⬜ Pending | |
 | US-080 | Native ESC/POS Printing 58/80mm | ⬜ Pending | |
 | US-081 | Multi-Register LAN Concurrency and Stability | ⬜ Pending | |

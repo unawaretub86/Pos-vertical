@@ -69,4 +69,4 @@ It applies to ways of interacting that the user has not seen before. Not to incr
 | SPRINT-15 | Assistant Continuation and UTC Debt (R-02, R-03, R-05, R-48) | ⬜ Pending |
 | SPRINT-16 | Security and Production (JWT, Tx, Backup) | ✅ Complete |
 | SPRINT-17 | Factus Sandbox, WhatsApp and Responsive | ✅ Complete except US-074 (responsive 320px): criteria unchecked, requires manual verification on a phone/emulator |
-| SPRINT-18 | Production Stabilization | ⬜ Pending |
+| SPRINT-18 | Production Stabilization | 🔄 In progress: US-075..US-078 done in code (manual PO checks pending, see `gaps.md`); US-079, US-080, US-081 pending |
