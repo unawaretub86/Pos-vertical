@@ -1,0 +1,2 @@
+*.sh text eol=lf
+.claude/hooks/*.js text eol=lf
