@@ -33,6 +33,7 @@ func GenerateToken(claims *model.Claims) (string, error) {
 		"user_id":  claims.UserID,
 		"username": claims.Username,
 		"role":     claims.Role,
+		"fpc":      claims.ForcePasswordChange,
 		"exp":      jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 	})
 	return token.SignedString(getJWTSecret())
@@ -70,9 +71,26 @@ func Auth(next http.Handler) http.Handler {
 			Username: mapClaims["username"].(string),
 			Role:     mapClaims["role"].(string),
 		}
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
+		claims.ForcePasswordChange, _ = mapClaims["fpc"].(bool)
+		if claims.ForcePasswordChange && !allowedWhilePasswordForced(r) {
+			http.Error(w, `{"error":"debe cambiar la contraseña antes de continuar"}`, http.StatusForbidden)
+			return
+		}
+		ctx :=context.WithValue(r.Context(), ClaimsKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// allowedWhilePasswordForced lists the only routes a session with the default
+// password may call: read its own profile and change the password.
+func allowedWhilePasswordForced(r *http.Request) bool {
+	switch {
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/auth/me"):
+		return true
+	case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/users/me/password"):
+		return true
+	}
+	return false
 }
 
 func RequireAdmin(next http.Handler) http.Handler {

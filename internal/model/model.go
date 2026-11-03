@@ -266,6 +266,9 @@ type Claims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	// ForcePasswordChange is set when the session was opened with the default
+	// password; the Auth middleware then only lets the user change it.
+	ForcePasswordChange bool `json:"force_password_change"`
 }
 
 type TicketBusiness struct {
