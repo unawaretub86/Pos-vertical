@@ -202,11 +202,20 @@ func TestDashboardToday_T20_Golden(t *testing.T) {
 	if len(resp.LowStock) != 2 {
 		t.Fatalf("low_stock len = %d, want 2: %+v", len(resp.LowStock), resp.LowStock)
 	}
-	if l := resp.LowStock[0]; l.ProductID != 2 || l.Name != "Aceite" || l.Stock != 3 || l.MinStock != 10 {
-		t.Errorf("low_stock[0] = %+v, want Aceite (id 2) 3/10", l)
+	// Ordered by urgency (days_remaining ASC). Seeded sales parse in SQLite 3.42+,
+	// so both products have a 7-day average: Gaseosa 1 / (2/7) = 3.5 → 4 days,
+	// Aceite 3 / (3/7) = 7 days (the voided S3 is excluded).
+	if l := resp.LowStock[0]; l.ProductID != 3 || l.Name != "Gaseosa" || l.Stock != 1 || l.MinStock != 6 {
+		t.Errorf("low_stock[0] = %+v, want Gaseosa (id 3) 1/6", l)
 	}
-	if l := resp.LowStock[1]; l.ProductID != 3 || l.Name != "Gaseosa" || l.Stock != 1 || l.MinStock != 6 {
-		t.Errorf("low_stock[1] = %+v, want Gaseosa (id 3) 1/6", l)
+	if l := resp.LowStock[1]; l.ProductID != 2 || l.Name != "Aceite" || l.Stock != 3 || l.MinStock != 10 {
+		t.Errorf("low_stock[1] = %+v, want Aceite (id 2) 3/10", l)
+	}
+	if d := resp.LowStock[0].DaysRemaining; d == nil || *d != 4 {
+		t.Errorf("low_stock[0] days_remaining = %v, want 4", d)
+	}
+	if d := resp.LowStock[1].DaysRemaining; d == nil || *d != 7 {
+		t.Errorf("low_stock[1] days_remaining = %v, want 7", d)
 	}
 
 	// Seeded with time.Time, which now correctly parses in SQLite 3.42+.
