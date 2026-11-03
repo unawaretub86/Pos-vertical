@@ -104,5 +104,16 @@ func (h *Handler) changeMyPassword(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	respond(w, http.StatusOK, map[string]string{"message": "contraseña actualizada"})
+	// A session opened with the default password carries the force flag; hand
+	// back a clean token so the user can keep working.
+	token, err := appmw.GenerateToken(&model.Claims{
+		UserID:   claims.UserID,
+		Username: claims.Username,
+		Role:     claims.Role,
+	})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error generando token")
+		return
+	}
+	respond(w, http.StatusOK, map[string]string{"message": "contraseña actualizada", "token": token})
 }

@@ -39,17 +39,18 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	forcePasswordChange := req.Password == "admin"
+
 	token, err := appmw.GenerateToken(&model.Claims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Role:     user.Role,
+		UserID:              user.ID,
+		Username:            user.Username,
+		Role:                user.Role,
+		ForcePasswordChange: forcePasswordChange,
 	})
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "error generando token")
 		return
 	}
-
-	forcePasswordChange := req.Password == "admin"
 
 	respond(w, http.StatusOK, map[string]any{
 		"token":                 token,

@@ -3,7 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { mustChangePassword, clearForcePassword, isAuthenticated } from '@/lib/auth';
+import { mustChangePassword, clearForcePassword, isAuthenticated, getUser, setAuth } from '@/lib/auth';
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -36,10 +36,13 @@ export default function ChangePasswordPage() {
     }
     setLoading(true);
     try {
-      await api.put('/users/me/password', {
+      const res = await api.put<{ token: string }>('/users/me/password', {
         current_password: currentPassword,
         new_password: newPassword,
       });
+      // The old token still carries the force flag; the server issues a clean one.
+      const user = getUser();
+      if (res?.token && user) setAuth(res.token, user);
       clearForcePassword();
       router.replace('/');
     } catch (err: unknown) {
