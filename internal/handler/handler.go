@@ -18,6 +18,7 @@ import (
 // Handler holds all HTTP handler methods and their dependencies.
 type Handler struct {
 	db           *database.DB
+	loginLimiter *appmw.LoginLimiter
 	categories   *service.CategoryService
 	products     *service.ProductService
 	sales        *service.SaleService
@@ -100,6 +101,7 @@ func New(db *database.DB) *Handler {
 		orders:       service.NewOrderService(orderRepo),
 		kds:          service.NewKDSService(kdsRepo),
 		localIP:      netutil.LocalIPv4,
+		loginLimiter: appmw.NewLoginLimiter(),
 	}
 }
 

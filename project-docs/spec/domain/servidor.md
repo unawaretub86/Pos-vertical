@@ -21,4 +21,10 @@
 
 Resolution order: exact file -> `<path>.html` (no redirect) -> `customers/_.html`, `catalogo/_.html` or `mesas/_.html` for `/customers/*`, `/catalogo/*` and `/mesas/*` (`dynamicRoutes`, `web/static.go:19`; a bare `/mesas` still serves `mesas.html`) -> 404 if it starts with `/_next/` or has an extension -> `index.html`.
 
-The UI uses relative `/api` unless `NEXT_PUBLIC_API_URL` is defined (dev on :3000). Dev CORS allows `GET, POST, PUT, PATCH, DELETE, OPTIONS` (`internal/middleware/middleware.go:97`; `PATCH` was added with US-056) and `api.patch` exists in `frontend/lib/api.ts`.
+The UI uses relative `/api` unless `NEXT_PUBLIC_API_URL` is defined (dev on :3000). CORS only echoes the dev-server origins `http://localhost:3000` and `http://127.0.0.1:3000` (`devOrigins`, `internal/middleware/middleware.go`); any other `Origin` gets no `Access-Control-Allow-Origin`, and the production UI never needs it because it is same-origin. Allowed methods are `GET, POST, PUT, PATCH, DELETE, OPTIONS` (`PATCH` was added with US-056) and `api.patch` exists in `frontend/lib/api.ts`.
+
+## Login attempt limit (R-62)
+
+- `POST /api/auth/login` counts failed logins per client IP (`RemoteAddr`; `X-Forwarded-For` is ignored). The 10th failure inside 10 minutes locks that IP for 5 minutes: `429` with `Retry-After` (seconds), even for the right password (`internal/middleware/ratelimit.go`, `internal/handler/auth.go`).
+- A successful login resets the counter. The limit is per IP, not per username, so nobody can lock the admin out by guessing their name. State is in memory; restarting `pos.exe` clears it.
+- Tests: `TestLoginLimiter_T1`..`_T6`, `TestCORS_T7`..`_T9` (`internal/middleware/ratelimit_test.go`), `TestLoginRateLimit_T1`..`_T3` (`internal/handler/login_ratelimit_test.go`).

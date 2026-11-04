@@ -109,13 +109,19 @@ func GetClaims(r *http.Request) *model.Claims {
 	return claims
 }
 
+// devOrigins are the only cross-origin callers: the Next.js dev server. In
+// production the UI is served by the binary itself (same origin, relative /api),
+// so no other origin ever needs a CORS grant.
+var devOrigins = map[string]bool{
+	"http://localhost:3000": true,
+	"http://127.0.0.1:3000": true,
+}
+
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
+		if origin := r.Header.Get("Origin"); devOrigins[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-		} else {
-			w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+			w.Header().Add("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
