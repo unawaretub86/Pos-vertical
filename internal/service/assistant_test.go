@@ -219,7 +219,7 @@ func TestAssistant_T7_AmbiguousOffersCandidates(t *testing.T) {
 	if result.Intent != "ambiguous" {
 		t.Errorf("Intent = %q, want ambiguous", result.Intent)
 	}
-	if !strings.HasPrefix(result.Text, "¿Te referís a") {
+	if !strings.HasPrefix(result.Text, "¿Te refieres a") {
 		t.Errorf("text = %q, want it to start with the clarifying question", result.Text)
 	}
 	if len(result.Suggestions) != 2 {
@@ -235,7 +235,7 @@ func TestAssistant_T7_AmbiguousOffersCandidates(t *testing.T) {
 		}
 	}
 	// The clarifying text keeps the 2nd-person wording (contract AC-15a).
-	if result.Text != "¿Te referís a cuánto vendiste o a cuánto ganaste?" {
+	if result.Text != "¿Te refieres a cuánto vendiste o a cuánto ganaste?" {
 		t.Errorf("text = %q, want the unchanged clarifying question", result.Text)
 	}
 }

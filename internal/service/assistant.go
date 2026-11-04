@@ -258,7 +258,7 @@ var unknownSuggestions = []string{"cuánto vendí hoy", "quién me debe", "qué 
 func unknownResult(tier string, confidence float64) *AskResult {
 	return &AskResult{
 		Intent:      "unknown",
-		Text:        "No entendí tu pregunta. Podés intentar con algo como:",
+		Text:        "No entendí tu pregunta. Puedes intentar con algo como:",
 		Suggestions: append([]string{}, unknownSuggestions...),
 		Tier:        tier,
 		Confidence:  confidence,
@@ -272,8 +272,8 @@ var intentExample = map[assistant.Intent]string{
 	assistant.IntentSales:       "cuánto vendiste",
 	assistant.IntentProfit:      "cuánto ganaste",
 	assistant.IntentMargin:      "cuál es tu margen",
-	assistant.IntentTopProducts: "qué es lo que más vendés",
-	assistant.IntentTopMargin:   "en qué ganás más",
+	assistant.IntentTopProducts: "qué es lo que más vendes",
+	assistant.IntentTopMargin:   "en qué ganas más",
 	assistant.IntentLowStock:    "qué se te está acabando",
 	assistant.IntentDebtors:     "quién te debe",
 	assistant.IntentExpenses:    "cuánto has gastado",
@@ -312,7 +312,7 @@ func ambiguousResult(q assistant.Query, tier string) *AskResult {
 	}
 	return &AskResult{
 		Intent:      "ambiguous",
-		Text:        "¿Te referís a " + strings.Join(examples, " o a ") + "?",
+		Text:        "¿Te refieres a " + strings.Join(examples, " o a ") + "?",
 		Suggestions: chips,
 		Tier:        tier,
 		Confidence:  q.Confidence,
@@ -340,7 +340,7 @@ var unresolvedChips = map[string][]string{
 func unresolvedPeriodResult(intent, tier string, confidence float64) *AskResult {
 	return &AskResult{
 		Intent:      intent,
-		Text:        "¿De qué fecha querés saber? Podés decir hoy, ayer, esta semana o este mes.",
+		Text:        "¿De qué fecha quieres saber? Puedes decir hoy, ayer, esta semana o este mes.",
 		Suggestions: append([]string{}, unresolvedChips[intent]...),
 		Tier:        tier,
 		Confidence:  confidence,
@@ -470,7 +470,7 @@ func (s *AssistantService) resolveTopProducts(ctx context.Context, q assistant.Q
 		return "", nil, err
 	}
 	if len(topMargin) > 0 && topSellerName != "" && topMargin[0].Name != topSellerName {
-		fmt.Fprintf(&b, "Lo que más vendés es %s (%s unidades), pero lo que más plata te deja es %s (%s%% de margen).",
+		fmt.Fprintf(&b, "Lo que más vendes es %s (%s unidades), pero lo que más plata te deja es %s (%s%% de margen).",
 			topSellerName, formatQty(topSellerQty), topMargin[0].Name, formatPct(topMargin[0].MarginPct))
 	}
 
@@ -621,12 +621,12 @@ func (s *AssistantService) resolveCash(ctx context.Context, q assistant.Query) (
 			return "", nil, err
 		}
 		prevEstimated := prevCashSales - prevCashOut
-		text := fmt.Sprintf("%s tenés aproximadamente %s en caja frente a %s el periodo anterior (%s).",
+		text := fmt.Sprintf("%s tienes aproximadamente %s en caja frente a %s el periodo anterior (%s).",
 			q.Period.Label, formatCOP(estimated), formatCOP(prevEstimated), signedPct(deltaPct(estimated, prevEstimated)))
 		return text, cashData{Estimated: estimated, CashSales: cashSales, CashOut: cashOut, Compare: newCompareInfo(estimated, prevEstimated)}, nil
 	}
 
-	text := fmt.Sprintf("%s tenés aproximadamente %s en caja (ventas en efectivo %s, salidas %s).",
+	text := fmt.Sprintf("%s tienes aproximadamente %s en caja (ventas en efectivo %s, salidas %s).",
 		q.Period.Label, formatCOP(estimated), formatCOP(cashSales), formatCOP(cashOut))
 	return text, cashData{Estimated: estimated, CashSales: cashSales, CashOut: cashOut}, nil
 }

@@ -38,11 +38,11 @@ export interface ParsedAnswer {
 }
 
 export const GREETING_TEXT =
-  'Hola, soy tu asistente. Preguntame por tus ventas, tu cartera o tu inventario, o tocá una de estas:';
+  'Hola, soy tu asistente. Pregúntame por tus ventas, tu cartera o tu inventario, o toca una de estas:';
 
 export const GREETING_CHIPS: string[] = ['cuánto vendí hoy', 'quién me debe', 'qué se está acabando'];
 
-export const ERROR_TEXT = 'No pude consultar los datos. Intentá de nuevo.';
+export const ERROR_TEXT = 'No pude consultar los datos. Intenta de nuevo.';
 
 // ─── Network ─────────────────────────────────────────────────────────────────
 

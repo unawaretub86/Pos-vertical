@@ -315,7 +315,7 @@ export default function AssistantWidget() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               disabled={loading}
-              placeholder="Escribí tu pregunta"
+              placeholder="Escribe tu pregunta"
               aria-label="Pregunta para el asistente"
               style={{
                 flex: 1,
