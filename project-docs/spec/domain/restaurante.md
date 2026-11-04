@@ -16,6 +16,7 @@ Enum values below (`libre`, `ocupada`, `por_cobrar`, route names like `/mesas`) 
 - On: the tables section appears in Settings and the sidebar shows "Mesas" and "Barra" to both `admin` and `cashier`. In addition the POS hides the parked carts kept in `localStorage` (mobile chip, desktop chip and "Dejar en espera": `showParked = !restaurant_mode`, `frontend/app/pos/page.tsx:622,1030,1141,1155`); when off, the POS does not change.
 - `business_config.lan_access_enabled` (0/1, default 0) is created together with this migration but belongs to US-054 (LAN access); see `servidor.md`.
 - `PUT /api/setup` replaces the whole row, except `owner_email_app_password`: an omitted or empty value keeps the stored one (US-076; see `caja.md`). The Settings form must always resend `restaurant_mode` and `lan_access_enabled` (read from `GET /setup`) so that saving another field does not turn them off.
+- `GET /api/setup` returns `catalog_token` only to `admin`; any other role gets an empty string (R-69, `internal/handler/setup.go`). Name, logo and `restaurant_mode` stay visible to every authenticated user. Test: `TestSetup_R69_CatalogTokenOnlyForAdmin`.
 
 ## Tables
 
