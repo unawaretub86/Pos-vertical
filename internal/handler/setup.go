@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/andreyo/pos/internal/mailer"
@@ -88,7 +89,13 @@ func (h *Handler) getLanInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	url := ""
 	if ip != "" {
-		url = "http://" + ip + ":8080"
+		// The admin reaches this endpoint through the port the POS listens on
+		// (--port / POS_PORT), so take it from the Host header.
+		port := "8080"
+		if _, p, err := net.SplitHostPort(r.Host); err == nil && p != "" {
+			port = p
+		}
+		url = "http://" + ip + ":" + port
 	}
 	respond(w, http.StatusOK, map[string]string{"ip": ip, "url": url})
 }

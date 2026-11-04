@@ -3,10 +3,14 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/andreyo/pos/internal/database"
@@ -18,7 +22,26 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+// port is the TCP port the POS listens on; --port or POS_PORT override 8080.
+var port = "8080"
+
+// resolvePort picks the flag value, then the environment value, then 8080.
+// Anything that is not a port number between 1 and 65535 is ignored.
+func resolvePort(flagVal, envVal string) string {
+	for _, v := range []string{flagVal, envVal} {
+		v = strings.TrimSpace(v)
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 65535 {
+			return strconv.Itoa(n)
+		}
+	}
+	return "8080"
+}
+
 func main() {
+	portFlag := flag.String("port", "", "TCP port to listen on (default 8080, or POS_PORT)")
+	flag.Parse()
+	port = resolvePort(*portFlag, os.Getenv("POS_PORT"))
+
 	// Initialize database
 	db, err := database.New("data.db")
 	if err != nil {
@@ -71,14 +94,14 @@ func main() {
 // listenAddr returns the bind address: all interfaces only when LAN access is on.
 func listenAddr(lan bool) string {
 	if lan {
-		return "0.0.0.0:8080"
+		return "0.0.0.0:" + port
 	}
-	return "127.0.0.1:8080"
+	return "127.0.0.1:" + port
 }
 
 // browserURL is always localhost, regardless of the bind address.
 func browserURL() string {
-	return "http://localhost:8080"
+	return "http://localhost:" + port
 }
 
 func openBrowser(url string) {
