@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/andreyo/pos/internal/mailer"
+	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/repository"
 )
 
@@ -27,7 +28,12 @@ func (h *Handler) getSetup(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Error al obtener configuración")
 		return
 	}
-	respond(w, http.StatusOK, newSetupResponse(cfg))
+	resp := newSetupResponse(cfg)
+	// The catalog token grants access to the public catalog: admin only (R-69).
+	if claims := appmw.GetClaims(r); claims == nil || claims.Role != "admin" {
+		resp.CatalogToken = ""
+	}
+	respond(w, http.StatusOK, resp)
 }
 
 func (h *Handler) updateSetup(w http.ResponseWriter, r *http.Request) {
