@@ -119,7 +119,7 @@ export default function OnboardingPage() {
             Paso {step} de 2 · {step === 1 ? 'Tu cuenta' : 'Tu negocio'}
           </div>
           <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '18px' }}>
-            {step === 1 ? 'Creá tu usuario admin' : 'Contanos de tu negocio'}
+            {step === 1 ? 'Crea tu usuario admin' : 'Cuéntanos de tu negocio'}
           </div>
 
           {step === 1 ? (
@@ -161,7 +161,7 @@ export default function OnboardingPage() {
                 <input
                   className="input"
                   type="password"
-                  placeholder="Repetí tu contraseña"
+                  placeholder="Repite tu contraseña"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"

@@ -5,6 +5,7 @@
 
 ## LAN access
 
+- The port is `8080` unless `--port N` or the environment variable `POS_PORT` says otherwise (flag first; anything outside 1-65535 is ignored). The bind address, the URL opened in the browser and the `url` of `GET /api/setup/lan-info` (taken from the request `Host`) all follow it (`cmd/pos/main.go`, `resolvePort`; `internal/handler/setup.go`).
 - `business_config.lan_access_enabled = 0` (or unreadable config): listens on `127.0.0.1:8080`. `= 1`: `0.0.0.0:8080`. It is read at startup; changing it takes effect when `pos.exe` is restarted.
 - The browser always opens at `http://localhost:8080`.
 - `GET /api/setup/lan-info` (admin only) returns `{ip, url}`; `ip` is the first private IPv4 (10/8, 172.16/12, 192.168/16); never loopback nor 169.254.x. With no IP: both empty and Settings shows help.

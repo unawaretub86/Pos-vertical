@@ -37,7 +37,7 @@ cd frontend && pnpm build && pnpm test && pnpm lint
 
 ## 3. Smoke test with the binary
 
-The binary uses `data.db` in the current directory and the fixed port `localhost:8080`, and opens the browser (`cmd/pos/main.go`).
+The binary uses `data.db` in the current directory and port `localhost:8080` (override with `--port` or `POS_PORT`), and opens the browser (`cmd/pos/main.go`).
 - Run it **only from the worktree root** (`go run ./cmd/pos`, in the background). It creates a fresh `data.db` there, isolated from real data.
 - First, verify port 8080 is free. If it is taken (Andrey has the POS open), **do not kill it**: mark the smoke test as SKIPPED with the reason.
 - Check `GET http://localhost:8080/api/setup/status` → 200. If the US touches endpoints, test them with curl (protected ones require onboarding + login against that fresh `data.db`).

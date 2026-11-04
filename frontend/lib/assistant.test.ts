@@ -28,7 +28,7 @@ async function load(): Promise<AssistantModule> {
   return await import('./assistant');
 }
 
-const ERROR_TEXT = 'No pude consultar los datos. Intentá de nuevo.';
+const ERROR_TEXT = 'No pude consultar los datos. Intenta de nuevo.';
 
 const SALES_DATA = {
   intent: 'sales',
@@ -86,7 +86,7 @@ describe('T-2 greeting', () => {
     expect(GREETING_CHIPS).toEqual(['cuánto vendí hoy', 'quién me debe', 'qué se está acabando']);
     expect(GREETING_CHIPS).toHaveLength(3);
     expect(GREETING_TEXT).toBe(
-      'Hola, soy tu asistente. Preguntame por tus ventas, tu cartera o tu inventario, o tocá una de estas:',
+      'Hola, soy tu asistente. Pregúntame por tus ventas, tu cartera o tu inventario, o toca una de estas:',
     );
   });
 });
@@ -243,10 +243,10 @@ describe('T-6 parseAnswerText', () => {
     expect(parsed.footer).toEqual([]);
   });
 
-  it('top products: the trailing "Lo que más vendés es …" line is footer, not an item', async () => {
+  it('top products: the trailing "Lo que más vendes es …" line is footer, not an item', async () => {
     const { parseAnswerText } = await load();
     const contrast =
-      'Lo que más vendés es Prod A (90 unidades), pero lo que más plata te deja es Prod B (38% de margen).';
+      'Lo que más vendes es Prod A (90 unidades), pero lo que más plata te deja es Prod B (38% de margen).';
     const text =
       'Hoy lo que más vendiste fue:\n' +
       '1. Prod A — 90 unidades ($900.000)\n' +

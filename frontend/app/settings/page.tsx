@@ -525,7 +525,7 @@ function SettingsContent() {
                     {lanUrl ? (
                       <div>Desde el otro dispositivo abre: <strong style={{ color: 'var(--text-primary)' }}>{lanUrl}</strong></div>
                     ) : (
-                      <div>No pudimos detectar la dirección de tu red. Conecta el computador a la WiFi y revisa su IP en la configuración de red de Windows; luego abre http://IP:8080 en el otro dispositivo.</div>
+                      <div>No pudimos detectar la dirección de tu red. Conecta el computador a la WiFi y revisa su IP en la configuración de red de Windows; luego abre http://IP:8080 (o el puerto con el que inició el programa) en el otro dispositivo.</div>
                     )}
                     <div>El cambio se aplica al cerrar y volver a abrir pos.exe.</div>
                     <div>Recomendación: cambia la contraseña inicial admin/admin en Usuarios, porque otros dispositivos de la red podrán ver la pantalla de ingreso.</div>

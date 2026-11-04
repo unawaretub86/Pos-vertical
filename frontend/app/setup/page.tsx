@@ -30,6 +30,9 @@ export default function SetupPage() {
     logo: '',
   });
   const [logoPreview, setLogoPreview] = useState('');
+  // Whole config as stored: PUT /setup replaces the row, so fields this page does
+  // not edit (owner email, catalog, restaurant mode, LAN) must be sent back.
+  const [existing, setExisting] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -40,6 +43,7 @@ export default function SetupPage() {
       return;
     }
     api.get<BusinessConfig>('/setup').then(cfg => {
+      setExisting(cfg as unknown as Record<string, unknown>);
       if (cfg.configured) {
         setForm({
           name: cfg.name,
@@ -73,7 +77,7 @@ export default function SetupPage() {
     setError('');
     setSaving(true);
     try {
-      await api.put('/setup', form);
+      await api.put('/setup', { ...existing, ...form });
       router.replace('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
