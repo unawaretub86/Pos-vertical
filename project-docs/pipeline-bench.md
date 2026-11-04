@@ -10,11 +10,11 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 10 (US-077, level L, 2026-10-20; first run with Gemini as advisory second reviewer). Before: 9 (US-056), 8 (US-054), 7 (US-062). No `us/*` worktree is open. `dev` is at the US-077 merge plus tooling and docs commits (verify with `git log`).
+**Last run:** 11 (US-079, level L, lint 48 -> 0; per-agent telemetry not recorded). Before: 10 (US-077, first run with Gemini as advisory second reviewer), 9 (US-056), 8 (US-054). No `us/*` worktree is open. `dev` is at the US-077 merge plus tooling and docs commits (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075, US-076, US-077 and US-078 are done in code and tests and merged to `dev`; US-079 (lint, 48 problems on `dev`, not 42), US-080 (ESC/POS printing) and US-081 (LAN multi-register concurrency) are pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**Next US:** US-079, then US-080, US-081. Run `/us US-079 [M|L]`.
+**Next US:** US-080, then US-081. Run `/us US-080 [M|L]`.
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -53,6 +53,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 8 | 2026-09-30 | US-054 | L | ~191k (A 79k=51k+55k+79k · T 32k · I 45k · Q 36k) | 51 | ~9.9 | 0 (one PASSES⚠️ shown to the PO by rule, not a stop) | 1 | 6 contract discrepancies (outdated sprint, dynamic routes, `go build` without `web/out`…) | 1 new (R-62) + 1 closed (R-55) | 0 | +452 / −55, 22 files |
 | 9 | 2026-09-30 | US-056 | L | ~514k (A 213k=82k+49k+83k · T 95k=82k+13k · I 114k · Q 92k=63k+29k) | 205 | ~22 | 1 (main checkout with a change in `.claude/`; plus one PASSES⚠️ shown to the PO by rule) | 1 (+ smoke 1b) | 8 contract discrepancies + 1 test defect (seed clashes with migration) | 5 new (R-63..R-67) + 1 closed (R-59) | 0 | +2,155 / −26, 26 files |
 | 10 | 2026-10-20 | US-077 | L | ~218k (A 128k=63k+26k+38k · T 29k · I 30k · Q 31k) | 70 | ~6.8 | 0 (one PASSES⚠️ shown to the PO by rule, not a stop) | 1 | 4 contract discrepancies (D-1..D-4) + 3 wording fixes from Gemini | 1 new (R-73) + 1 closed (R-49) | 0 | +249 / −11, 4 files |
+| 11 | about 2026-10-28 (steps 1-5; GATE 2 re-verified 2026-11-04) | US-079 | L | not recorded (lost with the earlier session) | not recorded | not recorded | not recorded | 1 | not recorded | 2 new (R-74, R-75) + 1 closed (R-35) | not recorded | +200 / −145, 32 files |
 
 ### Trend
 
@@ -499,6 +500,37 @@ The diff packet was 22 KB, smaller than the 57 KB packet that answered in 3m23s 
 ### What to measure in run 11
 - Gemini diff review with a longer timeout and one retry on TIMEOUT: does it finish, and does it find anything QA missed?
 - Whether the contract-mode review keeps paying off (3 of 4 findings valid) or only catches wording.
+
+## Run 11 — US-079 (lint 48 -> 0, R-35, level L)
+
+Steps 1-5 (contract through close) ran in an earlier session (about 2026-10-28). The orchestrator of this session did not launch the agents: it resumed at GATE 2 and re-verified the worktree.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | not recorded | not recorded | not recorded | not recorded |
+| test-author | not recorded | not recorded | not recorded | not recorded |
+| implementer | not recorded | not recorded | not recorded | not recorded |
+| qa | 1 round | not recorded | not recorded | not recorded |
+
+Per-agent telemetry was lost with the earlier session; the transcripts in `~/.claude/projects/<project>/*.jsonl` may still hold it.
+
+**What it found.** QA round 1: OK, 0 BLOCKER, 3 MINOR (latent drawer key; `data-theme` effect re-run; throwing `localStorage` -> R-75). Contract defects: not recorded.
+
+**Result.** Diff 32 files, +200 / −145. `pnpm lint` 48 -> 0. New tests `theme.test.ts` and `breakpoint.test.ts` (frontend tests 63 -> 71). CI now runs `pnpm lint`. New roadmap items R-74 and R-75; R-35 closed. Manual PO checks M-1..M-3 parked in `gaps.md`.
+
+**Re-verification at GATE 2 (this session).** `go build` ok; `pnpm lint` 0 problems; `pnpm test` 71 passed; `go test` fails only `TestDashboardToday_T20_Golden`, a stale test (R-67 was fixed on `dev` after the worktree was cut).
+
+**Unplanned stops:** not recorded. QA rounds: 1. Violations: not recorded.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK (`changes/US-079/gemini-contract.md`) | 10 (AMBIGUOUS/MISSING_CASE/UNTESTABLE, e.g. AC-5 fallback for a throwing `localStorage`, AC-6 SSR behavior of `useIsMobile`, tests T-6/T-7 conditional on extracted pure functions, Q-2 CI lint vs scope) | not recorded | not recorded | not recorded |
+| diff, round 1 | clean per the sprint doc | 0 | n/a | n/a | not verified by the orchestrator beyond QA |
+
+**Operational friction.**
+- The worktree was cut from a `dev` older than the R-67 fix, so `go test` shows a stale failure unrelated to the US.
+- The session was interrupted between close and GATE 2, so there was no live agent to resume.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

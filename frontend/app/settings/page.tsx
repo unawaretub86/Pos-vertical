@@ -2,6 +2,7 @@
 
 import { useState, useEffect, FormEvent, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
 import { useToast } from '@/components/Toast';
@@ -348,7 +349,7 @@ function SettingsContent() {
                       overflow: 'hidden', flexShrink: 0,
                     }}>
                       {logoPreview ? (
-                        <img src={logoPreview} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        <Image src={logoPreview} alt="Logo" width={40} height={40} unoptimized style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                       ) : (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                           <rect x="3" y="3" width="18" height="18" rx="2"/>

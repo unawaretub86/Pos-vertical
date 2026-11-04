@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import Sidebar from './Sidebar';
 import { BusinessConfigProvider } from '@/lib/business-config-context';
 import AssistantWidget from './AssistantWidget';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -16,21 +17,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  // Close drawer on navigation
-  useEffect(() => {
-    setDrawerOpen(false);
-  }, [pathname]);
+  const isMobile = useIsMobile(768);
+  // The drawer state is keyed to the pathname it was opened on, so navigating closes it.
+  const [drawerPath, setDrawerPath] = useState<string | null>(null);
+  const drawerOpen = drawerPath === pathname;
+  const setDrawerOpen = (open: boolean) => setDrawerPath(open ? pathname : null);
 
   useEffect(() => {
     if (!isAuthenticated()) {

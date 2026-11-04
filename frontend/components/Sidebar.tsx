@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearAuth, getUser } from '@/lib/auth';
 import { useTheme } from './ThemeProvider';
@@ -208,7 +209,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
           border: bizConfig.logo ? '1px solid var(--border)' : 'none',
         }}>
           {bizConfig.logo ? (
-            <img src={bizConfig.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <Image src={bizConfig.logo} alt="Logo" width={32} height={32} unoptimized style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           ) : 'POS'}
         </div>
         <div style={{ minWidth: 0 }}>

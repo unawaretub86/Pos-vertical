@@ -7,6 +7,7 @@ import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
 import { api, getSetupStatus } from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { formatCOP } from '@/lib/format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -342,7 +343,7 @@ export default function DashboardPage() {
   const [showVoided, setShowVoided] = useState(false);
   const [allSales, setAllSales] = useState<RecentSale[] | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile(768);
   const [payTarget, setPayTarget] = useState<AgingReceivable | null>(null);
 
   // Unauthenticated visits land here first (this is the app's root route) —
@@ -354,14 +355,6 @@ export default function DashboardPage() {
       .then(status => router.replace(status.completed ? '/login' : '/onboarding'))
       .catch(() => router.replace('/login'));
   }, [user, router]);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   useEffect(() => {
     if (!user) return;

@@ -63,6 +63,11 @@ const IconUser = () => (
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+function SortIcon({ k, sortKey, sortAsc }: { k: SortKey; sortKey: SortKey; sortAsc: boolean }) {
+  if (sortKey !== k) return <span style={{ opacity: 0.3 }}><IconArrowDown /></span>;
+  return sortAsc ? <IconArrowUp /> : <IconArrowDown />;
+}
+
 export default function PortfolioPage() {
   const router = useRouter();
   const isMobile = useIsMobile();
@@ -83,7 +88,7 @@ export default function PortfolioPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   const sorted = [...entries].sort((a, b) => {
     let diff = 0;
@@ -103,11 +108,6 @@ export default function PortfolioPage() {
     if (sortKey === key) setSortAsc(v => !v);
     else { setSortKey(key); setSortAsc(false); }
   }
-
-  const SortIcon = ({ k }: { k: SortKey }) => {
-    if (sortKey !== k) return <span style={{ opacity: 0.3 }}><IconArrowDown /></span>;
-    return sortAsc ? <IconArrowUp /> : <IconArrowDown />;
-  };
 
   return (
     <AppLayout>
@@ -145,7 +145,7 @@ export default function PortfolioPage() {
                         style={{ padding: '10px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: sortKey === 'oldest' ? 'var(--accent)' : 'var(--text-muted)', borderBottom: '1px solid var(--border)', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          Deuda más antigua <SortIcon k="oldest" />
+                          Deuda más antigua <SortIcon k="oldest" sortKey={sortKey} sortAsc={sortAsc} />
                         </span>
                       </th>
                     )}
@@ -154,7 +154,7 @@ export default function PortfolioPage() {
                       style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: sortKey === 'balance' ? 'var(--accent)' : 'var(--text-muted)', borderBottom: '1px solid var(--border)', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        Saldo <SortIcon k="balance" />
+                        Saldo <SortIcon k="balance" sortKey={sortKey} sortAsc={sortAsc} />
                       </span>
                     </th>
                     <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>

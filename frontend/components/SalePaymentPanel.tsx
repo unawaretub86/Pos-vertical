@@ -43,7 +43,7 @@ function CustomerPicker({ selected, onSelect }: CustomerPickerProps) {
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
+    queueMicrotask(() => setLoading(true));
     api.get<{ customers: Customer[] | null }>(`/customers${debouncedQuery ? `?q=${encodeURIComponent(debouncedQuery)}` : ''}`)
       .then(res => setResults(res.customers ?? []))
       .catch(() => setResults([]))
@@ -128,7 +128,7 @@ function CustomerPicker({ selected, onSelect }: CustomerPickerProps) {
   );
 }
 
-function PayBtn({ label, value, active, onClick }: { label: string; value: PaymentMethod; active: boolean; onClick: () => void }) {
+function PayBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -172,7 +172,7 @@ export default function SalePaymentPanel({
   const [customerBalance, setCustomerBalance] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!selectedCustomer) { setCustomerBalance(null); return; }
+    if (!selectedCustomer) { queueMicrotask(() => setCustomerBalance(null)); return; }
     api.get<{ balance: number }>(`/customers/${selectedCustomer.id}/balance`)
       .then(r => setCustomerBalance(r.balance))
       .catch(() => setCustomerBalance(null));
@@ -235,7 +235,6 @@ export default function SalePaymentPanel({
         {(['efectivo', 'transferencia', 'tarjeta', 'credito'] as PaymentMethod[]).map(m => (
           <PayBtn
             key={m}
-            value={m}
             label={m.charAt(0).toUpperCase() + m.slice(1)}
             active={payMethod === m}
             onClick={() => {

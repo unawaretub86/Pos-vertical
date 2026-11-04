@@ -1,17 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
+import { breakpointQuery } from '@/lib/breakpoint';
 
 export function useIsMobile(breakpoint = 768): boolean {
-  const [isMobile, setIsMobile] = useState(false);
+  const query = breakpointQuery(breakpoint);
 
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, [breakpoint]);
+  const subscribe = useCallback((onChange: () => void) => {
+    const mq = window.matchMedia(query);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [query]);
 
-  return isMobile;
+  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
+
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }

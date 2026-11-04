@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { useBusinessConfig } from "@/lib/business-config-context";
 import { useRouter } from "next/navigation";
@@ -48,11 +48,11 @@ export default function BarraPage() {
     }
   }, [loading, config, router]);
 
-  const playBeep = () => {
+  const playBeep = useCallback(() => {
     if (!soundEnabled) return;
     try {
       if (!audioContext.current) {
-        audioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContext.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       }
       const osc = audioContext.current.createOscillator();
       const gainNode = audioContext.current.createGain();
@@ -66,9 +66,9 @@ export default function BarraPage() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [soundEnabled]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const res = await api.get<KDSResponse>("/kds/orders");
       setError(false);
@@ -97,13 +97,14 @@ export default function BarraPage() {
       console.error("Error loading KDS", err);
       setError(true);
     }
-  };
+  }, [playBeep]);
 
+  // loadData only changes identity with soundEnabled, so the polling restarts exactly then.
   useEffect(() => {
-    loadData();
+    queueMicrotask(loadData);
     const interval = setInterval(loadData, 3000);
     return () => clearInterval(interval);
-  }, [soundEnabled]);
+  }, [loadData]);
 
   const advanceItem = async (orderId: number, itemId: number, currentStatus: string) => {
     let nextStatus = "";
@@ -191,7 +192,7 @@ export default function BarraPage() {
           <button
             onClick={() => {
               if (!soundEnabled) {
-                const ac = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const ac = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
                 audioContext.current = ac;
               }
               setSoundEnabled(!soundEnabled);

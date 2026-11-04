@@ -67,7 +67,7 @@ pnpm test               # vitest
 pnpm lint               # eslint
 ```
 
-CI (`.github/workflows/test.yml`) runs `go build`, `go test`, `pnpm build` and `pnpm test` on every push. It **does not run `pnpm lint`**, which currently fails with 41 pre-existing problems in `frontend/` (roadmap R-35). Still run lint locally and do not add new problems.
+CI (`.github/workflows/test.yml`) runs `go build`, `go test`, `pnpm build`, `pnpm test` and `pnpm lint` on every push. `pnpm lint` is at **0 problems** (closed by US-079, roadmap R-35), so any new lint problem fails CI: do not add `eslint-disable` comments to get around it.
 
 ## Architecture
 

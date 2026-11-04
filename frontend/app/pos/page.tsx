@@ -9,10 +9,11 @@ import TicketPreview, { type TicketData } from '@/components/TicketPreview';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { getUser } from '@/lib/auth';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { calcSubtotal, calcTax, calcTotal } from '@/lib/saleCalc';
 import { readActiveCart, writeActiveCart } from '@/lib/activeCart';
-import SalePaymentPanel, { type CheckoutData, type PaymentMethod, type Customer } from '@/components/SalePaymentPanel';
+import SalePaymentPanel, { type CheckoutData, type Customer } from '@/components/SalePaymentPanel';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ function StockBadge({ product }: { product: Product }) {
   const { stock, min_stock } = product;
   let bg = 'rgba(76,175,130,0.15)';
   let color = 'var(--success)';
-  let label = String(stock);
+  const label = String(stock);
   if (stock <= 0) { bg = 'rgba(224,84,84,0.15)'; color = 'var(--danger)'; }
   else if (stock <= 3) { bg = 'rgba(224,84,84,0.15)'; color = 'var(--danger)'; }
   else if (stock <= min_stock) { bg = 'rgba(245,166,35,0.15)'; color = 'var(--accent)'; }
@@ -451,16 +452,8 @@ export default function POSPage() {
   const isAdmin = getUser()?.role === 'admin';
 
   // Mobile detection
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile(768);
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   // Data
   const [categories, setCategories] = useState<Category[]>([]);
@@ -509,7 +502,7 @@ export default function POSPage() {
   }, [cart, selectedCustomer, globalDiscountInput, cartHydrated]);
 
   useEffect(() => {
-    setParkedCarts(loadParkedCarts());
+    queueMicrotask(() => setParkedCarts(loadParkedCarts()));
   }, []);
 
   // Debounce search
@@ -565,7 +558,7 @@ export default function POSPage() {
     }
   }, [debouncedSearch, selectedCat, toast]);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  useEffect(() => { queueMicrotask(loadProducts); }, [loadProducts]);
 
   // Cart operations
   function addToCart(product: Product) {

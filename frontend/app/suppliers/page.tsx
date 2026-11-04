@@ -167,7 +167,7 @@ export default function SuppliersPage() {
     }
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   async function confirmDelete() {
     if (!confirmTarget) return;

@@ -119,7 +119,7 @@ export default function OrderClient() {
           .filter(l => l.amount > 0)
           .map(l => ({ method: pmMap[l.method] ?? l.method, amount: l.amount }));
 
-      const body: Record<string, any> = {
+      const body: Record<string, unknown> = {
         payments,
         ...(selectedCustomer && { customer_id: selectedCustomer.id }),
       };

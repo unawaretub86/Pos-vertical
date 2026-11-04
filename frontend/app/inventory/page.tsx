@@ -536,9 +536,9 @@ export default function InventoryPage() {
     }
   }, [debouncedSearch, filterCat, filterActive, toast]);
 
-  useEffect(() => { loadCategories(); }, [loadCategories]);
-  useEffect(() => { loadProducts(); }, [loadProducts]);
-  useEffect(() => { loadAllActive(); }, [loadAllActive]);
+  useEffect(() => { queueMicrotask(loadCategories); }, [loadCategories]);
+  useEffect(() => { queueMicrotask(loadProducts); }, [loadProducts]);
+  useEffect(() => { queueMicrotask(loadAllActive); }, [loadAllActive]);
 
   // Stats
   const totalActive = allActive.length;

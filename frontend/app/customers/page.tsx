@@ -36,12 +36,6 @@ interface CustomersResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
 function daysOverdue(iso: string | null): number {
   if (!iso) return 0;
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -295,6 +289,11 @@ function CustomerModal({ initial, onClose, onSaved }: CustomerModalProps) {
 
 type SortKey = 'name' | 'balance' | 'oldest_debt';
 
+function SortIcon({ k, sortKey, sortAsc }: { k: SortKey; sortKey: SortKey; sortAsc: boolean }) {
+  if (sortKey !== k) return <span style={{ opacity: 0.3 }}><IconArrowDown /></span>;
+  return sortAsc ? <IconArrowUp /> : <IconArrowDown />;
+}
+
 export default function CustomersPage() {
   const { toast } = useToast();
   const router = useRouter();
@@ -324,7 +323,7 @@ export default function CustomersPage() {
   }, [toast]);
 
   useEffect(() => {
-    load('');
+    queueMicrotask(() => load(''));
   }, [load]);
 
   function handleSearchChange(val: string) {
@@ -377,11 +376,6 @@ export default function CustomersPage() {
     }
   }
 
-  function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span style={{ opacity: 0.3 }}><IconArrowDown /></span>;
-    return sortAsc ? <IconArrowUp /> : <IconArrowDown />;
-  }
-
   return (
     <AppLayout>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -421,7 +415,7 @@ export default function CustomersPage() {
               onClick={() => toggleSort('balance')}
               style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
             >
-              <SortIcon k="balance" /> Ordenar por deuda
+              <SortIcon k="balance" sortKey={sortKey} sortAsc={sortAsc} /> Ordenar por deuda
             </button>
           </div>
 
@@ -454,7 +448,7 @@ export default function CustomersPage() {
                         onClick={() => toggleSort('name')}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          Cliente <SortIcon k="name" />
+                          Cliente <SortIcon k="name" sortKey={sortKey} sortAsc={sortAsc} />
                         </span>
                       </th>
                       {!isMobile && <th style={{ textAlign: 'left' }}>Teléfono</th>}
@@ -464,7 +458,7 @@ export default function CustomersPage() {
                           onClick={() => toggleSort('oldest_debt')}
                         >
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            Deuda más antigua <SortIcon k="oldest_debt" />
+                            Deuda más antigua <SortIcon k="oldest_debt" sortKey={sortKey} sortAsc={sortAsc} />
                           </span>
                         </th>
                       )}
@@ -473,7 +467,7 @@ export default function CustomersPage() {
                         onClick={() => toggleSort('balance')}
                       >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                          Saldo <SortIcon k="balance" />
+                          Saldo <SortIcon k="balance" sortKey={sortKey} sortAsc={sortAsc} />
                         </span>
                       </th>
                       <th style={{ textAlign: 'right' }}>Acciones</th>

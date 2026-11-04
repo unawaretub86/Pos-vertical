@@ -121,7 +121,7 @@ export default function AuditPage() {
     api.get<User[]>('/users').then(setUsers).catch(() => {});
   }, [user, router]);
 
-  useEffect(() => { if (user?.role === 'admin') load(); }, [user, load]);
+  useEffect(() => { if (user?.role === 'admin') queueMicrotask(load); }, [user, load]);
 
   if (!user || user.role !== 'admin') return null;
 

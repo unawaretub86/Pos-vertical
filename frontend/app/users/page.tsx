@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
 import { api } from '@/lib/api';
@@ -93,8 +92,8 @@ function UserModal({ initial, onClose, onSaved }: UserModalProps) {
       }
       onSaved();
       onClose();
-    } catch (err: any) {
-      toast(err.message ?? 'Error guardando usuario', 'error');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Error guardando usuario', 'error');
     } finally {
       setSaving(false);
     }
@@ -214,7 +213,6 @@ function UserModal({ initial, onClose, onSaved }: UserModalProps) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function UsersPage() {
-  const router = useRouter();
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -233,17 +231,17 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { queueMicrotask(load); }, [load]);
 
   async function handleDeactivate(user: User) {
     try {
       await api.delete(`/users/${user.id}`);
       toast('Usuario desactivado', 'success');
       load();
-    } catch (err: any) {
-      toast(err.message ?? 'Error desactivando usuario', 'error');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Error desactivando usuario', 'error');
     } finally {
       setConfirmDeactivate(null);
     }
@@ -254,8 +252,8 @@ export default function UsersPage() {
       await api.put(`/users/${user.id}`, { username: user.username, role: user.role, active: true });
       toast('Usuario activado', 'success');
       load();
-    } catch (err: any) {
-      toast(err.message ?? 'Error activando usuario', 'error');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Error activando usuario', 'error');
     } finally {
       setConfirmActivate(null);
     }

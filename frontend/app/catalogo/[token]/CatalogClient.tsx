@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { api } from '@/lib/api';
 
 interface CatalogProduct {
@@ -53,7 +54,7 @@ export default function CatalogClient({ token }: { token: string }) {
     <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: '800px', margin: '0 auto', padding: '16px' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #eee' }}>
         {data.logo && (
-          <img src={data.logo} alt="Logo" style={{ width: '60px', height: '60px', objectFit: 'contain', borderRadius: '8px' }} />
+          <Image src={data.logo} alt="Logo" width={60} height={60} unoptimized style={{ width: '60px', height: '60px', objectFit: 'contain', borderRadius: '8px' }} />
         )}
         <div>
           <h1 style={{ margin: 0, fontSize: '24px', color: '#111' }}>{data.business_name}</h1>

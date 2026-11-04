@@ -11,7 +11,7 @@
 - R-57: `GET /setup` exposes `owner_email_app_password` to any authenticated user. -> **Closed in US-076**.
 - R-49: Redirect to `/login` when any request answers 401. -> **Closed in US-077**.
 - R-56: SQLite foreign keys are not enforced. -> **Closed in US-078**.
-- R-35: 42 React lint problems (`set-state-in-effect`, `any`). -> **Closed in US-079**.
+- R-35: 48 React lint problems (36 errors, 12 warnings; `set-state-in-effect`, `any`, `static-components` and others). -> **Closed in US-079**.
 - Gaps (POS Prodcheck): Native ESC/POS support for thermal printers. -> **Closed in US-080**.
 - E1/K1 (US-054 partial): Multi-register concurrency tests on LAN. -> **Closed in US-081**.
 
@@ -25,7 +25,7 @@
 | US-076 | Hide the email App password in GET (R-57) | [x] Complete (AC-7 manual browser check pending from the PO) | 2026-10-13 |
 | US-077 | Forced redirect when the session expires (R-49) | [x] Complete (manual PO check pending) | 2026-10-20 |
 | US-078 | Enable Foreign Keys in SQLite (R-56) | [x] Complete in code (PO validation pending) | 2026-10-13 |
-| US-079 | Fix 42 Lint Errors (R-35) | ⬜ Pending | |
+| US-079 | Fix 48 Lint Problems (R-35) | [x] Complete in code (manual PO checks M-1..M-3 pending) | 2026-10-28 |
 | US-080 | Native ESC/POS Printing 58/80mm | ⬜ Pending | |
 | US-081 | Multi-Register LAN Concurrency and Stability | ⬜ Pending | |
 
@@ -193,7 +193,7 @@ QA: round 1 OK, 0 BLOCKER, 3 MINOR accepted without items (`redirecting` flag st
 
 ---
 
-## US-079 — Fix 42 Lint Errors (R-35)
+## US-079 — Fix 48 Lint Problems (R-35)
 
 **As** a developer and end user,
 **I want** the React code to respect the hooks rules (`set-state-in-effect`),
@@ -210,12 +210,33 @@ QA: round 1 OK, 0 BLOCKER, 3 MINOR accepted without items (`redirecting` flag st
 - Remove unjustified `any` types (type as `unknown` or the proper interface).
 
 **Acceptance Criteria:**
-- [ ] Running `pnpm run lint` in `/frontend` must return zero errors and zero warnings.
-- [ ] Navigate the app and verify there is no flicker when opening the side menu (AppLayout) or when switching from light to dark mode (ThemeProvider).
+- [x] Running `pnpm run lint` in `/frontend` must return zero errors and zero warnings. (QA: 48 -> 0.)
+- [ ] Navigate the app and verify there is no flicker when opening the side menu (AppLayout) or when switching from light to dark mode (ThemeProvider). **Pending manual PO check M-1** (`gaps.md`).
 
 **DoD:**
-- Modifications to the problematic hooks.
-- Clean CI/Build (`pnpm lint` && `pnpm build`).
+- [x] Modifications to the problematic hooks.
+- [x] Clean CI/Build (`pnpm lint` && `pnpm build`); CI now runs `pnpm lint` (`.github/workflows/test.yml:35`).
+
+**Verified criteria (closed 2026-10-28):**
+
+The measured baseline was 48 problems (36 errors, 12 warnings) on `dev`, not 42, and they were mostly in page files rather than in `AppLayout`/`useIsMobile`/`ThemeProvider` (4 of 48).
+
+- AC-1: WHEN `pnpm lint` runs in `frontend/`, the system SHALL exit 0 with 0 errors and 0 warnings. QA run: exit 0, 0 problems.
+- AC-2: WHEN `pnpm build` runs, the system SHALL succeed. QA run: succeeded, all routes prerendered.
+- AC-3: WHEN `pnpm test` runs, the system SHALL pass all tests. QA run: 7 files, 71 tests passed (baseline 63 plus 8 new).
+- AC-4/AC-9/AC-14: no `eslint-disable`, `@ts-ignore`, `@ts-expect-error` or explicit `any` added; `eslint.config.mjs` untouched; unused bindings removed, not renamed with `_`. Checked by QA with grep on the diff.
+- AC-5: WHEN `localStorage['pos_theme']` is `'light'`, the system SHALL use light; for any other value (absent, `'dark'`, unknown, empty) it SHALL use dark. This is the only intentional behavior change (before, any stored string was cast to `Theme`). Tests: `frontend/lib/theme.test.ts` (`readTheme`).
+- AC-6/AC-6b: `useIsMobile` and `AppLayout` share `breakpointQuery(breakpoint)`; `breakpointQuery(768)` = `(max-width: 767px)`; the server snapshot is `false` and `matchMedia` is not touched during render. Tests: `frontend/lib/breakpoint.test.ts`.
+- AC-7, AC-8, AC-13, AC-15: the drawer closes on pathname change, `SortIcon` moved to module level, data-load effects keep their dependency arrays (barra polling restarts only when `soundEnabled` changes; users `load` deps `[toast]` with a stable `toast`) and so the same requests. Verified by QA code reading only; behavior checks are M-1, M-2, M-3 below.
+- AC-10: the diff touches only `frontend/**`, `.github/workflows/test.yml` and docs; no backend, migration, `package.json` or lockfile.
+- AC-11: the 4 `<img>` sites (`CatalogClient`, `settings`, `setup`, `Sidebar`) use `next/image` with `unoptimized` and explicit width/height, same `src`, `alt` and rendered size.
+- AC-12: the `frontend` job runs `pnpm lint` (`.github/workflows/test.yml:35`).
+
+New tests: `frontend/lib/theme.test.ts`, `frontend/lib/breakpoint.test.ts`.
+
+**Pending, PO decision Q-3:** manual checks M-1 (theme and mobile first paint, drawer close on navigation, resize), M-2 (sort icons on `/customers` and `/portfolio`) and M-3 (smoke of `/pos`, `/inventory`, `/users`, `/barra`, `/reports`, `/purchases`, `/suppliers`, `/audit`: same requests as `dev`) are NOT done; no browser was available to QA. Exact steps in `gaps.md`.
+
+QA: round 1 OK, 0 BLOCKER, 3 MINOR (latent drawer state keyed by pathname; `data-theme` effect re-runs after hydration, same net behavior as `dev`; a throwing `localStorage` now throws in render, out of scope -> R-75). `go test ./...` has one failure that also exists on clean `dev` (`TestDashboardToday_T20_Golden`, R-67). Gemini diff review: clean. Spec: no change (code-quality refactor, no business rule; `git diff dev...HEAD` touches nothing under `project-docs/spec/`).
 
 ---
 

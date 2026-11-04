@@ -296,7 +296,7 @@ export default function CustomerDetailPage() {
   }, [customerId, toast]);
 
   useEffect(() => {
-    load();
+    queueMicrotask(load);
   }, [load]);
 
   if (loading) {

@@ -317,8 +317,8 @@ export default function ReportsPage() {
     }
   }, [range, customFrom, customTo, expenseCategory]);
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { loadExpenses(); }, [loadExpenses]);
+  useEffect(() => { queueMicrotask(load); }, [load]);
+  useEffect(() => { queueMicrotask(loadExpenses); }, [loadExpenses]);
 
   const totalDebt = portfolio.reduce((s, e) => s + e.balance, 0);
 
