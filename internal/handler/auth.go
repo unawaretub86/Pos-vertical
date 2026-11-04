@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"math"
 	"net/http"
+	"strconv"
 
 	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/model"
@@ -24,20 +26,30 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ip := appmw.ClientIP(r)
+	if ok, retry := h.loginLimiter.Allowed(ip); !ok {
+		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retry.Seconds()))))
+		respondError(w, http.StatusTooManyRequests, "demasiados intentos fallidos, espere unos minutos")
+		return
+	}
+
 	var user model.User
 	err := h.db.QueryRow(
 		`SELECT id, username, password_hash, role, active FROM users WHERE username = ? AND active = 1`,
 		req.Username,
 	).Scan(&user.ID, &user.Username, &user.PasswordHash, &user.Role, &user.Active)
 	if err != nil {
+		h.loginLimiter.Fail(ip)
 		respondError(w, http.StatusUnauthorized, "credenciales inválidas")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		h.loginLimiter.Fail(ip)
 		respondError(w, http.StatusUnauthorized, "credenciales inválidas")
 		return
 	}
+	h.loginLimiter.Reset(ip)
 
 	forcePasswordChange := req.Password == "admin"
 
