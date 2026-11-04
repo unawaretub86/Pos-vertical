@@ -11,6 +11,7 @@ import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { getUser } from '@/lib/auth';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { calcSubtotal, calcTax, calcTotal } from '@/lib/saleCalc';
+import { readActiveCart, writeActiveCart } from '@/lib/activeCart';
 import SalePaymentPanel, { type CheckoutData, type PaymentMethod, type Customer } from '@/components/SalePaymentPanel';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -498,6 +499,15 @@ export default function POSPage() {
   const [resumeCandidate, setResumeCandidate] = useState<ParkedCart | null>(null); // pending confirm when active cart isn't empty
   const [discardTarget, setDiscardTarget] = useState<ParkedCart | null>(null);
 
+  // Live cart persistence (R-73): the cart is restored once, right after the
+  // first products load (loadProducts), and saved on every change afterwards.
+  const [cartHydrated, setCartHydrated] = useState(false);
+  const cartHydrationStarted = useRef(false);
+  useEffect(() => {
+    if (!cartHydrated) return;
+    writeActiveCart(window.localStorage, { items: cart, customer: selectedCustomer, globalDiscountInput });
+  }, [cart, selectedCustomer, globalDiscountInput, cartHydrated]);
+
   useEffect(() => {
     setParkedCarts(loadParkedCarts());
   }, []);
@@ -532,6 +542,22 @@ export default function POSPage() {
       if (selectedCat) params.set('category_id', String(selectedCat));
       const data = await api.get<Product[]>(`/products?${params}`);
       setProducts(data ?? []);
+      if (!cartHydrationStarted.current) {
+        // Restore the cart a session expiry left behind. Product data is refreshed;
+        // a product that is gone or inactive is flagged inactive, as doResume does.
+        cartHydrationStarted.current = true;
+        const saved = readActiveCart<CartItem, Customer>(window.localStorage);
+        if (saved) {
+          setCart(saved.items.map(item => {
+            const fresh = (data ?? []).find(p => p.id === item.product.id);
+            return fresh ? { ...item, product: fresh } : { ...item, product: { ...item.product, active: false } };
+          }));
+          setSelectedCustomer(saved.customer);
+          setGlobalDiscountInput(saved.globalDiscountInput);
+          toast('Recuperamos la venta que tenías abierta', 'success');
+        }
+        setCartHydrated(true);
+      }
     } catch {
       toast('Error al cargar productos', 'error');
     } finally {

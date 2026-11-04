@@ -29,3 +29,11 @@ The UI uses relative `/api` unless `NEXT_PUBLIC_API_URL` is defined (dev on :300
 - `POST /api/auth/login` counts failed logins per client IP (`RemoteAddr`; `X-Forwarded-For` is ignored). The 10th failure inside 10 minutes locks that IP for 5 minutes: `429` with `Retry-After` (seconds), even for the right password (`internal/middleware/ratelimit.go`, `internal/handler/auth.go`).
 - A successful login resets the counter. The limit is per IP, not per username, so nobody can lock the admin out by guessing their name. State is in memory; restarting `pos.exe` clears it.
 - Tests: `TestLoginLimiter_T1`..`_T6`, `TestCORS_T7`..`_T9` (`internal/middleware/ratelimit_test.go`), `TestLoginRateLimit_T1`..`_T3` (`internal/handler/login_ratelimit_test.go`).
+
+## Session expiry and the live POS cart (R-73)
+
+- The session token lasts 24 hours. When a request returns `401`, the frontend clears the session and goes to `/login` (US-077).
+- The open POS cart (lines, customer, global discount) is saved in `localStorage` under `pos.activeCart` on every change and removed when the cart is empty (`frontend/lib/activeCart.ts`, `frontend/app/pos/page.tsx`). After logging in again, `/pos` restores it once the products load, refreshes each line's product data (a product no longer returned is flagged inactive) and shows "Recuperamos la venta que tenías abierta".
+- A saved cart older than 12 hours is discarded, because its prices and stock are probably stale. Parked carts (`pos.parkedCarts`) are unchanged.
+- The cart belongs to the browser, not to the user: whoever logs in next on the same machine sees it. That is intended for a shared till.
+- Tests: `frontend/lib/activeCart.test.ts`.
