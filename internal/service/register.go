@@ -19,11 +19,12 @@ var (
 
 // RegisterSummary aggregates the register state for display.
 type RegisterSummary struct {
-	Register        *model.Register              `json:"register"`
-	CashSales       float64                      `json:"cash_sales"`
-	CashIn          float64                      `json:"cash_in"`
-	CashOut         float64                      `json:"cash_out"`
-	Expected        float64                      `json:"expected"`
+	Register        *model.Register                 `json:"register"`
+	CashSales       float64                         `json:"cash_sales"`
+	CashAbonos      float64                         `json:"cash_abonos"`
+	CashIn          float64                         `json:"cash_in"`
+	CashOut         float64                         `json:"cash_out"`
+	Expected        float64                         `json:"expected"`
 	Movements       []*model.RegisterMovement       `json:"movements"`
 	ByPaymentMethod []repository.PaymentMethodTotal `json:"by_payment_method"`
 	OpenOrdersCount int                             `json:"open_orders_count"`
@@ -91,6 +92,10 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 	if err != nil {
 		return nil, err
 	}
+	cashAbonos, err := s.repo.SumCashAbonos(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	cashIn, err := s.repo.SumCashIn(ctx, id)
 	if err != nil {
 		return nil, err
@@ -108,10 +113,11 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 		return nil, err
 	}
 	openOrders, _ := s.repo.CountOpenOrders(ctx)
-	expected := reg.OpeningAmount + cashSales + cashIn - cashOut
+	expected := reg.OpeningAmount + cashSales + cashAbonos + cashIn - cashOut
 	return &RegisterSummary{
 		Register:        reg,
 		CashSales:       cashSales,
+		CashAbonos:      cashAbonos,
 		CashIn:          cashIn,
 		CashOut:         cashOut,
 		Expected:        expected,
@@ -134,7 +140,13 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 	cashSales, _ := s.repo.SumCashSales(ctx, id)
 	cashIn, _ := s.repo.SumCashIn(ctx, id)
 	cashOut, _ := s.repo.SumCashOut(ctx, id)
-	expected := reg.OpeningAmount + cashSales + cashIn - cashOut
+	// Unlike the sums above, a failing abono sum aborts the close: closing
+	// without it would persist a wrong expected_close (US-082, AC-12).
+	cashAbonos, err := s.repo.SumCashAbonos(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("sum cash abonos: %w", err)
+	}
+	expected := reg.OpeningAmount + cashSales + cashAbonos + cashIn - cashOut
 	difference := actualClose - expected
 
 	closed, err := s.repo.Close(ctx, id, actualClose, expected, difference)
@@ -147,6 +159,7 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 	summary := &RegisterSummary{
 		Register:        closed,
 		CashSales:       cashSales,
+		CashAbonos:      cashAbonos,
 		CashIn:          cashIn,
 		CashOut:         cashOut,
 		Expected:        expected,
@@ -165,7 +178,7 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 					}
 				}
 			}
-			
+
 			pmLines := make([]mailer.PaymentLine, len(byMethod))
 			for i, m := range byMethod {
 				pmLines[i] = mailer.PaymentLine{Method: m.Method, Total: m.Total}
@@ -184,6 +197,7 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 				Cashier:         cashierName,
 				ClosedAt:        closedAt,
 				ByPaymentMethod: pmLines,
+				CashAbonos:      cashAbonos,
 				CashIn:          cashIn,
 				CashOut:         cashOut,
 				Expected:        expected,

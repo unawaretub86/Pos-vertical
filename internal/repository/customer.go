@@ -158,7 +158,7 @@ func (r *customerRepo) TotalPortfolioBalance(ctx context.Context) (float64, erro
 // ListPayments returns all payments for a given customer, ordered by most recent first.
 func (r *customerRepo) ListPayments(ctx context.Context, customerID int64) ([]*model.CustomerPayment, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, customer_id, amount, COALESCE(note,''), created_at
+		`SELECT id, customer_id, amount, method, register_id, COALESCE(note,''), created_at
 		 FROM customer_payments WHERE customer_id = ? ORDER BY created_at DESC`, customerID)
 	if err != nil {
 		return nil, fmt.Errorf("list payments: %w", err)
@@ -168,7 +168,7 @@ func (r *customerRepo) ListPayments(ctx context.Context, customerID int64) ([]*m
 	var payments []*model.CustomerPayment
 	for rows.Next() {
 		p := &model.CustomerPayment{}
-		if err := rows.Scan(&p.ID, &p.CustomerID, &p.Amount, &p.Note, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.CustomerID, &p.Amount, &p.Method, &p.RegisterID, &p.Note, &p.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan payment: %w", err)
 		}
 		payments = append(payments, p)
@@ -179,8 +179,8 @@ func (r *customerRepo) ListPayments(ctx context.Context, customerID int64) ([]*m
 // CreatePayment inserts a new customer payment (abono).
 func (r *customerRepo) CreatePayment(ctx context.Context, p *model.CustomerPayment) (*model.CustomerPayment, error) {
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO customer_payments (customer_id, amount, note) VALUES (?, ?, ?)`,
-		p.CustomerID, p.Amount, p.Note)
+		`INSERT INTO customer_payments (customer_id, amount, method, register_id, note) VALUES (?, ?, ?, ?, ?)`,
+		p.CustomerID, p.Amount, p.Method, p.RegisterID, p.Note)
 	if err != nil {
 		return nil, fmt.Errorf("create payment: %w", err)
 	}
@@ -190,8 +190,8 @@ func (r *customerRepo) CreatePayment(ctx context.Context, p *model.CustomerPayme
 	}
 	created := &model.CustomerPayment{}
 	err = r.db.QueryRowContext(ctx,
-		`SELECT id, customer_id, amount, COALESCE(note,''), created_at FROM customer_payments WHERE id = ?`, id).
-		Scan(&created.ID, &created.CustomerID, &created.Amount, &created.Note, &created.CreatedAt)
+		`SELECT id, customer_id, amount, method, register_id, COALESCE(note,''), created_at FROM customer_payments WHERE id = ?`, id).
+		Scan(&created.ID, &created.CustomerID, &created.Amount, &created.Method, &created.RegisterID, &created.Note, &created.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get created payment: %w", err)
 	}

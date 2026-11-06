@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/model"
 )
 
@@ -61,9 +62,22 @@ func (m *mockCustomerRepo) GetPOSSummary(_ context.Context, _ int64) (*model.Cus
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
+// newCustomerSvc wires a register stub with no open register (US-082: the
+// service now resolves the open register when creating an abono).
 func newCustomerSvc(repo *mockCustomerRepo) *CustomerService {
-	return NewCustomerService(repo)
+	return NewCustomerService(repo, &stubRegisterRepo{})
 }
+
+func newCustomerSvcWithRegister(repo *mockCustomerRepo, reg *stubRegisterRepo) *CustomerService {
+	return NewCustomerService(repo, reg)
+}
+
+func ctxWithRole(role string) context.Context {
+	return context.WithValue(context.Background(), appmw.ClaimsKey, &model.Claims{UserID: 1, Username: role, Role: role})
+}
+
+func adminCtx() context.Context   { return ctxWithRole("admin") }
+func cashierCtx() context.Context { return ctxWithRole("cashier") }
 
 func existingCustomer() *model.Customer {
 	return &model.Customer{ID: 1, Name: "Carlos"}
@@ -78,7 +92,7 @@ func TestCreatePayment_OK(t *testing.T) {
 	}
 	svc := newCustomerSvc(repo)
 
-	p, err := svc.CreatePayment(context.Background(), 1, 20000, "primer abono")
+	p, err := svc.CreatePayment(adminCtx(), 1, 20000, "cash", "primer abono")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,7 +108,7 @@ func TestCreatePayment_ZeroAmount(t *testing.T) {
 	repo := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
 	svc := newCustomerSvc(repo)
 
-	_, err := svc.CreatePayment(context.Background(), 1, 0, "")
+	_, err := svc.CreatePayment(adminCtx(), 1, 0, "cash", "")
 	if err == nil {
 		t.Fatal("expected error for zero amount")
 	}
@@ -104,7 +118,7 @@ func TestCreatePayment_NegativeAmount(t *testing.T) {
 	repo := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
 	svc := newCustomerSvc(repo)
 
-	_, err := svc.CreatePayment(context.Background(), 1, -100, "")
+	_, err := svc.CreatePayment(adminCtx(), 1, -100, "cash", "")
 	if err == nil {
 		t.Fatal("expected error for negative amount")
 	}
@@ -117,7 +131,7 @@ func TestCreatePayment_ExceedsBalance(t *testing.T) {
 	}
 	svc := newCustomerSvc(repo)
 
-	_, err := svc.CreatePayment(context.Background(), 1, 50000, "")
+	_, err := svc.CreatePayment(adminCtx(), 1, 50000, "cash", "")
 	if err == nil {
 		t.Fatal("expected error when amount exceeds balance")
 	}
@@ -130,7 +144,7 @@ func TestCreatePayment_ExactBalance(t *testing.T) {
 	}
 	svc := newCustomerSvc(repo)
 
-	p, err := svc.CreatePayment(context.Background(), 1, 30000, "pago total")
+	p, err := svc.CreatePayment(adminCtx(), 1, 30000, "cash", "pago total")
 	if err != nil {
 		t.Fatalf("unexpected error for exact balance payment: %v", err)
 	}
@@ -145,7 +159,7 @@ func TestCreatePayment_CustomerNotFound(t *testing.T) {
 	}
 	svc := newCustomerSvc(repo)
 
-	_, err := svc.CreatePayment(context.Background(), 99, 1000, "")
+	_, err := svc.CreatePayment(adminCtx(), 99, 1000, "cash", "")
 	if err == nil {
 		t.Fatal("expected error for non-existent customer")
 	}
@@ -158,7 +172,7 @@ func TestCreatePayment_BalanceError(t *testing.T) {
 	}
 	svc := newCustomerSvc(repo)
 
-	_, err := svc.CreatePayment(context.Background(), 1, 1000, "")
+	_, err := svc.CreatePayment(adminCtx(), 1, 1000, "cash", "")
 	if err == nil {
 		t.Fatal("expected error when balance query fails")
 	}
@@ -172,7 +186,7 @@ func TestCreatePayment_RepoError(t *testing.T) {
 	}
 	svc := newCustomerSvc(repo)
 
-	_, err := svc.CreatePayment(context.Background(), 1, 10000, "")
+	_, err := svc.CreatePayment(adminCtx(), 1, 10000, "cash", "")
 	if err == nil {
 		t.Fatal("expected error when repo fails")
 	}
@@ -263,5 +277,107 @@ func TestListPayments_Empty(t *testing.T) {
 	}
 	if len(payments) != 0 {
 		t.Errorf("expected 0 payments, got %d", len(payments))
+	}
+}
+
+// ── US-082 contract §4, T-8 (AC-7) ──────────────────────────────────────────
+
+func TestCreatePayment_T8_OpenRegisterLookupFailureStoresNothing(t *testing.T) {
+	for _, role := range []string{"admin", "cashier"} {
+		t.Run(role, func(t *testing.T) {
+			repo := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
+			reg := &stubRegisterRepo{getOpenErr: errors.New("database is locked")}
+			svc := newCustomerSvcWithRegister(repo, reg)
+
+			_, err := svc.CreatePayment(ctxWithRole(role), 1, 20000, "cash", "")
+			if err == nil {
+				t.Fatal("expected an error when the open-register lookup fails")
+			}
+			if repo.createdPay != nil {
+				t.Errorf("repo CreatePayment was called (amount %.0f); nothing must be stored", repo.createdPay.Amount)
+			}
+		})
+	}
+}
+
+// ── US-082 contract §4, T-9 (AC-4, AC-5, AC-6, AC-9) ─────────────────────────
+
+func TestCreatePayment_T9_CashierWithoutOpenRegisterRejected(t *testing.T) {
+	repo := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
+	svc := newCustomerSvcWithRegister(repo, &stubRegisterRepo{}) // GetOpen -> ErrNotFound
+
+	_, err := svc.CreatePayment(cashierCtx(), 1, 20000, "cash", "")
+	if err == nil {
+		t.Fatal("expected an error for a cashier with no open register")
+	}
+	if repo.createdPay != nil {
+		t.Error("repo CreatePayment was called; nothing must be stored")
+	}
+
+	// Same input as admin succeeds unattributed (AC-5), so the rejection above
+	// is the role rule and not some other validation.
+	repoAdmin := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
+	svcAdmin := newCustomerSvcWithRegister(repoAdmin, &stubRegisterRepo{})
+	p, err := svcAdmin.CreatePayment(adminCtx(), 1, 20000, "cash", "")
+	if err != nil {
+		t.Fatalf("admin with no open register: unexpected error: %v", err)
+	}
+	if p.RegisterID != nil {
+		t.Errorf("admin abono register_id = %d, want nil", *p.RegisterID)
+	}
+	if p.Method != "cash" || p.Amount != 20000 {
+		t.Errorf("admin abono = %q/%.0f, want cash/20000", p.Method, p.Amount)
+	}
+}
+
+func TestCreatePayment_T9_CashierWithOpenRegisterLinksRegister(t *testing.T) {
+	repo := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
+	reg := &stubRegisterRepo{openRegister: &model.Register{ID: 7, Status: "open", OpeningAmount: 100000}}
+	svc := newCustomerSvcWithRegister(repo, reg)
+
+	p, err := svc.CreatePayment(cashierCtx(), 1, 20000, "transfer", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if repo.createdPay == nil {
+		t.Fatal("repo CreatePayment was not called")
+	}
+	if repo.createdPay.RegisterID == nil || *repo.createdPay.RegisterID != 7 {
+		t.Errorf("stored register_id = %v, want 7", repo.createdPay.RegisterID)
+	}
+	if repo.createdPay.Method != "transfer" {
+		t.Errorf("stored method = %q, want transfer", repo.createdPay.Method)
+	}
+	if p.Amount != 20000 {
+		t.Errorf("amount = %.0f, want 20000", p.Amount)
+	}
+}
+
+func TestCreatePayment_T9_CashierOverBalanceRejected(t *testing.T) {
+	// Balance $50,000, abono $60,000 -> over-balance error, nothing stored.
+	repo := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
+	reg := &stubRegisterRepo{openRegister: &model.Register{ID: 1, Status: "open", OpeningAmount: 100000}}
+	svc := newCustomerSvcWithRegister(repo, reg)
+
+	_, err := svc.CreatePayment(cashierCtx(), 1, 60000, "cash", "")
+	if err == nil {
+		t.Fatal("expected an over-balance error")
+	}
+	if repo.createdPay != nil {
+		t.Error("repo CreatePayment was called; nothing must be stored")
+	}
+}
+
+func TestCreatePayment_T9_CashierZeroAmountRejected(t *testing.T) {
+	repo := &mockCustomerRepo{customer: existingCustomer(), balance: 50000}
+	reg := &stubRegisterRepo{openRegister: &model.Register{ID: 1, Status: "open", OpeningAmount: 100000}}
+	svc := newCustomerSvcWithRegister(repo, reg)
+
+	_, err := svc.CreatePayment(cashierCtx(), 1, 0, "cash", "")
+	if err == nil {
+		t.Fatal("expected an error for amount 0")
+	}
+	if repo.createdPay != nil {
+		t.Error("repo CreatePayment was called; nothing must be stored")
 	}
 }

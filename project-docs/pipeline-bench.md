@@ -10,22 +10,25 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 12 (US-080, ESC/POS printing, level L; two orchestrator sessions overlapped at close). Before: 11 (US-079), 10 (US-077), 9 (US-056). No `us/*` worktree is open. `dev` is at the US-080 merge (verify with `git log`).
+**Last run:** 13 (US-082, payment method on *abonos*, level L). Before: 12 (US-080), 11 (US-079), 10 (US-077). No `us/*` worktree is open. `dev` is at the US-082 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**Next US:** US-082 (SPRINT-19, fiado collection, planned 2026-11-05 ahead of US-081; Q-1/Q-2 already decided by the PO), then US-083, US-043, US-084, US-085, then US-081. Run `/us US-082 [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**SPRINT-19 (Fiado collection):** US-082 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3 in `gaps.md`).
+
+**Next US:** US-083, then US-043, US-084, US-085, then US-081. Run `/us US-083 [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
 **Pipeline changes since run 9 (applied, with the PO's approval):**
 - Hooks in `.claude/settings.json` run `.claude/hooks/pos-guard.js`: pnpm only, no commit on `master`/`main`, applied migrations, `t.Skip`, CGO (blocks); `BETWEEN`, SQL concatenation, hard-coded colors, Spanish docs, missing spec (warn/ask). Documented in `CLAUDE.md`.
 - `scripts/gemini-review.sh` is called by `/us`: `contract` mode before GATE 1 and `diff` mode in every QA round, in parallel with `qa`. Advisory: the orchestrator verifies every finding. Timeout 420 s with one retry; the pipeline waits at most about 10 minutes.
+- After run 13 (PO: "use gemini as u want"): the `diff` prompt states that the spec delta is written at close and must not be reported, and asks for weakened/skipped tests as defect lines instead of prose; the script keeps only the finding lines (or `CLEAN`) and falls back to the raw answer if none match.
 - Experiment M-1..M-3 (model comparison) did not change any agent's model: the recommendations (cheaper implementer when a red test defines done, QA on the strong model, Gemini never the only reviewer) wait for more data. See `experiments/model-bench/README.md` on branch `experiment/model-bench`.
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-082` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us US-083` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -55,6 +58,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 10 | 2026-10-20 | US-077 | L | ~218k (A 128k=63k+26k+38k · T 29k · I 30k · Q 31k) | 70 | ~6.8 | 0 (one PASSES⚠️ shown to the PO by rule, not a stop) | 1 | 4 contract discrepancies (D-1..D-4) + 3 wording fixes from Gemini | 1 new (R-73) + 1 closed (R-49) | 0 | +249 / −11, 4 files |
 | 11 | about 2026-10-28 (steps 1-5; GATE 2 re-verified 2026-11-04) | US-079 | L | not recorded (lost with the earlier session) | not recorded | not recorded | not recorded | 1 | not recorded | 2 new (R-74, R-75) + 1 closed (R-35) | not recorded | +200 / −145, 32 files |
 | 12 | 2026-11-05 | US-080 | L | ~535k (A 276k=76k+45k+73k+82k · T 84k · I 124k · Q 51k) | 167 | ~23.9 | 1 (two orchestrator sessions ran the close in parallel; PO closed one before merge) | 1 | 7 contract discrepancies (D-1..D-7) + 5 at close + 2 Gemini-verified MINOR | 7 new (R-76..R-82) | 1 (duplicate close by a parallel session) | +1,988 / −30, 32 files (excluding this benchmark entry) |
+| 13 | 2026-11-05 | US-082 | L | ~929k (A 409k=110k+127k+172k · T 243k=119k+124k · I 205k=95k+110k · Q 72k) | 232 | ~39.3 | 1 (analyst lost when the earlier session ended; resumed from transcript) | 1 | 6 contract discrepancies (D-1..D-6) + 5 Gemini-verified contract fixes + 1 red-test gap + 1 AC-7 miss + 6 QA MINOR | 7 new (R-83..R-89) | 0 | +1,146 / −93, 29 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -571,6 +575,46 @@ Gemini's "missing spec update" is a structural false positive: the diff review r
 ### What to measure in run 13
 - Whether Gemini diff keeps catching AC-wording deviations QA marks OK (2 of 2 runs here).
 - Gemini contract findings: record verified/false counts at GATE 1.
+
+## Run 13 — US-082 (payment method on *abonos*; cash *abonos* in the register close, level L)
+
+Started in a session that the PO confirmed as owner after `ListAgents` showed two idle peer sessions and a fresh US-082 commit (`1cbf2ea`) from one of them. The first analyst call was still running when that session ended; the next session found `changes/US-082/` empty and resumed the same agent with `SendMessage` (its transcript survived), so no cold relaunch was needed.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 recorded (contract, resumed after the session loss; contract update after GATE 1; close) + 1 lost (first contract attempt, no telemetry) | 409k (110.3k + 126.8k + 172.1k) | 67 | ~10.2 min |
+| test-author | 2 (red tests; fix of a missing mock method after RED) | 243k (119.0k + 123.9k) | 64 | ~10.6 min |
+| implementer | 2 (round 1; AC-7 follow-up) | 205k (95.1k + 110.0k) | 69 | ~12.8 min |
+| qa | 1 round | 72.4k | 32 | ~5.7 min |
+
+**What it found.** Contract: D-1..D-6 (stale sprint/spec line refs; unknown customer gets 400 not 404; duplicate close email; close modal omits `cash_in`; `:memory:` + held `Conn()` opens a second empty DB — a test trap the analyst hit while probing). The analyst ran a probe test that confirmed the bug ($130,000 expected instead of $150,000) and the 403 for cashiers. Red tests: `sale_test.go`'s `mockRegisterRepo` lacked the new interface method, so `internal/service` did not compile with the implementation — found by the implementer, fixed by the test-author in a second test commit (`a6b8763`, new RED). Implementation round 1 mapped a failed open-register lookup to 400 instead of AC-7's 500; sent back before QA. QA round 1: OK, 0 BLOCKER, 6 MINOR (500 on internal failures accepted into the spec; ST1005 capital letter required by AC-6; open-register cards lack the line → R-87; gofmt churn in `model.go`; D-2 → R-83; `Close` ignores other sums' errors → R-88). QA's binary smoke on port 18082 confirmed expected 155,000 with transfer/card *abonos* excluded.
+
+**Unplanned stops:** 0 to the PO outside the gates (the ownership question at step 0 was the run-12 check, asked by design). Internal re-dispatches: 2 (red-test gap, AC-7 miss). 1 agent lost to the session ending. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | not recorded | 13 (2 RULE_CONFLICT, 6 MISSING_CASE, 4 AMBIGUOUS, 1 UNTESTABLE) | 5 (zero-*abono* SUM test; `Summary` error path; `/detail` fields untested; $0 line shown or not; notice placement) — all accepted by the PO at GATE 1 | 8 (cut-off spec delta, undefined Q-A/Q-B: false; "any role"/other roles: only admin and cashier exist; inactive customer: existing, desirable; race: already out of scope; 320 px: manual by design) | n/a (G-2 led to the `getRegister` 404/500 fix) |
+| diff, round 1 | OK | not recorded (finished after QA, ~6 min) | 0 defect lines; 2 prose statements ("no spec update"; 8 existing tests edited) | 0 defects (tests were edited only for the new signature) | 1 ("no spec update", structural, same as run 12) | no |
+
+The diff answer was mostly the model's own reasoning text (~150 lines) instead of the requested ≤15 finding lines; the prompt's "State explicitly whether…" sentence invited prose.
+
+**Operational friction.**
+- The orchestrating session ended while the analyst ran; the background agent stopped. Resume via `SendMessage` worked from the saved transcript.
+- Contract §5/§6 told the implementer to write the spec, while `/us` reserves the spec for the analyst at close; the orchestrator told the implementer not to touch it. The pos-guard Rule 2 hook did not block the implementation commit.
+- A test-side mock outside the files the contract named needed the new interface method; the test-author did not compile-check `internal/service` against an interface stub.
+
+### Adjustments applied (PO: "use gemini as u want")
+1. `gemini-review.sh diff`: the prompt says the spec delta is written at close by the analyst and must not be reported; edited/weakened tests are reported as defect lines.
+2. The script keeps only lines that match the requested format (or `CLEAN`), and falls back to the raw answer when none match.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12 proposal 1 still pending: step 0 checks `ListAgents` for peer sessions (done by hand this run).
+2. Contract template: the analyst should not assign the spec delta to the implementer (§5/§6), since `/us` writes it at close.
+3. Test-author: after adding a method to an interface, grep every test stub of that interface (`grep -rn "func (m \*mock<X>)"`).
+
+### What to measure in run 14
+- Whether the filtered Gemini diff output stays within format and drops the "no spec update" false positive.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

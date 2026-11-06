@@ -23,6 +23,9 @@ type RegisterRepository interface {
 	SumCashOut(ctx context.Context, registerID int64) (float64, error)
 	// SumCashIn returns the sum of cash_in movements for a register.
 	SumCashIn(ctx context.Context, registerID int64) (float64, error)
+	// SumCashAbonos returns the sum of cash abonos received by a register
+	// (US-082). Transfer/card abonos and unattributed ones never count.
+	SumCashAbonos(ctx context.Context, registerID int64) (float64, error)
 	// SumByPaymentMethod returns completed sales totals for a register, grouped
 	// by payment method — used by the register close ticket (US-051), which
 	// any authenticated cashier can see even though GET /reports/sales is
@@ -215,6 +218,17 @@ func (r *registerRepo) SumCashIn(ctx context.Context, registerID int64) (float64
 		`SELECT COALESCE(SUM(amount), 0) FROM register_movements WHERE register_id = ? AND type = 'cash_in'`,
 		registerID).Scan(&sum)
 	return sum, err
+}
+
+func (r *registerRepo) SumCashAbonos(ctx context.Context, registerID int64) (float64, error) {
+	var sum float64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE register_id = ? AND method = 'cash'`,
+		registerID).Scan(&sum)
+	if err != nil {
+		return 0, fmt.Errorf("register sum cash abonos: %w", err)
+	}
+	return sum, nil
 }
 
 func scanRegister(s scanner) (*model.Register, error) {

@@ -56,7 +56,7 @@ RULES='Project rules (CLAUDE.md): everything written in the repo is English (onl
 } > "$PACKET"
 
 if [[ $MODE == diff ]]; then
-  TASK='You are an independent reviewer. Review the DIFF in the packet against the CONTRACT and RULES. List only real defects, one per line, as: SEVERITY | file:line | defect | requirement or AC violated (SEVERITY is BLOCKER or MINOR). State explicitly whether any existing test was weakened, skipped or edited, and whether a behavior change lacks a spec update. Quote the offending line. Do not praise, do not restate the diff, do not invent files. If nothing is wrong, answer exactly: CLEAN. Max 15 lines. Use only the packet: do not open or search any other file.'
+  TASK='You are an independent reviewer. Review the DIFF in the packet against the CONTRACT and RULES. List only real defects, one per line, as: SEVERITY | file:line | defect | requirement or AC violated (SEVERITY is BLOCKER or MINOR). An existing test that was weakened or skipped, or whose assertions were removed, is a defect line too (adapting a call to a new signature is not). Do not report missing project-docs/spec/ changes: the spec delta is written in a later step, after this review. Quote the offending line. Output only the defect lines, no reasoning or commentary. Do not praise, do not restate the diff, do not invent files. If nothing is wrong, answer exactly: CLEAN. Max 15 lines. Use only the packet: do not open or search any other file.'
 else
   TASK='You are an independent requirements reviewer. Read the CONTRACT in the packet. List only real problems, one per line, as: KIND | section | problem. KIND is AMBIGUOUS, UNTESTABLE, MISSING_CASE or RULE_CONFLICT (against RULES). Typical misses: empty/zero/negative values, concurrency, inactive or deleted entities, permissions (admin vs cashier), half-open date ranges, spec not updated. Do not praise or summarize. If nothing is wrong, answer exactly: CLEAN. Max 15 lines. Use only the packet: do not open or search any other file.'
 fi
@@ -82,4 +82,17 @@ for attempt in 1 2; do
   ANSWER=""
 done
 [[ -z $ANSWER ]] && finish EMPTY "agy returned nothing twice (usually a denied read_file or a silent failure)."
+
+# Keep only the requested finding lines: the model sometimes prints its reasoning (run 13).
+# Lines must start with the KIND/SEVERITY (optionally after "- "), so drafts quoted inside prose are dropped.
+if [[ $MODE == diff ]]; then KINDS='BLOCKER|MINOR'; else KINDS='AMBIGUOUS|UNTESTABLE|MISSING_CASE|RULE_CONFLICT'; fi
+ANSWER=${ANSWER//$'\r'/}
+FINDINGS=$(grep -E "^(- )?($KINDS) \|" <<< "$ANSWER")
+if [[ -n $FINDINGS ]]; then
+  ANSWER=$FINDINGS
+elif grep -qxE '[[:space:]]*CLEAN[[:space:]]*' <<< "$ANSWER"; then
+  ANSWER=CLEAN
+else
+  ANSWER="UNFILTERED: no line matched the requested format; raw answer follows."$'\n\n'"$ANSWER"
+fi
 finish OK "$ANSWER"

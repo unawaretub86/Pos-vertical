@@ -180,19 +180,28 @@ func (h *Handler) createCustomerPayment(w http.ResponseWriter, r *http.Request) 
 	}
 	var body struct {
 		Amount float64 `json:"amount"`
+		Method string  `json:"method"`
 		Note   string  `json:"note"`
 	}
 	if err := decode(r, &body); err != nil {
 		respondError(w, http.StatusBadRequest, "request inválido")
 		return
 	}
-	payment, err := h.customers.CreatePayment(r.Context(), id, body.Amount, body.Note)
+	payment, err := h.customers.CreatePayment(r.Context(), id, body.Amount, body.Method, body.Note)
+	if errors.Is(err, service.ErrAbonoNeedsOpenRegister) {
+		respondError(w, http.StatusForbidden, err.Error())
+		return
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "cliente no encontrado")
 		return
 	}
-	if err != nil {
+	if errors.Is(err, service.ErrInvalidAbono) {
 		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error registrando abono")
 		return
 	}
 	respond(w, http.StatusCreated, payment)

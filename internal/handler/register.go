@@ -52,8 +52,12 @@ func (h *Handler) getRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	summary, err := h.registers.Summary(r.Context(), id)
-	if err != nil {
+	if errors.Is(err, repository.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "caja no encontrada")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo caja")
 		return
 	}
 	respond(w, http.StatusOK, summary)
@@ -141,6 +145,7 @@ func (h *Handler) sendRegisterSummaryEmail(summary *service.RegisterSummary, cas
 		Cashier:         cashier,
 		ClosedAt:        closedAt,
 		ByPaymentMethod: lines,
+		CashAbonos:      summary.CashAbonos,
 		CashIn:          summary.CashIn,
 		CashOut:         summary.CashOut,
 		Expected:        summary.Expected,

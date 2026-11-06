@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-05 · Verified against the code on 2026-10-13 (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -27,18 +27,22 @@ valid types (register_movements.type): sale · cash_in · cash_out · opening
 ## Rule: expected cash at close
 
 ```
-expected   = opening_float + cash_sales + cash_in − cash_out
+expected   = opening_float + cash_sales + cash_abonos + cash_in − cash_out
 difference = actual_counted − expected
 ```
 
-Source: `internal/service/register.go:111` and `:137`.
+Source: `internal/service/register.go:116` (`Summary`) and `:149` (`Close`).
 
+- `cash_abonos` = `SUM(customer_payments.amount)` with `method = 'cash'` and `register_id` = this register (`RegisterRepository.SumCashAbonos`, `internal/repository/register.go:223-232`). An *abono* (a payment toward a fiado balance) is linked to the register that was open when it was registered; see `fiado.md`, "Rule: payments (*abonos*)".
 - `difference > 0` → surplus (*sobrante*)
 - `difference < 0` → shortage (*faltante*)
-- Only **cash** counts. Sales by transfer, card or fiado do not enter the count: that money is not in the drawer.
-- **Known gap (verified 2026-11-05):** cash *abonos* (fiado payments) are not in the formula. `customer_payments` has no method and no `register_id` (`internal/database/migrate.go:245-251`), so a cash *abono* shows up as an unexplained surplus. Planned fix: SPRINT-19 US-082.
+- Only **cash** counts. Sales by transfer, card or fiado do not enter the count: that money is not in the drawer. The same holds for transfer and card *abonos*.
+- An *abono* registered with no open register (`register_id NULL`), and every *abono* recorded before migration 21 (US-082), never enters any register count.
+- The register summary (`GET /registers/{id}`, `GET /registers/open`, `POST /registers/{id}/close`) returns `cash_abonos` (`internal/service/register.go:21-31`). The close modal, the close ticket and the close email always show the line `Abonos en efectivo`, also at `$0` (`frontend/app/register/page.tsx:366`, `frontend/components/CloseTicketPreview.tsx:135`, `internal/mailer/mailer.go:81`).
+- If summing cash *abonos* fails, `Close` returns an error and does not close the register (`internal/service/register.go:143-148`), and `Summary` returns an error (`:95-98`). `GET /registers/{id}` answers 404 only when the register does not exist and 500 for any other failure (`internal/handler/register.go:54-62`); `GET /registers/open` answers 500 on a summary failure (`:76-80`).
+- **Known inconsistency:** `Close` still ignores errors from `SumCashSales`, `SumCashIn` and `SumCashOut` (`internal/service/register.go:140-142`); only the *abono* sum is strict. Roadmap R-88.
 
-> **Historical note:** `archive/2026-05-plan-mvp.md:1135` (formerly `PLAN.md`) reports that `cash_in` was missing from this formula. **It is already included** (`register.go:111`). It is an example of why that document is not a source of truth about current state.
+> **Historical note:** `archive/2026-05-plan-mvp.md:1135` (formerly `PLAN.md`) reports that `cash_in` was missing from this formula. **It is already included** (`internal/service/register.go:116`). It is an example of why that document is not a source of truth about current state.
 
 ## Rule: estimated cash of the day (dashboard)
 
@@ -47,9 +51,9 @@ estimated cash = cash payments of completed sales in the range
                  − cash_out movements in the range
 ```
 
-It does not include the opening float or `cash_in`: it is a daily flow indicator, not the register count. The register count is "expected cash at close".
+It does not include the opening float, `cash_in` or cash *abonos*: it is a daily flow indicator, not the register count. The register count is "expected cash at close". Counting cash *abonos* here was left out of US-082 by the PO (2026-11-05); roadmap R-86.
 
-Source: `MetricsRepository.CashFlow` (`internal/repository/metrics.go:112`, `cash` payments at `:118`, `cash_out` at `:128`); the subtraction is done in `internal/handler/dashboard.go`.
+Source: `MetricsRepository.CashFlow` (`internal/repository/metrics.go:127`, `cash` payments at `:133`, `cash_out` at `:143`); the subtraction is done in `internal/handler/dashboard.go:67`.
 
 ## Rule: expenses
 

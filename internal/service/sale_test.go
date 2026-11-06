@@ -95,6 +95,9 @@ func (m *mockRegisterRepo) ListMovements(_ context.Context, _ int64) ([]*model.R
 func (m *mockRegisterRepo) SumCashSales(_ context.Context, _ int64) (float64, error) { return 0, nil }
 func (m *mockRegisterRepo) SumCashOut(_ context.Context, _ int64) (float64, error)   { return 0, nil }
 func (m *mockRegisterRepo) SumCashIn(_ context.Context, _ int64) (float64, error)    { return 0, nil }
+func (m *mockRegisterRepo) SumCashAbonos(_ context.Context, _ int64) (float64, error) {
+	return 0, nil
+}
 func (m *mockRegisterRepo) SumByPaymentMethod(_ context.Context, _ int64) ([]repository.PaymentMethodTotal, error) {
 	return nil, nil
 }

@@ -63,3 +63,23 @@ func TestBuildRegisterSummaryEmail_ExactMatch(t *testing.T) {
 		t.Errorf("exact-match body should not contain \"Faltante\"; got:\n%s", body)
 	}
 }
+
+// ─── US-082 contract §4, T-12 (AC-14 email, G-4) ─────────────────────────────
+
+func TestBuildRegisterSummaryEmail_T12_CashAbonosLine(t *testing.T) {
+	_, body := BuildRegisterSummaryEmail(baseData(func(d *RegisterSummaryData) {
+		d.CashAbonos = 20000
+	}))
+	if !strings.Contains(body, "Abonos en efectivo: $20.000") {
+		t.Errorf("body missing \"Abonos en efectivo: $20.000\"; got:\n%s", body)
+	}
+}
+
+func TestBuildRegisterSummaryEmail_T12_CashAbonosLineShownAtZero(t *testing.T) {
+	_, body := BuildRegisterSummaryEmail(baseData(func(d *RegisterSummaryData) {
+		d.CashAbonos = 0
+	}))
+	if !strings.Contains(body, "Abonos en efectivo: $0") {
+		t.Errorf("body missing \"Abonos en efectivo: $0\" line; got:\n%s", body)
+	}
+}

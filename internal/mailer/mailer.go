@@ -24,6 +24,7 @@ type RegisterSummaryData struct {
 	Cashier         string
 	ClosedAt        time.Time
 	ByPaymentMethod []PaymentLine
+	CashAbonos      float64 // cash abonos received by the register (US-082)
 	CashIn          float64
 	CashOut         float64
 	Expected        float64
@@ -77,6 +78,7 @@ func BuildRegisterSummaryEmail(d RegisterSummaryData) (subject, body string) {
 		}
 		fmt.Fprintf(&b, "%s: %s\n", label, formatCOP(line.Total))
 	}
+	fmt.Fprintf(&b, "Abonos en efectivo: %s\n", formatCOP(d.CashAbonos))
 	fmt.Fprintf(&b, "Entradas: %s\n", formatCOP(d.CashIn))
 	fmt.Fprintf(&b, "Salidas: %s\n", formatCOP(d.CashOut))
 	fmt.Fprintf(&b, "Esperado: %s\n", formatCOP(d.Expected))

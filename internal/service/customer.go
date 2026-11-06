@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
 )
@@ -13,12 +14,33 @@ import (
 // ErrCustomerHasBalance is returned when deleting a customer that still owes money.
 var ErrCustomerHasBalance = errors.New("no se puede eliminar un cliente con saldo pendiente")
 
+// ErrInvalidAbono matches (errors.Is) every rejected abono input: amount,
+// method, unknown customer, amount above the balance. The handler maps it to
+// 400; any other CreatePayment error is internal (500).
+var ErrInvalidAbono = errors.New("abono inválido")
+
+// abonoInputError carries the user-facing message of a rejected abono input
+// and matches ErrInvalidAbono.
+type abonoInputError struct{ msg string }
+
+func (e *abonoInputError) Error() string        { return e.msg }
+func (e *abonoInputError) Is(target error) bool { return target == ErrInvalidAbono }
+
+// ErrInvalidAbonoMethod is returned when an abono's payment method is not
+// cash, transfer or card (US-082).
+var ErrInvalidAbonoMethod error = &abonoInputError{"método de pago inválido: use efectivo, transferencia o tarjeta"}
+
+// ErrAbonoNeedsOpenRegister is returned when a non-admin registers an abono
+// while no register is open (US-082, PO Q-1).
+var ErrAbonoNeedsOpenRegister = errors.New("Debe haber una caja abierta para registrar un abono")
+
 type CustomerService struct {
-	repo repository.CustomerRepository
+	repo         repository.CustomerRepository
+	registerRepo repository.RegisterRepository
 }
 
-func NewCustomerService(repo repository.CustomerRepository) *CustomerService {
-	return &CustomerService{repo: repo}
+func NewCustomerService(repo repository.CustomerRepository, registerRepo repository.RegisterRepository) *CustomerService {
+	return &CustomerService{repo: repo, registerRepo: registerRepo}
 }
 
 func (s *CustomerService) List(ctx context.Context, search string) ([]*model.CustomerWithBalance, error) {
@@ -81,28 +103,57 @@ func (s *CustomerService) ListPayments(ctx context.Context, customerID int64) ([
 	return s.repo.ListPayments(ctx, customerID)
 }
 
-func (s *CustomerService) CreatePayment(ctx context.Context, customerID int64, amount float64, note string) (*model.CustomerPayment, error) {
+// CreatePayment registers an abono. method defaults to cash. The abono is
+// linked to the open register when there is one; with no open register only an
+// admin may register it, and it stays unattributed (register_id NULL).
+func (s *CustomerService) CreatePayment(ctx context.Context, customerID int64, amount float64, method, note string) (*model.CustomerPayment, error) {
 	if amount <= 0 {
-		return nil, errors.New("el monto del abono debe ser mayor a cero")
+		return nil, &abonoInputError{"el monto del abono debe ser mayor a cero"}
+	}
+	method = strings.TrimSpace(method)
+	if method == "" {
+		method = "cash"
+	}
+	if method != "cash" && method != "transfer" && method != "card" {
+		return nil, ErrInvalidAbonoMethod
+	}
+
+	var registerID *int64
+	reg, err := s.registerRepo.GetOpen(ctx)
+	switch {
+	case err == nil:
+		registerID = &reg.ID
+	case errors.Is(err, repository.ErrNotFound):
+		claims, _ := ctx.Value(appmw.ClaimsKey).(*model.Claims)
+		if claims == nil || claims.Role != "admin" {
+			return nil, ErrAbonoNeedsOpenRegister
+		}
+	default:
+		return nil, fmt.Errorf("check open register: %w", err)
 	}
 
 	// Verify customer exists
 	if _, err := s.repo.GetByID(ctx, customerID); err != nil {
-		return nil, errors.New("cliente no encontrado")
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, &abonoInputError{"cliente no encontrado"}
+		}
+		return nil, fmt.Errorf("get customer: %w", err)
 	}
 
 	// Validate amount does not exceed current balance
 	balance, err := s.repo.Balance(ctx, customerID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("customer balance: %w", err)
 	}
 	if amount > balance {
-		return nil, fmt.Errorf("el pago ($%.0f) supera la deuda actual ($%.0f)", amount, balance)
+		return nil, &abonoInputError{fmt.Sprintf("el pago ($%.0f) supera la deuda actual ($%.0f)", amount, balance)}
 	}
 
 	return s.repo.CreatePayment(ctx, &model.CustomerPayment{
 		CustomerID: customerID,
 		Amount:     amount,
+		Method:     method,
+		RegisterID: registerID,
 		Note:       strings.TrimSpace(note),
 	})
 }

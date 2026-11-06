@@ -19,7 +19,7 @@
 
 | US | Name | Status | Date |
 |----|------|--------|------|
-| US-082 | Payment method on *abonos*; cash *abonos* count in the register close | ⬜ Pending | |
+| US-082 | Payment method on *abonos*; cash *abonos* count in the register close | [x] Complete in code (manual PO checks pending, see `gaps.md`) | 2026-11-05 |
 | US-083 | Business name in the collection WhatsApp message (R-61) | ⬜ Pending | |
 | US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | ⬜ Pending | |
 | US-084 | Quick *abono* modal from the Customers list | ⬜ Pending | |
@@ -67,16 +67,32 @@
 - Q-2: a cash *abono* with no open register is accepted unattributed (`register_id NULL`), and the UI shows a notice that it will not appear in any register close.
 
 **Acceptance Criteria:**
-- [ ] The *abono* form has a method selector `Efectivo` / `Transferencia` / `Tarjeta` (default `Efectivo`); the note stays optional.
-- [ ] With an open register of opening $100,000 and one cash sale of $30,000, a cash *abono* of $20,000 → expected cash $150,000, and the close summary shows a line `Abonos en efectivo: $20.000`.
-- [ ] A transfer *abono* of $50,000 in the same register does not change expected cash.
-- [ ] Existing *abonos* keep their amounts; the customer balance does not change after the migration.
-- [ ] A cashier with an open register registers an *abono* → 201, linked to that register. A cashier with no open register → 403. An admin with no open register → 201 with `register_id` null.
-- [ ] A cash *abono* saved with no open register shows the notice `Este abono no quedará en ningún cierre de caja` (UI text).
+- [x] The *abono* form has a method selector `Efectivo` / `Transferencia` / `Tarjeta` (default `Efectivo`); the note stays optional.
+- [x] With an open register of opening $100,000 and one cash sale of $30,000, a cash *abono* of $20,000 → expected cash $150,000, and the close summary shows a line `Abonos en efectivo: $20.000`.
+- [x] A transfer *abono* of $50,000 in the same register does not change expected cash.
+- [x] Existing *abonos* keep their amounts; the customer balance does not change after the migration.
+- [x] A cashier with an open register registers an *abono* → 201, linked to that register. A cashier with no open register → 403. An admin with no open register → 201 with `register_id` null.
+- [x] A cash *abono* saved with no open register shows the notice `Este abono no quedará en ningún cierre de caja` (UI text).
 
 **DoD:**
 - Migration + repository, service and handler changes, with tests carrying concrete numbers (pattern `setupTestDB`, `internal/handler/dashboard_test.go:14`).
 - `spec/domain/caja.md` (expected-cash formula) and `spec/domain/fiado.md` (*abonos* rule) updated in the same commit.
+
+**Verified criteria (closed 2026-11-05):**
+
+Contract discrepancies: the over-balance check is at `internal/service/customer.go:99` on `dev`, not `:94-95` (D-1); an unknown customer on `POST /customers/{id}/payments` answers 400, not 404 (D-2, R-83); every register close sends the owner email twice (D-3, R-84); the close modal omits `cash_in` (D-4, R-85). GATE 1: close email carries `Abonos en efectivo` (Q-A yes); dashboard estimated cash unchanged (Q-B, R-86); duplicate email not fixed here (Q-C, R-84). QA round 1: OK, 0 BLOCKER, 6 MINOR (R-87, R-88; internal failures on the payment endpoint now answer 500, recorded in `spec/domain/fiado.md`). Spec: `spec/domain/caja.md` (expected cash), `spec/domain/fiado.md` (*abonos*).
+
+- AC-1: WHEN migration 21 runs on a database with existing *abonos*, the system SHALL add `customer_payments.method` (`cash`/`transfer`/`card`, default `cash`) and `register_id` (nullable FK), leaving existing rows `cash`, `NULL`, same amount and same balances. Test: `TestMigration21_T1_AbonoMethodAndRegisterBackfill` (`internal/database/migrate_test.go`).
+- AC-2, AC-3: WHEN `method` is omitted or empty, the system SHALL store `cash`; IF it is not `cash`/`transfer`/`card`, THEN 400 and nothing stored. Test: `TestCustomerPayment_T6_MethodDefaultAndValidation` (`internal/handler/customer_payment_test.go`).
+- AC-4, AC-10, AC-11, AC-8: WHEN an *abono* is created while a register is open, the system SHALL link it to that register; expected cash SHALL be `opening + cash_sales + cash_abonos + cash_in − cash_out` in `Summary` and `Close`, returned as `cash_abonos`; payments list and detail carry `method` and `register_id`. Opening $100,000 + cash sale $30,000 + cash *abono* $20,000 → expected $150,000. Tests: `TestCustomerPayment_T2_CashAbonoLinkedAndCountedInExpected`; `TestRegisterService_T7_SummaryExpectedIncludesCashAbonos`, `TestRegisterService_T7_CloseStoresExpectedWithCashAbonos` (`internal/service/register_test.go`); `TestRegisterRepo_T10_SumCashAbonosPerRegister` (`internal/repository/register_test.go`, includes a register with no *abonos* → 0); `TestCustomerRepo_T11_CreatePaymentStoresMethodAndRegister` (`internal/repository/customer_test.go`).
+- AC-13: Transfer and card *abonos*, and *abonos* unattributed or on another register, SHALL NOT change expected cash (transfer $50,000 + card $10,000 → expected stays $150,000). Tests: `TestCustomerPayment_T3_TransferAndCardAbonosDoNotChangeExpected`, `TestRegisterRepo_T10_SumCashAbonosPerRegister`.
+- AC-5, AC-6: WHEN an admin creates an *abono* with no open register, the system SHALL answer 201 with `register_id: null`; IF a cashier does, THEN 403 `Debe haber una caja abierta para registrar un abono` and nothing stored; the route is outside `RequireAdmin` and the check is in `CustomerService`. Tests: `TestCustomerPayment_T4_CashierNeedsOpenRegister`, `TestCustomerPayment_T5_AdminWithoutRegisterStoresUnattributed`; `TestCreatePayment_T9_CashierWithoutOpenRegisterRejected`, `TestCreatePayment_T9_CashierWithOpenRegisterLinksRegister` (`internal/service/customer_test.go`).
+- AC-7: IF the open-register lookup fails for a reason other than "none open", THEN the system SHALL return an error (500) and store nothing. Test: `TestCreatePayment_T8_OpenRegisterLookupFailureStoresNothing`.
+- AC-9: Amount ≤ 0 or above the balance SHALL still be rejected (400) for every role. Tests: `TestCreatePayment_T9_CashierOverBalanceRejected`, `TestCreatePayment_T9_CashierZeroAmountRejected`.
+- AC-12: IF summing cash *abonos* fails, THEN `Close` SHALL fail without closing the register and `Summary` SHALL fail, so `GET /registers/{id}` and `GET /registers/open` answer 500. Tests: `TestRegisterService_T7_CloseFailsWhenAbonoSumFails`, `TestRegisterService_T7_SummaryFailsWhenAbonoSumFails`, `TestRegisterSummary_T7_FailingAbonoSumReturns500` (`internal/handler/customer_payment_test.go`).
+- AC-14: WHEN the close modal, close ticket and close email are shown, the system SHALL always show `Abonos en efectivo: <amount>`, also at $0. Tests: `TestBuildRegisterSummaryEmail_T12_CashAbonosLine`, `TestBuildRegisterSummaryEmail_T12_CashAbonosLineShownAtZero` (`internal/mailer/mailer_test.go`); modal and ticket by code reading (`frontend/app/register/page.tsx:366`, `frontend/components/CloseTicketPreview.tsx:135`), manual PO check in `gaps.md`.
+- AC-15, AC-16: The form SHALL offer `Efectivo`/`Transferencia`/`Tarjeta` (default `Efectivo`) and send `method`; WHEN a cash *abono* is saved with `register_id: null`, the UI SHALL show the toast `Este abono no quedará en ningún cierre de caja` next to the save confirmation. Tests: `frontend/lib/abono.test.ts` (`ABONO_METHOD_OPTIONS`, `showsNoRegisterNotice`).
+- AC-17, AC-18: a 403 shows the server message and keeps the modal open; the form works at 320 px with CSS variables only. Manual PO checks in `gaps.md`.
 
 ---
 

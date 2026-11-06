@@ -37,6 +37,7 @@ interface Movement {
 interface RegisterSummary {
   register: Register;
   cash_sales: number;
+  cash_abonos: number;
   cash_in: number;
   cash_out: number;
   expected: number;
@@ -362,6 +363,7 @@ function CloseModal({
           {[
             ['Base apertura', summary.register.opening_amount],
             ['Ventas efectivo', summary.cash_sales],
+            ['Abonos en efectivo', summary.cash_abonos],
             ['Salidas manuales', -summary.cash_out],
           ].map(([label, val]) => (
             <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
@@ -645,6 +647,7 @@ export default function RegisterPage() {
         closed_at: closed.register.closed_at ?? new Date().toISOString(),
         opening_amount: closed.register.opening_amount,
         by_payment_method: closed.by_payment_method ?? [],
+        cash_abonos: closed.cash_abonos,
         cash_in: closed.cash_in,
         cash_out: closed.cash_out,
         expected: closed.expected,

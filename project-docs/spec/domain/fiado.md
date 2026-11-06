@@ -1,7 +1,7 @@
 # Domain — Fiado (credit to customers)
 
 > **Type:** spec · **Current:** yes · **Rules over:** customer balance, payments (*abonos*), receivables (*cartera*)
-> **Updated:** 2026-11-05 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
+> **Updated:** 2026-11-05 (US-082: *abono* method, register link, who may register; line refs re-verified) · Verified against the code on 2026-11-05 for *abonos* (US-082) and on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
 
 *Fiado* (selling on credit) is **the product's differentiator**. Competitors treat it as an accounting field; here it is a relationship with history. Any change to these rules changes the value proposition, not just the code.
 
@@ -28,17 +28,17 @@ balance(customer) = SUM(sale_payments.amount where method='credit'
                   − SUM(customer_payments.amount)
 ```
 
-Source: `internal/repository/customer.go:24-40`.
+Source: `CustomerRepository.Balance` (`internal/repository/customer.go:121-134`); lists and metrics use `customerBalanceExpr` (`internal/repository/metrics.go:338`) over `customerBalanceFrom` (`metrics.go:343`). The *abono* method plays no part: every *abono* subtracts, whatever its method.
 
 Consequences that must be respected:
 
 - **A voided sale stops counting automatically**, because the filter is `status='completed'`. There is no need to "reverse" the debt by hand.
 - **There is no such thing as a stale balance.** Any screen that shows a balance reads it from the same query. If two screens ever show different balances, it is a query bug, not a synchronization bug.
 - A customer with balance `0` or negative is **not in receivables**. Receivables filter `balance > 0`.
-- Receivables order: balance descending and, on a tie, name ascending. Source: `MetricsRepository.Debtors` (`internal/repository/metrics.go:286`, ordering at `:297`), same balance formula as `customer.go:24-40`.
-- The dashboard's aging receivables (`MetricsRepository.AgingReceivables`, `internal/repository/metrics.go:326`) use the same balance formula as `Debtors`: both build the balance with `customerBalanceExpr` (`metrics.go:265`) over `customerBalanceFrom` (`metrics.go:270`), which aggregates credit sales and payments per customer before joining, so each payment counts exactly once. Filters `balance > 0`.
-- Aging receivables order: `days_overdue` descending first and, on a tie of days, the same tie-break as `Debtors` — balance descending and, if that also ties, name ascending (`metrics.go:336`).
-- `total_portfolio` of `GET /customers` (`CustomerRepository.TotalPortfolioBalance`, `internal/repository/customer.go:145`) uses the same per-customer aggregated formula (`customerBalanceExpr`/`customerBalanceFrom`) and excludes balances `≤ 0`, summing only the positive ones — not a global subtraction of all credit sales minus all payments (that was the R-44 bug, fixed in US-064).
+- Receivables order: balance descending and, on a tie, name ascending. Source: `MetricsRepository.Debtors` (`internal/repository/metrics.go:359`, ordering at `:370`), same balance formula as `CustomerRepository.Balance`.
+- The dashboard's aging receivables (`MetricsRepository.AgingReceivables`, `internal/repository/metrics.go:402`) use the same balance formula as `Debtors`: both build the balance with `customerBalanceExpr` (`metrics.go:338`) over `customerBalanceFrom` (`metrics.go:343`), which aggregates credit sales and payments per customer before joining, so each payment counts exactly once. Filters `balance > 0`.
+- Aging receivables order: `days_overdue` descending first and, on a tie of days, the same tie-break as `Debtors` — balance descending and, if that also ties, name ascending (`metrics.go:412`).
+- `total_portfolio` of `GET /customers` (`CustomerRepository.TotalPortfolioBalance`, `internal/repository/customer.go:144`) uses the same per-customer aggregated formula (`customerBalanceExpr`/`customerBalanceFrom`) and excludes balances `≤ 0`, summing only the positive ones — not a global subtraction of all credit sales minus all payments (that was the R-44 bug, fixed in US-064).
 
 ## Rule: debt age
 
@@ -54,7 +54,7 @@ It is the date of the **oldest debt without distinguishing partial payments**: a
 
 `customers.credit_limit` is **optional** (`NULL` = no limit defined) and is currently **informational**: it warns, it does not block the sale.
 
-Source: `internal/service/customer.go:39,54`. Scenario covered in `internal/service/customer_test.go:213`.
+Source: `internal/service/customer.go:54,68` (`Create`, `Update`). Scenario covered in `internal/service/customer_test.go:230` (`TestBalance_CreditLimitWarningScenario`).
 
 If it is ever decided that it should block, that is a product change Andrey must approve: a shopkeeper who cannot extend credit because of a cap they set wrong stops using the system.
 
@@ -62,11 +62,21 @@ If it is ever decided that it should block, that is a product change Andrey must
 
 An *abono* is a row in `customer_payments`. It is not tied to a specific sale — it is applied to the customer's total balance, not to an invoice. That is how the notebook the system replaces works, and changing it to per-invoice allocation would be a redesign, not an adjustment.
 
-- Only an admin can register an *abono* today (`POST /customers/{id}/payments`, admin group, `internal/handler/handler.go:290`).
-- The payment method is not stored: the form asks for it as free text in the note (`frontend/app/customers/[id]/CustomerDetailClient.tsx:233`).
-- An amount above the current balance is rejected (`internal/service/customer.go:94`).
+```
+valid methods (customer_payments.method):  cash · transfer · card     (default cash)
+customer_payments.register_id:             the register open at the time, or NULL
+```
 
-Planned change (SPRINT-19 US-082, PO decisions 2026-11-05): a stored method (`cash`/`transfer`/`card`), cash *abonos* counted in the open register's close, and cashiers allowed to register *abonos* while a register is open.
+Schema: migration 21 (`internal/database/migrate.go:588-595`, US-082). Every *abono* recorded before it is `cash` with `register_id NULL`: it changes no balance and no past register close.
+
+- **Method.** `POST /customers/{id}/payments` takes `{amount, method, note}`. A missing or empty `method` is stored as `cash`; any value other than `cash`, `transfer`, `card` → 400 (`internal/service/customer.go:113-119`). The form offers `Efectivo` / `Transferencia` / `Tarjeta`, default `Efectivo`; the note stays optional (`frontend/lib/abono.ts`, `frontend/app/customers/[id]/CustomerDetailClient.tsx`).
+- **Register link.** The server links the *abono* to the open register, if any, whatever the method and the role (`internal/service/customer.go:121-133`). Only cash *abonos* linked to a register enter its expected cash (`caja.md`, "Rule: expected cash at close").
+- **Who may register one** (PO, 2026-11-05). Any authenticated role may call the endpoint; it is outside the admin group (`internal/handler/handler.go:285-287`) and the check lives in the service. While a register is open, a cashier or an admin may register an *abono*. With no open register, only an admin may; a cashier gets 403 `Debe haber una caja abierta para registrar un abono` (`internal/service/customer.go:126-130`, `:35`).
+- **Unattributed *abonos*.** An admin's *abono* with no open register is stored with `register_id NULL` and appears in no register close. When it is cash, the UI shows the toast `Este abono no quedará en ningún cierre de caja` next to the save confirmation (`CustomerDetailClient.tsx:139-141`).
+- An amount `≤ 0` or above the current balance is rejected (`internal/service/customer.go:110-111`, `:148-149`).
+- `GET /customers/{id}/payments`, `GET /customers/{id}/detail` (`payments`) and the 201 response carry `method` and `register_id`.
+- **HTTP codes of `POST /customers/{id}/payments`** (`internal/handler/customer.go:190-207`): validation errors → 400 (amount, method, amount above the balance, unknown customer); cashier with no open register → 403; internal failures (open-register lookup, a customer lookup failing for a reason other than "not found", the balance query) → 500 `error registrando abono`, and nothing is stored. An unknown customer answers 400 `cliente no encontrado`, not 404 (`internal/service/customer.go:136-139`); roadmap R-83.
+- Order of checks: amount and method first, then the open register and role, then the customer and balance. A cashier with no open register therefore gets 403 even for an unknown customer.
 
 ## Rule: deleting a customer
 
@@ -76,7 +86,7 @@ Planned change (SPRINT-19 US-082, PO decisions 2026-11-05): a stored method (`ca
 - Inactive customers are hidden from `GET /customers` and its search (`q`). Everything else keeps resolving them by id: customer detail, balance, payments, sale detail, the dashboard's recent sales, and the receivables metrics (`Debtors`, `AgingReceivables`, `total_portfolio`), which do not filter by `active`. Totals therefore do not change when a customer is deleted.
 - A credit sale (`fiado`, payment method `credit`) to an inactive or missing customer is rejected (400, `internal/repository/sale.go`, `ErrCustomerInactive`). A cash, card or transfer sale that merely names an inactive customer is accepted. A payment (`abono`) cannot target an inactive customer either: its balance is never above zero, and `CreatePayment` rejects an amount above the balance.
 
-Source: `internal/service/customer.go:61`, `internal/repository/customer.go:30,106`, `internal/handler/customer.go:110`.
+Source: `internal/service/customer.go:83`, `internal/repository/customer.go:31,107`, `internal/handler/customer.go:110`.
 
 ---
 

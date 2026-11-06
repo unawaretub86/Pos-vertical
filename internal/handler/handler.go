@@ -85,7 +85,7 @@ func New(db *database.DB) *Handler {
 		products:     service.NewProductService(prodRepo),
 		sales:        salesSvc,
 		registers:    registerSvc,
-		customers:    service.NewCustomerService(custRepo),
+		customers:    service.NewCustomerService(custRepo, regRepo),
 		users:        service.NewUserService(userRepo),
 		setup:        setupRepo,
 		stockEntries: stockRepo,
@@ -282,12 +282,14 @@ func (h *Handler) Routes() http.Handler {
 		r.Get("/customers/{id}/detail", h.getCustomerDetail)
 		r.Get("/customers/{id}/balance", h.getCustomerBalance)
 		r.Get("/customers/{id}/payments", h.listCustomerPayments)
+		// Any role may register an abono; CustomerService requires an open
+		// register unless the caller is an admin (US-082).
+		r.Post("/customers/{id}/payments", h.createCustomerPayment)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Post("/customers", h.createCustomer)
 			r.Put("/customers/{id}", h.updateCustomer)
 			r.Delete("/customers/{id}", h.deleteCustomer)
-			r.Post("/customers/{id}/payments", h.createCustomerPayment)
 		})
 	})
 

@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
 	"github.com/andreyo/pos/internal/database"
+	"github.com/andreyo/pos/internal/model"
 )
 
 // seedPortfolioT1 seeds the fixture shared by T-1, T-2 (case 2), T-3, T-5:
@@ -207,4 +209,57 @@ func TestCustomerRepo_T5_ListSearchFiltersByNameOrPhone(t *testing.T) {
 			t.Errorf("List(\"\") len = %d, want 3 (Ana, Beto, Carla)", len(got))
 		}
 	})
+}
+
+// ─── US-082 contract §4, T-11 (AC-8) ─────────────────────────────────────────
+
+func TestCustomerRepo_T11_CreatePaymentStoresMethodAndRegister(t *testing.T) {
+	db := openMetricsDB(t)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Dora', '', '')`)
+	metricsExec(t, db, `INSERT INTO registers (id, user_id, opening_amount) VALUES (1, 1, 100000)`)
+
+	repo := NewCustomerRepository(db.DB)
+	ctx := context.Background()
+	regID := int64(1)
+
+	created, err := repo.CreatePayment(ctx, &model.CustomerPayment{
+		CustomerID: 1,
+		Amount:     15000,
+		Method:     "transfer",
+		RegisterID: &regID,
+		Note:       "Nequi",
+	})
+	if err != nil {
+		t.Fatalf("CreatePayment: %v", err)
+	}
+	if created.Method != "transfer" {
+		t.Errorf("created method = %q, want transfer", created.Method)
+	}
+	if created.RegisterID == nil || *created.RegisterID != 1 {
+		t.Errorf("created register_id = %v, want 1", created.RegisterID)
+	}
+
+	payments, err := repo.ListPayments(ctx, 1)
+	if err != nil {
+		t.Fatalf("ListPayments: %v", err)
+	}
+	if len(payments) != 1 {
+		t.Fatalf("ListPayments len = %d, want 1", len(payments))
+	}
+	p := payments[0]
+	if p.Amount != 15000 || p.Method != "transfer" {
+		t.Errorf("listed payment = amount %.0f method %q, want 15000 transfer", p.Amount, p.Method)
+	}
+	if p.RegisterID == nil || *p.RegisterID != 1 {
+		t.Errorf("listed register_id = %v, want 1", p.RegisterID)
+	}
+
+	var storedMethod string
+	var storedReg sql.NullInt64
+	if err := db.DB.QueryRow(`SELECT method, register_id FROM customer_payments WHERE id = ?`, created.ID).Scan(&storedMethod, &storedReg); err != nil {
+		t.Fatalf("read stored row: %v", err)
+	}
+	if storedMethod != "transfer" || !storedReg.Valid || storedReg.Int64 != 1 {
+		t.Errorf("stored row = %q/%v, want transfer/1", storedMethod, storedReg)
+	}
 }

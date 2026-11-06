@@ -17,6 +17,7 @@ export interface CloseTicketData {
   closed_at: string;
   opening_amount: number;
   by_payment_method: CloseTicketPaymentLine[];
+  cash_abonos: number;
   cash_in: number;
   cash_out: number;
   expected: number;
@@ -131,6 +132,7 @@ export default function CloseTicketPreview({ ticket, onPrint, onClose }: Props) 
         <div style={{ fontSize: '11px' }}>
           {[
             ['Base apertura', ticket.opening_amount],
+            ['Abonos en efectivo', ticket.cash_abonos],
             ['Entradas', ticket.cash_in],
             ['Salidas', -ticket.cash_out],
           ].map(([label, val]) => (

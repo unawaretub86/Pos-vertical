@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { formatCOP } from '@/lib/format';
 import { useBusinessConfig } from '@/lib/business-config-context';
+import { ABONO_METHOD_OPTIONS, DEFAULT_ABONO_METHOD, showsNoRegisterNotice, type AbonoMethod } from '@/lib/abono';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ interface CustomerPayment {
   id: number;
   customer_id: number;
   amount: number;
+  method: AbonoMethod;
+  register_id: number | null;
   note: string;
   created_at: string;
 }
@@ -111,6 +114,7 @@ function PaymentModal({ customerName, balance, onClose, onSaved, customerId }: P
   const { toast } = useToast();
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [method, setMethod] = useState<AbonoMethod>(DEFAULT_ABONO_METHOD);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -131,8 +135,11 @@ function PaymentModal({ customerName, balance, onClose, onSaved, customerId }: P
     }
     setLoading(true);
     try {
-      await api.post(`/customers/${customerId}/payments`, { amount: parsedAmount, note });
+      const saved = await api.post<CustomerPayment>(`/customers/${customerId}/payments`, { amount: parsedAmount, method, note });
       toast('Abono registrado exitosamente', 'success');
+      if (showsNoRegisterNotice(saved.method, saved.register_id)) {
+        toast('Este abono no quedará en ningún cierre de caja', 'info');
+      }
       onSaved();
       onClose();
     } catch (err: unknown) {
@@ -224,13 +231,30 @@ function PaymentModal({ customerName, balance, onClose, onSaved, customerId }: P
           </div>
 
           <div>
+            <label htmlFor="abono-method" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px' }}>
+              Método de pago
+            </label>
+            <select
+              id="abono-method"
+              className="input"
+              value={method}
+              onChange={e => setMethod(e.target.value as AbonoMethod)}
+              style={{ width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
+            >
+              {ABONO_METHOD_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px' }}>
               Nota (opcional)
             </label>
             <input
               value={note}
               onChange={e => setNote(e.target.value)}
-              placeholder="Ej: efectivo, transferencia Nequi..."
+              placeholder="Ej: referencia de la transferencia"
               style={{ width: '100%', boxSizing: 'border-box' }}
             />
           </div>

@@ -42,6 +42,7 @@ var dbMigrations = []migration{
 	{version: 18, up: migration18},
 	{version: 19, up: migration19},
 	{version: 20, up: migration20},
+	{version: 21, up: migration21},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -582,4 +583,13 @@ ALTER TABLE business_config ADD COLUMN paper_width_mm INTEGER NOT NULL DEFAULT 5
 ALTER TABLE business_config ADD COLUMN printer_host TEXT NOT NULL DEFAULT '';
 ALTER TABLE business_config ADD COLUMN printer_port INTEGER NOT NULL DEFAULT 9100;
 ALTER TABLE business_config ADD COLUMN printer_name TEXT NOT NULL DEFAULT '';
+`
+
+// migration21 records how each abono was paid and which register received it
+// (US-082). Existing abonos become cash with no register, so no balance and no
+// past register close changes.
+const migration21 = `
+ALTER TABLE customer_payments ADD COLUMN method TEXT NOT NULL DEFAULT 'cash' CHECK (method IN ('cash','transfer','card'));
+ALTER TABLE customer_payments ADD COLUMN register_id INTEGER NULL REFERENCES registers(id);
+CREATE INDEX IF NOT EXISTS idx_customer_payments_register ON customer_payments(register_id);
 `
