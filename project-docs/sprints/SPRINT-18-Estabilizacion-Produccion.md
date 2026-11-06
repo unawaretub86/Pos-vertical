@@ -289,7 +289,7 @@ Discrepancies resolved at GATE 1: no reprint flow exists (D-1, deferred); route 
 
 QA: round 1 OK, 0 BLOCKER, 5 MINOR (stale `print_method` on other LAN sessions until reload -> R-80; `ctx` ignored by `WindowsTransport.Send` and winspool only cross-compiled -> R-81; 409 before 404 in browser mode -> R-82; spec delta, applied at close; `Imprimir prueba` hidden in browser mode while contract AC-1 listed it unconditionally, found by the Gemini diff review, accepted and recorded in `spec/domain/impresion.md`). `go build ./...`, `GOOS=windows go build ./...`, `go test ./...`, `pnpm lint` (0 problems), `pnpm test` (10 files, 90 tests) and `pnpm build` passed. Smoke on port 18082 with a TCP listener: test print bytes start `1B 40 1B 74 13` and end `1B 64 03 1D 56 01`; a real sale ticket was not smoked (covered by T-7..T-9). Out of scope, sent to roadmap: reprint from history (R-76), logo (R-77), cash drawer (R-78), register-close ticket over ESC/POS (R-79).
 
-**Pending, PO (contract Q-9):** real hardware checks P-1..P-4 in `gaps.md`. Q-10 (keep the 2-day estimate) is still open in the contract; no re-baseline recorded.
+**Pending, PO (contract Q-9):** real hardware checks P-1..P-4 in `gaps.md`. Q-10 (keep the 2-day estimate) resolved by the scope cut: the PO moved R-76, R-77 and R-78 to a later version (2026-11-05).
 
 ---
 
