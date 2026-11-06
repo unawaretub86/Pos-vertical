@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-10-13 · Verified against the code on 2026-10-13 (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-05 · Verified against the code on 2026-10-13 (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -31,13 +31,14 @@ expected   = opening_float + cash_sales + cash_in − cash_out
 difference = actual_counted − expected
 ```
 
-Source: `internal/service/register.go:113` and `:138`.
+Source: `internal/service/register.go:111` and `:137`.
 
 - `difference > 0` → surplus (*sobrante*)
 - `difference < 0` → shortage (*faltante*)
 - Only **cash** counts. Sales by transfer, card or fiado do not enter the count: that money is not in the drawer.
+- **Known gap (verified 2026-11-05):** cash *abonos* (fiado payments) are not in the formula. `customer_payments` has no method and no `register_id` (`internal/database/migrate.go:245-251`), so a cash *abono* shows up as an unexplained surplus. Planned fix: SPRINT-19 US-082.
 
-> **Historical note:** `archive/2026-05-plan-mvp.md:1135` (formerly `PLAN.md`) reports that `cash_in` was missing from this formula. **It is already included** (`register.go:113`). It is an example of why that document is not a source of truth about current state.
+> **Historical note:** `archive/2026-05-plan-mvp.md:1135` (formerly `PLAN.md`) reports that `cash_in` was missing from this formula. **It is already included** (`register.go:111`). It is an example of why that document is not a source of truth about current state.
 
 ## Rule: estimated cash of the day (dashboard)
 

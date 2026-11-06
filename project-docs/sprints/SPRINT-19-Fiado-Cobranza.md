@@ -62,15 +62,17 @@
 - Expected cash at close = `opening + cashSales + cashAbonos + cashIn − cashOut`, where `cashAbonos` = sum of `method = 'cash'` *abonos* with that `register_id`.
 - The close summary lists cash *abonos* as their own line, so the owner can see where the extra cash came from.
 
-**Open questions for the PO (GATE 1):**
-- Q-1: Today only admins can register an *abono*. Should the cashier be able to? Recommendation: yes, while a register is open, because the cashier is the one who takes the money.
-- Q-2: A cash *abono* with no open register: reject it, or accept it unattributed? Recommendation: accept it and show a notice that it will not appear in any close.
+**PO decisions (2026-11-05):**
+- Q-1: a cashier may register an *abono* while a register is open, because the cashier is the one who takes the money. With no open register, only an admin may. `POST /customers/{id}/payments` moves out of the admin-only group (`internal/handler/handler.go:290`) and the role check goes into the service.
+- Q-2: a cash *abono* with no open register is accepted unattributed (`register_id NULL`), and the UI shows a notice that it will not appear in any register close.
 
 **Acceptance Criteria:**
 - [ ] The *abono* form has a method selector `Efectivo` / `Transferencia` / `Tarjeta` (default `Efectivo`); the note stays optional.
 - [ ] With an open register of opening $100,000 and one cash sale of $30,000, a cash *abono* of $20,000 → expected cash $150,000, and the close summary shows a line `Abonos en efectivo: $20.000`.
 - [ ] A transfer *abono* of $50,000 in the same register does not change expected cash.
 - [ ] Existing *abonos* keep their amounts; the customer balance does not change after the migration.
+- [ ] A cashier with an open register registers an *abono* → 201, linked to that register. A cashier with no open register → 403. An admin with no open register → 201 with `register_id` null.
+- [ ] A cash *abono* saved with no open register shows the notice `Este abono no quedará en ningún cierre de caja` (UI text).
 
 **DoD:**
 - Migration + repository, service and handler changes, with tests carrying concrete numbers (pattern `setupTestDB`, `internal/handler/dashboard_test.go:14`).

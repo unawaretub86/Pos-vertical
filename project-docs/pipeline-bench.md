@@ -14,7 +14,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**Next US:** US-081. Run `/us US-081 [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-082 (SPRINT-19, fiado collection, planned 2026-11-05 ahead of US-081; Q-1/Q-2 already decided by the PO), then US-083, US-043, US-084, US-085, then US-081. Run `/us US-082 [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -25,7 +25,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-081` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us US-082` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 

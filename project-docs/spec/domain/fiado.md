@@ -1,7 +1,7 @@
 # Domain — Fiado (credit to customers)
 
 > **Type:** spec · **Current:** yes · **Rules over:** customer balance, payments (*abonos*), receivables (*cartera*)
-> **Updated:** 2026-10-01 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
+> **Updated:** 2026-11-05 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
 
 *Fiado* (selling on credit) is **the product's differentiator**. Competitors treat it as an accounting field; here it is a relationship with history. Any change to these rules changes the value proposition, not just the code.
 
@@ -61,6 +61,12 @@ If it is ever decided that it should block, that is a product change Andrey must
 ## Rule: payments (*abonos*)
 
 An *abono* is a row in `customer_payments`. It is not tied to a specific sale — it is applied to the customer's total balance, not to an invoice. That is how the notebook the system replaces works, and changing it to per-invoice allocation would be a redesign, not an adjustment.
+
+- Only an admin can register an *abono* today (`POST /customers/{id}/payments`, admin group, `internal/handler/handler.go:290`).
+- The payment method is not stored: the form asks for it as free text in the note (`frontend/app/customers/[id]/CustomerDetailClient.tsx:233`).
+- An amount above the current balance is rejected (`internal/service/customer.go:94`).
+
+Planned change (SPRINT-19 US-082, PO decisions 2026-11-05): a stored method (`cash`/`transfer`/`card`), cash *abonos* counted in the open register's close, and cashiers allowed to register *abonos* while a register is open.
 
 ## Rule: deleting a customer
 
