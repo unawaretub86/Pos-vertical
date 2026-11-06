@@ -7,6 +7,8 @@ import Topbar from '@/components/Topbar';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { useBusinessConfig } from '@/lib/business-config-context';
+import { shouldAutoPrint, handleTicketPrint } from '@/lib/printFlow';
 import { formatCOP } from '@/lib/format';
 import { ITEM_STATUS_LABEL, type Order, type OrderItem } from '@/lib/orders';
 import TicketPreview, { type TicketData } from '@/components/TicketPreview';
@@ -22,6 +24,7 @@ export default function OrderClient() {
   const params = useParams<{ orderId: string }>();
   const router = useRouter();
   const { toast } = useToast();
+  const { config: businessConfig } = useBusinessConfig();
   const orderId = params.orderId;
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -134,6 +137,14 @@ export default function OrderClient() {
       try {
         const ticket = await api.get<TicketData>(`/sales/${res.sale_id}/ticket`);
         setTicketData(ticket);
+        // Direct printing: send the ticket once, the preview stays on screen.
+        if (shouldAutoPrint(businessConfig.print_method)) {
+          void handleTicketPrint(businessConfig.print_method, res.sale_id, {
+            post: (path, body) => api.post(path, body),
+            toast,
+            browserPrint: () => {},
+          });
+        }
       } catch {
         toast('Venta completada', 'success');
         router.push('/mesas');
@@ -150,7 +161,6 @@ export default function OrderClient() {
       <TicketPreview
         ticket={ticketData}
         onClose={() => { setTicketData(null); router.push('/mesas'); }}
-        onPrint={() => window.print()}
       />
     );
   }

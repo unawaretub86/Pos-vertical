@@ -11,6 +11,7 @@ import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { getUser } from '@/lib/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useBusinessConfig } from '@/lib/business-config-context';
+import { shouldAutoPrint, handleTicketPrint } from '@/lib/printFlow';
 import { calcSubtotal, calcTax, calcTotal } from '@/lib/saleCalc';
 import { readActiveCart, writeActiveCart } from '@/lib/activeCart';
 import SalePaymentPanel, { type CheckoutData, type Customer } from '@/components/SalePaymentPanel';
@@ -765,6 +766,14 @@ export default function POSPage() {
       try {
         const ticket = await api.get<TicketData>(`/sales/${created.id}/ticket`);
         setTicketData(ticket);
+        // Direct printing: send the ticket once, the preview stays on screen.
+        if (shouldAutoPrint(businessConfig.print_method)) {
+          void handleTicketPrint(businessConfig.print_method, created.id, {
+            post: (path, body) => api.post(path, body),
+            toast,
+            browserPrint: () => {},
+          });
+        }
       } catch {
         toast('Venta completada', 'success');
       }

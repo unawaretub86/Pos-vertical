@@ -265,3 +265,91 @@ func TestSetup_US076_T6_InternalConsumersStillSeeSecret(t *testing.T) {
 		t.Errorf("setup.Get password = %q, want %q", got, us076Secret)
 	}
 }
+
+// --- US-080 T-14 / T-15: printer settings persist and are validated ---
+
+type printerSettings struct {
+	Name         string `json:"name"`
+	PrintMethod  string `json:"print_method"`
+	PaperWidthMM int    `json:"paper_width_mm"`
+	PrinterHost  string `json:"printer_host"`
+	PrinterPort  int    `json:"printer_port"`
+	PrinterName  string `json:"printer_name"`
+}
+
+func getPrinterSettings(t *testing.T, h *Handler) printerSettings {
+	t.Helper()
+	raw := getSetupRaw(t, h, tokenFor(t, 1, "admin"))
+	var env struct {
+		Data printerSettings `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &env); err != nil {
+		t.Fatalf("decode: %v\n%s", err, raw)
+	}
+	return env.Data
+}
+
+func TestSetup_US080_T14_PrinterSettingsPersist(t *testing.T) {
+	h := New(setupTestDB(t))
+
+	fresh := getPrinterSettings(t, h)
+	if fresh.PrintMethod != "browser" || fresh.PaperWidthMM != 58 || fresh.PrinterPort != 9100 {
+		t.Errorf("fresh DB defaults = %+v, want browser / 58 / 9100", fresh)
+	}
+
+	putSetup(t, h, `{"name":"Tienda Uno","print_method":"escpos_network","printer_host":"192.168.1.50","printer_port":9100,"paper_width_mm":80}`)
+	got := getPrinterSettings(t, h)
+	want := printerSettings{Name: "Tienda Uno", PrintMethod: "escpos_network", PaperWidthMM: 80, PrinterHost: "192.168.1.50", PrinterPort: 9100}
+	if got != want {
+		t.Errorf("after PUT: %+v, want %+v", got, want)
+	}
+
+	// A second PUT that carries the GET's values with a changed name keeps them.
+	putSetup(t, h, `{"name":"Tienda Dos","print_method":"escpos_network","printer_host":"192.168.1.50","printer_port":9100,"paper_width_mm":80,"printer_name":""}`)
+	got = getPrinterSettings(t, h)
+	want.Name = "Tienda Dos"
+	if got != want {
+		t.Errorf("after second PUT: %+v, want %+v", got, want)
+	}
+}
+
+func TestSetup_US080_T15_PrinterSettingsValidation(t *testing.T) {
+	h := New(setupTestDB(t))
+	admin := tokenFor(t, 1, "admin")
+	putSetup(t, h, `{"name":"Tienda Uno","print_method":"escpos_network","printer_host":"192.168.1.50","printer_port":9100,"paper_width_mm":80}`)
+	baseline := getPrinterSettings(t, h)
+
+	bad := []struct{ label, body string }{
+		{"unknown method", `{"name":"X","print_method":"laser","paper_width_mm":58,"printer_port":9100}`},
+		{"width 70", `{"name":"X","print_method":"browser","paper_width_mm":70,"printer_port":9100}`},
+		{"network port 70000", `{"name":"X","print_method":"escpos_network","printer_host":"10.0.0.2","printer_port":70000,"paper_width_mm":58}`},
+		{"network port 0", `{"name":"X","print_method":"escpos_network","printer_host":"10.0.0.2","printer_port":0,"paper_width_mm":58}`},
+		{"network empty host", `{"name":"X","print_method":"escpos_network","printer_host":"","printer_port":9100,"paper_width_mm":58}`},
+		{"windows empty name", `{"name":"X","print_method":"escpos_windows","printer_name":"","printer_port":9100,"paper_width_mm":58}`},
+	}
+	for _, tc := range bad {
+		w := doAuth(h, admin, http.MethodPut, "/setup", tc.body)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status %d, want 400", tc.label, w.Code)
+		}
+		if got := getPrinterSettings(t, h); got != baseline {
+			t.Errorf("%s: stored config changed to %+v, want %+v", tc.label, got, baseline)
+		}
+	}
+
+	// The port is validated only for the network method.
+	w := doAuth(h, admin, http.MethodPut, "/setup", `{"name":"Tienda Uno","print_method":"browser","printer_port":70000,"paper_width_mm":58}`)
+	if w.Code != http.StatusOK {
+		t.Errorf("browser + port 70000: status %d, want 200; body %s", w.Code, w.Body.String())
+	}
+
+	// A cashier cannot change printer settings.
+	before := getPrinterSettings(t, h)
+	w = doAuth(h, tokenFor(t, 2, "cashier"), http.MethodPut, "/setup", `{"name":"Hacked","print_method":"escpos_network","printer_host":"6.6.6.6","printer_port":9100,"paper_width_mm":58}`)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("cashier PUT: status %d, want 403", w.Code)
+	}
+	if got := getPrinterSettings(t, h); got != before {
+		t.Errorf("cashier PUT changed config to %+v, want %+v", got, before)
+	}
+}

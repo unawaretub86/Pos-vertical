@@ -1,4 +1,4 @@
-> **Type:** current · **Rules over:** what is missing for production · **Updated:** 2026-10-01
+> **Type:** current · **Rules over:** what is missing for production · **Updated:** 2026-11-05
 
 This document lists **verified** limitations and debt of the current product; what will be built in the future lives in [roadmap.md](roadmap.md), which is a different thing.
 
@@ -20,6 +20,10 @@ Code and tests are done for these; only a human check on a real browser or devic
 
 | US | What to check | Where it is described |
 |---|---|---|
+| US-080 P-1 | Network ESC/POS printer. In Settings pick `ESC/POS red`, enter the printer IP and port 9100, save, press `Imprimir prueba`: paper comes out at once with `PRUEBA DE IMPRESION`, no browser dialog, and is cut. Unplug the printer and press it again: a red toast `No se pudo imprimir: ...` within about 3 s. | `SPRINT-18-Estabilizacion-Produccion.md` (US-080), `spec/domain/impresion.md` |
+| US-080 P-2 | Windows queue printer (USB) via winspool, never executed by any test. On the Windows PC running `pos.exe`, install the printer driver, pick `ESC/POS Windows`, type the exact queue name from Windows "Printers & scanners", save, press `Imprimir prueba`: paper comes out and is cut. Type a wrong name: 502 toast. If the spooler hangs, note it (the job has no timeout, R-81). | same |
+| US-080 P-3 | Paper width. With a 58 mm printer and `58 mm`, then an 80 mm printer and `80 mm`: charge one cash sale with 2 items, a long product name and an accented one (e.g. "Café", "Piña", "Jamón"). Lines do not wrap unexpectedly, the subtotal column is flush right, `TOTAL` is bold and tall, accents print correctly (not `?` or garbage; if garbled, the printer may not support CP858). | same |
+| US-080 P-4 | Flow after a sale. In `/pos` and in a table checkout (`/mesas`) with an ESC/POS method: the ticket prints once by itself, the preview stays on screen with toast `Ticket enviado a la impresora`, and `Imprimir` prints a second copy. Switch back to `Navegador`: the browser dialog opens as before. Charge a credit sale (fiado): `*** CREDITO ***` and the customer print. | same |
 | US-079 M-1 | Theme, layout and drawer. Set `localStorage.pos_theme = 'light'` and reload: first paint is dark and light applies after mount, same as on `dev`, with no second dark frame. Toggle the theme, reload: it persists. Set `pos_theme = 'garbage'`: the app uses dark. At 800 px wide resize to 700 px: mobile layout appears and returns when widened. In mobile layout open the drawer and click a menu link: the drawer closes. | `SPRINT-18-Estabilizacion-Produccion.md` (US-079) |
 | US-079 M-2 | Sort icons. On `/customers` and `/portfolio` click each sortable header: same ordering and same icon/direction as on `dev`. | `SPRINT-18-Estabilizacion-Produccion.md` (US-079) |
 | US-079 M-3 | Smoke of `/pos`, `/inventory`, `/users`, `/barra`, `/reports`, `/purchases`, `/suppliers`, `/audit`: each loads its data on first render and the Network tab shows the same requests (URLs and count) as on `dev`. `/barra` polls every 3 s and the interval restarts only when the sound toggle changes. | `SPRINT-18-Estabilizacion-Produccion.md` (US-079) |

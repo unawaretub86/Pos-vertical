@@ -24,6 +24,11 @@ type BusinessConfig struct {
 	CatalogToken         string  `json:"catalog_token"`
 	RestaurantMode       bool    `json:"restaurant_mode"`
 	LanAccessEnabled     bool    `json:"lan_access_enabled"`
+	PrintMethod          string  `json:"print_method"`
+	PaperWidthMM         int     `json:"paper_width_mm"`
+	PrinterHost          string  `json:"printer_host"`
+	PrinterPort          int     `json:"printer_port"`
+	PrinterName          string  `json:"printer_name"`
 	Configured           bool    `json:"configured"`
 }
 
@@ -42,15 +47,20 @@ func (r *SetupRepository) Get() (*BusinessConfig, error) {
 		       COALESCE(default_opening_amount, 0), COALESCE(allow_global_discount, 0),
 		       COALESCE(owner_email, ''), COALESCE(owner_email_app_password, ''),
 		       COALESCE(catalog_enabled, 0), COALESCE(catalog_token, ''),
-		       COALESCE(restaurant_mode, 0), COALESCE(lan_access_enabled, 0)
+		       COALESCE(restaurant_mode, 0), COALESCE(lan_access_enabled, 0),
+		       print_method, paper_width_mm, printer_host, printer_port, printer_name
 		FROM business_config WHERE id = 1`)
 	cfg := &BusinessConfig{}
 	err := row.Scan(&cfg.ID, &cfg.Name, &cfg.Logo, &cfg.Address, &cfg.NIT,
 		&cfg.CIIU, &cfg.Currency, &cfg.TicketHeader, &cfg.TicketFooter, &cfg.DefaultOpeningAmount, &cfg.AllowGlobalDiscount,
 		&cfg.OwnerEmail, &cfg.OwnerEmailAppPassword, &cfg.CatalogEnabled, &cfg.CatalogToken,
-		&cfg.RestaurantMode, &cfg.LanAccessEnabled)
+		&cfg.RestaurantMode, &cfg.LanAccessEnabled,
+		&cfg.PrintMethod, &cfg.PaperWidthMM, &cfg.PrinterHost, &cfg.PrinterPort, &cfg.PrinterName)
 	if err == sql.ErrNoRows {
 		cfg.Currency = "COP"
+		cfg.PrintMethod = "browser"
+		cfg.PaperWidthMM = 58
+		cfg.PrinterPort = 9100
 		cfg.Configured = false
 		return cfg, nil
 	}
@@ -89,8 +99,8 @@ func (r *SetupRepository) CompleteOnboarding(name, nit string) error {
 
 func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 	_, err := r.db.Exec(`
-		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, catalog_enabled, catalog_token, restaurant_mode, lan_access_enabled, updated_at)
-		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO business_config (id, name, logo, address, nit, currency, ticket_header, ticket_footer, default_opening_amount, allow_global_discount, owner_email, owner_email_app_password, catalog_enabled, catalog_token, restaurant_mode, lan_access_enabled, print_method, paper_width_mm, printer_host, printer_port, printer_name, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, logo=excluded.logo, address=excluded.address,
 			nit=excluded.nit, currency=excluded.currency,
@@ -103,10 +113,16 @@ func (r *SetupRepository) Upsert(cfg *BusinessConfig) error {
 			catalog_token=excluded.catalog_token,
 			restaurant_mode=excluded.restaurant_mode,
 			lan_access_enabled=excluded.lan_access_enabled,
+			print_method=excluded.print_method,
+			paper_width_mm=excluded.paper_width_mm,
+			printer_host=excluded.printer_host,
+			printer_port=excluded.printer_port,
+			printer_name=excluded.printer_name,
 			updated_at=CURRENT_TIMESTAMP
 	`, cfg.Name, cfg.Logo, cfg.Address, cfg.NIT, cfg.Currency,
 		cfg.TicketHeader, cfg.TicketFooter, cfg.DefaultOpeningAmount, cfg.AllowGlobalDiscount, cfg.OwnerEmail, cfg.OwnerEmailAppPassword,
-		cfg.CatalogEnabled, cfg.CatalogToken, cfg.RestaurantMode, cfg.LanAccessEnabled)
+		cfg.CatalogEnabled, cfg.CatalogToken, cfg.RestaurantMode, cfg.LanAccessEnabled,
+		cfg.PrintMethod, cfg.PaperWidthMM, cfg.PrinterHost, cfg.PrinterPort, cfg.PrinterName)
 	return err
 }
 

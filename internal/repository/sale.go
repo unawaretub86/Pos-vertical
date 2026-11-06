@@ -219,7 +219,7 @@ func (r *saleRepo) List(ctx context.Context, filter SaleFilter) ([]*model.Sale, 
 func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT id, user_id, customer_id, register_id, subtotal, discount, tax, total,
-		payment_method, cash_tendered, change_amount, reference, status, voided_by, voided_at, created_at
+		payment_method, cash_tendered, change_amount, COALESCE(reference, ''), status, voided_by, voided_at, created_at
 		FROM sales WHERE id = ?`, id)
 	s, err := scanSale(row)
 	if err == sql.ErrNoRows {

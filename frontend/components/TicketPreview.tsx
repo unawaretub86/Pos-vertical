@@ -1,6 +1,10 @@
 'use client';
 
 import { formatCOP } from '@/lib/format';
+import { api } from '@/lib/api';
+import { useToast } from '@/components/Toast';
+import { useBusinessConfig } from '@/lib/business-config-context';
+import { handleTicketPrint } from '@/lib/printFlow';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,6 +72,8 @@ interface Props {
 }
 
 export default function TicketPreview({ ticket, onPrint, onClose }: Props) {
+  const { toast } = useToast();
+  const { config } = useBusinessConfig();
   const isCredit = ticket.payment_method === 'credit';
   const isVoided = ticket.status === 'voided';
 
@@ -75,9 +81,17 @@ export default function TicketPreview({ ticket, onPrint, onClose }: Props) {
   const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
   const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
 
+  // ESC/POS methods send the ticket to the printer through the server;
+  // "browser" opens the print dialog as before.
   function handlePrint() {
-    if (onPrint) onPrint();
-    window.print();
+    void handleTicketPrint(config.print_method, ticket.sale_id, {
+      post: (path, body) => api.post(path, body),
+      toast,
+      browserPrint: () => {
+        if (onPrint) onPrint();
+        window.print();
+      },
+    });
   }
 
   return (

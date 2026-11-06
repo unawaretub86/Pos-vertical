@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-10-20
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-05
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -10,11 +10,11 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 11 (US-079, level L, lint 48 -> 0; per-agent telemetry not recorded). Before: 10 (US-077, first run with Gemini as advisory second reviewer), 9 (US-056), 8 (US-054). No `us/*` worktree is open. `dev` is at the US-077 merge plus tooling and docs commits (verify with `git log`).
+**Last run:** 12 (US-080, ESC/POS printing, level L; two orchestrator sessions overlapped at close). Before: 11 (US-079), 10 (US-077), 9 (US-056). No `us/*` worktree is open. `dev` is at the US-080 merge (verify with `git log`).
 
-**SPRINT-18 (Production Stabilization):** US-075, US-076, US-077 and US-078 are done in code and tests and merged to `dev`; US-079 (lint, 48 problems on `dev`, not 42), US-080 (ESC/POS printing) and US-081 (LAN multi-register concurrency) are pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
+**SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**Next US:** US-080, then US-081. Run `/us US-080 [M|L]`.
+**Next US:** US-081. Run `/us US-081 [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -25,7 +25,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-079` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us US-081` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -54,6 +54,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 9 | 2026-09-30 | US-056 | L | ~514k (A 213k=82k+49k+83k · T 95k=82k+13k · I 114k · Q 92k=63k+29k) | 205 | ~22 | 1 (main checkout with a change in `.claude/`; plus one PASSES⚠️ shown to the PO by rule) | 1 (+ smoke 1b) | 8 contract discrepancies + 1 test defect (seed clashes with migration) | 5 new (R-63..R-67) + 1 closed (R-59) | 0 | +2,155 / −26, 26 files |
 | 10 | 2026-10-20 | US-077 | L | ~218k (A 128k=63k+26k+38k · T 29k · I 30k · Q 31k) | 70 | ~6.8 | 0 (one PASSES⚠️ shown to the PO by rule, not a stop) | 1 | 4 contract discrepancies (D-1..D-4) + 3 wording fixes from Gemini | 1 new (R-73) + 1 closed (R-49) | 0 | +249 / −11, 4 files |
 | 11 | about 2026-10-28 (steps 1-5; GATE 2 re-verified 2026-11-04) | US-079 | L | not recorded (lost with the earlier session) | not recorded | not recorded | not recorded | 1 | not recorded | 2 new (R-74, R-75) + 1 closed (R-35) | not recorded | +200 / −145, 32 files |
+| 12 | 2026-11-05 | US-080 | L | ~535k (A 276k=76k+45k+73k+82k · T 84k · I 124k · Q 51k) | 167 | ~23.9 | 1 (two orchestrator sessions ran the close in parallel; PO closed one before merge) | 1 | 7 contract discrepancies (D-1..D-7) + 5 at close + 2 Gemini-verified MINOR | 7 new (R-76..R-82) | 1 (duplicate close by a parallel session) | +1,988 / −30, 32 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -531,6 +532,45 @@ Per-agent telemetry was lost with the earlier session; the transcripts in `~/.cl
 **Operational friction.**
 - The worktree was cut from a `dev` older than the R-67 fix, so `go test` shows a stale failure unrelated to the US.
 - The session was interrupted between close and GATE 2, so there was no live agent to resume.
+
+## Run 12 — US-080 (ESC/POS direct printing, level L)
+
+Steps 0-4 ran in session A (the original orchestrator). Session B was opened with "follow pipeline" while A was still alive, found QA round 1 OK and no Gemini diff output, and resumed at step 5. Both sessions then ran Gemini diff round 1 and the analyst close in parallel on the same worktree. A committed a follow-up (`2685c0a`, spec anchors) on top of B's close commit (`5c29491`); nothing conflicted. B noticed the overlap while collecting telemetry from A's transcript and stopped before merging; the PO closed A and B merged.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract; contract update after GATE 1; close in A; close in B, cold, `ListAgents` showed none alive) | 276k (75.9k + 44.9k + 72.6k + 82.3k) | 90 | ~9.8 min |
+| test-author | 1 | 84.0k | 24 | ~5.9 min |
+| implementer | 1 | 124.1k | 41 | ~5.7 min |
+| qa | 1 round | 51.0k | 12 | ~2.5 min |
+
+The duplicate close (72.6k or 82.3k, ~2-4 min) is pure waste caused by the overlap.
+
+**What it found.** Contract: 7 discrepancies sprint vs code (D-1 no reprint flow exists; D-2 chi route shape; others in the contract). QA round 1: OK, 0 BLOCKER, 4 MINOR (stale `print_method` on other LAN devices -> R-80; `WindowsTransport.Send` ignores `ctx` -> R-81; 409 before 404 in browser mode -> R-82; spec delta pending, done at close). Close: 5 discrepancies documented in the spec (a `PUT /setup` without printer fields resets to browser; printed ticket has more lines than AC-14; auto-print skipped if loading the ticket fails; roadmap table column mismatch on R-74/R-75; Q-10 still open). QA's smoke test with a Node TCP listener confirmed the ESC/POS byte stream (init, CP858, accents, feed, partial cut). The winspool path was only cross-compiled, never executed.
+
+**Unplanned stops:** 1 — overlap of two orchestrator sessions on the same US. QA rounds: 1. Violations: 1 (duplicate close). QA could not stop its own smoke server (permission denied); the port was free by the time B checked.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~2 min | 12 (1 RULE_CONFLICT, 6 MISSING_CASE, 4 AMBIGUOUS, 1 UNTESTABLE) | verified in session A; count not recorded | the RULE_CONFLICT (Spanish file name `impresion.md`) is false: every `spec/domain/` file has a Spanish name, content is English | n/a |
+| diff, round 1 (A's run, 01:33Z) | OK | not recorded | 2 (MINOR test-print button hidden in browser mode vs AC-1; "no spec update") | 1 (button hidden, `settings/page.tsx:543` vs `contract.md:57`; accepted by the PO) | 1 (spec: input predated the close commit) | yes, the AC-1 deviation |
+| diff, round 1 (B's run, 01:38Z) | OK | ~6 min | 2 (BLOCKER "no spec update"; MINOR mixed-payment lines before items, `printer.go:262`) | 1 (order deviates from AC-14's literal wording but mirrors `TicketPreview.tsx:167`, which AC-14 also requires; not a defect) | 1 (spec BLOCKER: input predated the close commit) | yes, the AC-14 wording conflict |
+
+Gemini's "missing spec update" is a structural false positive: the diff review runs in step 4, before the analyst writes the spec in step 5. It appeared in both diff runs.
+
+**Operational friction.**
+- Two live sessions orchestrated the same US. Nothing in the pipeline detects this: `ListAgents` showed the peer session but not its subagents, and the worktree looked idle.
+- The second Gemini diff run overwrote the first one's output file (`gemini-diff-round-1.md`).
+- `data.db` from QA's smoke test stays in the worktree root (gitignored).
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. At step 0, if `us/$ID` already exists, also check `ListAgents` for peer sessions and ask the PO whether another session owns the US, before resuming.
+2. Tell `gemini-review.sh diff` (or its prompt) that the spec delta is written at close, to stop the recurring "no spec update" false positive.
+
+### What to measure in run 13
+- Whether Gemini diff keeps catching AC-wording deviations QA marks OK (2 of 2 runs here).
+- Gemini contract findings: record verified/false counts at GATE 1.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

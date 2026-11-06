@@ -41,6 +41,7 @@ var dbMigrations = []migration{
 	{version: 17, up: migration17},
 	{version: 18, up: migration18},
 	{version: 19, up: migration19},
+	{version: 20, up: migration20},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -571,4 +572,14 @@ ALTER TABLE business_config ADD COLUMN lan_access_enabled INTEGER NOT NULL DEFAU
 // removing the row. Existing customers stay active.
 const migration19 = `
 ALTER TABLE customers ADD COLUMN active INTEGER NOT NULL DEFAULT 1;
+`
+
+// migration20 adds the thermal printer settings (US-080). Existing shops keep
+// printing through the browser until an admin picks an ESC/POS method.
+const migration20 = `
+ALTER TABLE business_config ADD COLUMN print_method TEXT NOT NULL DEFAULT 'browser';
+ALTER TABLE business_config ADD COLUMN paper_width_mm INTEGER NOT NULL DEFAULT 58;
+ALTER TABLE business_config ADD COLUMN printer_host TEXT NOT NULL DEFAULT '';
+ALTER TABLE business_config ADD COLUMN printer_port INTEGER NOT NULL DEFAULT 9100;
+ALTER TABLE business_config ADD COLUMN printer_name TEXT NOT NULL DEFAULT '';
 `

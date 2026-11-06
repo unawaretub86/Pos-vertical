@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -160,7 +162,7 @@ func (h *Handler) getTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sale, err := h.sales.GetByID(r.Context(), id)
+	ticket, err := h.buildTicket(r.Context(), id)
 	if errors.Is(err, repository.ErrNotFound) {
 		respondError(w, http.StatusNotFound, "venta no encontrada")
 		return
@@ -169,13 +171,23 @@ func (h *Handler) getTicket(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "error obteniendo venta")
 		return
 	}
+	respond(w, http.StatusOK, ticket)
+}
+
+// buildTicket assembles the ticket data of a sale. It is shared by the JSON
+// ticket endpoint and the ESC/POS printer so both show the same content.
+func (h *Handler) buildTicket(ctx context.Context, id int64) (*model.TicketData, error) {
+	sale, err := h.sales.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get sale %d: %w", id, err)
+	}
 
 	// Build enriched ticket items with product names
 	ticketItems := make([]model.TicketItem, 0, len(sale.Items))
 	for _, item := range sale.Items {
 		name := "Producto"
 		unit := "unit"
-		if prod, err := h.products.GetByID(r.Context(), item.ProductID); err == nil {
+		if prod, err := h.products.GetByID(ctx, item.ProductID); err == nil {
 			name = prod.Name
 			unit = prod.Unit
 		}
@@ -192,7 +204,7 @@ func (h *Handler) getTicket(w http.ResponseWriter, r *http.Request) {
 	// Get customer name for credit sales
 	var customer *model.Customer
 	if sale.CustomerID != nil {
-		if cust, err := h.customers.GetByID(r.Context(), *sale.CustomerID); err == nil {
+		if cust, err := h.customers.GetByID(ctx, *sale.CustomerID); err == nil {
 			customer = cust
 		}
 	}
@@ -226,5 +238,5 @@ func (h *Handler) getTicket(w http.ResponseWriter, r *http.Request) {
 		Customer:      customer,
 		Business:      business,
 	}
-	respond(w, http.StatusOK, ticket)
+	return &ticket, nil
 }

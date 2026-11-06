@@ -119,6 +119,22 @@ Si la impresión térmica sale cortada o con márgenes incorrectos:
 3. En **Tamaño de papel**, elige `80mm` o `58mm` según tu modelo.
 4. Guarda los cambios.
 
+### Impresión directa (sin diálogo del navegador)
+
+Con la impresión directa el ticket sale de la impresora térmica apenas se cobra la venta, sin abrir el diálogo del navegador y sin configurar márgenes.
+
+1. Entra a **Configuración → Formato de tickets** (solo el administrador).
+2. En **Método de impresión** elige:
+   - **Navegador**: el comportamiento de siempre (valor por defecto).
+   - **ESC/POS red**: impresora con cable de red o WiFi. Escribe su **IP** (ej. `192.168.1.50`) y el **puerto** (normalmente `9100`).
+   - **ESC/POS Windows**: impresora instalada en Windows (por ejemplo por USB). Escribe el **nombre exacto** que aparece en *Impresoras y escáneres*.
+3. Elige el **Ancho del papel**: `58 mm` o `80 mm`.
+4. Presiona **Guardar** y luego **Imprimir prueba**. Debe salir un ticket que dice `PRUEBA DE IMPRESION`, con las tildes y la ñ bien escritas y el corte del papel.
+
+Al cobrar, el ticket se envía solo a la impresora y aparece el aviso **Ticket enviado a la impresora**. El ticket sigue en pantalla: el botón **Imprimir** saca otra copia. Si la impresora está apagada o desconectada verá un aviso con el motivo; la venta ya quedó registrada y puede intentar de nuevo con **Imprimir**.
+
+> La opción **ESC/POS Windows** solo funciona cuando el POS corre en Windows.
+
 ---
 
 ## Solución de problemas

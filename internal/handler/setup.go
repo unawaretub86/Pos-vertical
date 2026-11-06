@@ -3,6 +3,7 @@ package handler
 import (
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/andreyo/pos/internal/mailer"
 	appmw "github.com/andreyo/pos/internal/middleware"
@@ -48,6 +49,10 @@ func (h *Handler) updateSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Currency == "" {
 		body.Currency = "COP"
+	}
+	if msg := normalizePrinterSettings(&body); msg != "" {
+		respondError(w, http.StatusBadRequest, msg)
+		return
 	}
 	if err := h.setup.Upsert(&body); err != nil {
 		respondError(w, http.StatusInternalServerError, "Error al guardar configuración")
@@ -104,4 +109,39 @@ func (h *Handler) getLanInfo(w http.ResponseWriter, r *http.Request) {
 		url = "http://" + ip + ":" + port
 	}
 	respond(w, http.StatusOK, map[string]string{"ip": ip, "url": url})
+}
+
+// normalizePrinterSettings fills the defaults for absent printer fields and
+// validates the rest. It returns a Spanish error message, or "" when valid.
+// The port is only checked for the network method.
+func normalizePrinterSettings(c *repository.BusinessConfig) string {
+	if c.PrintMethod == "" {
+		c.PrintMethod = "browser"
+	}
+	if c.PaperWidthMM == 0 {
+		c.PaperWidthMM = 58
+	}
+	if c.PaperWidthMM != 58 && c.PaperWidthMM != 80 {
+		return "El ancho de papel debe ser 58 u 80 mm"
+	}
+	switch c.PrintMethod {
+	case "browser":
+	case "escpos_network":
+		if strings.TrimSpace(c.PrinterHost) == "" {
+			return "La dirección IP de la impresora es requerida"
+		}
+		if c.PrinterPort < 1 || c.PrinterPort > 65535 {
+			return "El puerto de la impresora debe estar entre 1 y 65535"
+		}
+	case "escpos_windows":
+		if strings.TrimSpace(c.PrinterName) == "" {
+			return "El nombre de la impresora de Windows es requerido"
+		}
+	default:
+		return "Método de impresión inválido"
+	}
+	if c.PrintMethod != "escpos_network" && c.PrinterPort == 0 {
+		c.PrinterPort = 9100
+	}
+	return ""
 }

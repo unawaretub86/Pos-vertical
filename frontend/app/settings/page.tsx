@@ -8,6 +8,7 @@ import Topbar from '@/components/Topbar';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useBusinessConfig } from '@/lib/business-config-context';
+import { buildPrinterPayload, isTestPrintDisabled, type PrinterForm } from '@/lib/printerSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,11 @@ interface BusinessConfig {
   catalog_token: string;
   restaurant_mode: boolean;
   lan_access_enabled: boolean;
+  print_method: string;
+  paper_width_mm: number;
+  printer_host: string;
+  printer_port: number;
+  printer_name: string;
   configured: boolean;
 }
 
@@ -204,7 +210,21 @@ function SettingsContent() {
     catalog_token: '',
     restaurant_mode: false,
     lan_access_enabled: false,
+    print_method: 'browser',
+    paper_width_mm: 58,
+    printer_host: '',
+    printer_port: 9100,
+    printer_name: '',
   });
+  // Printer config as stored on the server; the test print uses it.
+  const [savedPrinter, setSavedPrinter] = useState<PrinterForm>({
+    print_method: 'browser',
+    paper_width_mm: 58,
+    printer_host: '',
+    printer_port: 9100,
+    printer_name: '',
+  });
+  const [testingPrinter, setTestingPrinter] = useState(false);
   const [fiscal, setFiscal] = useState<FiscalConfig>({
     enabled: false,
     numbering_range_id: 0,
@@ -252,7 +272,19 @@ function SettingsContent() {
           catalog_token: cfg.catalog_token ?? '',
           restaurant_mode: cfg.restaurant_mode ?? false,
           lan_access_enabled: cfg.lan_access_enabled ?? false,
+          print_method: cfg.print_method ?? 'browser',
+          paper_width_mm: cfg.paper_width_mm ?? 58,
+          printer_host: cfg.printer_host ?? '',
+          printer_port: cfg.printer_port ?? 9100,
+          printer_name: cfg.printer_name ?? '',
         });
+        setSavedPrinter(buildPrinterPayload({
+          print_method: cfg.print_method ?? 'browser',
+          paper_width_mm: cfg.paper_width_mm ?? 58,
+          printer_host: cfg.printer_host ?? '',
+          printer_port: cfg.printer_port ?? 9100,
+          printer_name: cfg.printer_name ?? '',
+        }));
         setHasEmailPassword(cfg.has_email_app_password ?? false);
         if (cfg.logo) setLogoPreview(cfg.logo);
       })
@@ -293,7 +325,8 @@ function SettingsContent() {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.put('/setup', form);
+      await api.put('/setup', { ...form, ...buildPrinterPayload(form) });
+      setSavedPrinter(buildPrinterPayload(form));
       if (form.owner_email_app_password) {
         setHasEmailPassword(true);
         setForm(f => ({ ...f, owner_email_app_password: '' }));
@@ -304,6 +337,18 @@ function SettingsContent() {
       toast(err instanceof Error ? err.message : 'Error al guardar', 'error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleTestPrinter() {
+    setTestingPrinter(true);
+    try {
+      await api.post('/printer/test', {});
+      toast('Prueba enviada a la impresora', 'success');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'No se pudo imprimir la prueba', 'error');
+    } finally {
+      setTestingPrinter(false);
     }
   }
 
@@ -432,6 +477,86 @@ function SettingsContent() {
                     style={{ width: '220px' }}
                   />
                 </ConfigRow>
+
+                <ConfigRow label="Método de impresión" sublabel="Impresión directa envía el ticket a la tirilla sin abrir el diálogo del navegador">
+                  <select
+                    className="input"
+                    value={form.print_method}
+                    onChange={e => setForm(f => ({ ...f, print_method: e.target.value }))}
+                    style={{ width: '220px' }}
+                  >
+                    <option value="browser">Navegador</option>
+                    <option value="escpos_network">ESC/POS red</option>
+                    <option value="escpos_windows">ESC/POS Windows</option>
+                  </select>
+                </ConfigRow>
+
+                <ConfigRow label="Ancho del papel" sublabel="Solo para impresión directa">
+                  <select
+                    className="input"
+                    value={form.paper_width_mm}
+                    onChange={e => setForm(f => ({ ...f, paper_width_mm: Number(e.target.value) }))}
+                    style={{ width: '220px' }}
+                  >
+                    <option value={58}>58 mm</option>
+                    <option value={80}>80 mm</option>
+                  </select>
+                </ConfigRow>
+
+                {form.print_method === 'escpos_network' && (
+                  <>
+                    <ConfigRow label="IP de la impresora" sublabel="Ej: 192.168.1.50">
+                      <input
+                        className="input"
+                        type="text"
+                        value={form.printer_host}
+                        onChange={e => setForm(f => ({ ...f, printer_host: e.target.value }))}
+                        style={{ width: '220px' }}
+                      />
+                    </ConfigRow>
+                    <ConfigRow label="Puerto" sublabel="Normalmente 9100">
+                      <input
+                        className="input"
+                        type="number"
+                        min={1}
+                        max={65535}
+                        value={form.printer_port}
+                        onChange={e => setForm(f => ({ ...f, printer_port: Number(e.target.value) }))}
+                        style={{ width: '220px' }}
+                      />
+                    </ConfigRow>
+                  </>
+                )}
+
+                {form.print_method === 'escpos_windows' && (
+                  <ConfigRow label="Nombre de la impresora en Windows" sublabel="Tal como aparece en Impresoras y escáneres">
+                    <input
+                      className="input"
+                      type="text"
+                      value={form.printer_name}
+                      onChange={e => setForm(f => ({ ...f, printer_name: e.target.value }))}
+                      style={{ width: '220px' }}
+                    />
+                  </ConfigRow>
+                )}
+
+                {form.print_method !== 'browser' && (
+                  <ConfigRow
+                    label="Imprimir prueba"
+                    sublabel={isTestPrintDisabled(savedPrinter, buildPrinterPayload(form))
+                      ? 'Guarde la configuración antes de imprimir la prueba'
+                      : 'Envía un ticket de prueba con la configuración guardada'}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={handleTestPrinter}
+                      disabled={testingPrinter || isTestPrintDisabled(savedPrinter, buildPrinterPayload(form))}
+                    >
+                      {testingPrinter ? 'Imprimiendo...' : 'Imprimir prueba'}
+                    </button>
+                  </ConfigRow>
+                )}
               </div>
             </div>
 

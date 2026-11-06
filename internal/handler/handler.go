@@ -39,6 +39,7 @@ type Handler struct {
 	tables       *service.DiningTableService
 	orders       *service.OrderService
 	kds          *service.KDSService
+	printer      *service.PrinterService
 	localIP      func() string // injectable for tests; netutil.LocalIPv4 in production
 }
 
@@ -100,6 +101,7 @@ func New(db *database.DB) *Handler {
 		tables:       service.NewDiningTableService(tableRepo),
 		orders:       service.NewOrderService(orderRepo),
 		kds:          service.NewKDSService(kdsRepo),
+		printer:      service.NewPrinterService(),
 		localIP:      netutil.LocalIPv4,
 		loginLimiter: appmw.NewLoginLimiter(),
 	}
@@ -161,12 +163,19 @@ func (h *Handler) Routes() http.Handler {
 		r.Get("/sales", h.listSales)
 		r.Get("/sales/{id}", h.getSale)
 		r.Get("/sales/{id}/ticket", h.getTicket)
+		r.Post("/printer/print-ticket/{sale_id}", h.printTicket)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Delete("/sales/{id}/void", h.voidSale)
 			r.Post("/sales/{id}/void-with-credit-note", h.voidSaleWithCreditNote)
 			r.Get("/sales/{id}/factura", h.getSaleFactura)
 			r.Get("/sales/{id}/factura/pdf", h.getSaleFacturaPDF)
+		})
+
+		// Printer test (admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmw.RequireAdmin)
+			r.Post("/printer/test", h.printTest)
 		})
 
 		// Fiscal config (admin only)

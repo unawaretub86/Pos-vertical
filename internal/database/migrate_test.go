@@ -3,6 +3,8 @@ package database
 // Contrato US-055 §4, T-1 y T-2.
 
 import (
+	"database/sql"
+	"path/filepath"
 	"testing"
 )
 
@@ -68,5 +70,53 @@ func TestMigration18_T2_BusinessConfigDefaults(t *testing.T) {
 	}
 	if rm != 0 || lan != 0 {
 		t.Errorf("restaurant_mode=%d lan_access_enabled=%d, want 0 and 0", rm, lan)
+	}
+}
+
+// US-080 T-16 (AC-2): migration 20 adds the printer settings with safe defaults
+// to an existing business_config row.
+func TestMigration20_T16_PrinterSettingsDefaults(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v19.db")
+	raw, err := sql.Open("sqlite", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	old := &DB{DB: raw, path: p}
+	if _, err := raw.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range dbMigrations {
+		if m.version > 19 {
+			break
+		}
+		if err := old.runMigration(m); err != nil {
+			t.Fatalf("v%d: %v", m.version, err)
+		}
+	}
+	if _, err := raw.Exec(`INSERT INTO business_config(id, name, currency) VALUES(1, 'Cafe', 'COP')`); err != nil {
+		t.Fatalf("seed business_config: %v", err)
+	}
+	raw.Close()
+
+	db, err := New(p)
+	if err != nil {
+		t.Fatalf("upgrade v19 -> latest: %v", err)
+	}
+	defer db.Close()
+
+	var v int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = 20`).Scan(&v); err != nil || v != 1 {
+		t.Errorf("schema_migrations rows with version 20 = %d err=%v, want 1", v, err)
+	}
+	var method, host, name string
+	var width, port int
+	err = db.QueryRow(`SELECT print_method, paper_width_mm, printer_host, printer_port, printer_name FROM business_config WHERE id = 1`).
+		Scan(&method, &width, &host, &port, &name)
+	if err != nil {
+		t.Fatalf("select printer columns: %v", err)
+	}
+	if method != "browser" || width != 58 || port != 9100 || host != "" || name != "" {
+		t.Errorf("defaults = %q/%d/%q/%d/%q, want browser/58/''/9100/''", method, width, host, port, name)
 	}
 }

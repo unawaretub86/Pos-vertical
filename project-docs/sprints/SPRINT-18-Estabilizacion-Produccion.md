@@ -26,7 +26,7 @@
 | US-077 | Forced redirect when the session expires (R-49) | [x] Complete (manual PO check pending) | 2026-10-20 |
 | US-078 | Enable Foreign Keys in SQLite (R-56) | [x] Complete in code (PO validation pending) | 2026-10-13 |
 | US-079 | Fix 48 Lint Problems (R-35) | [x] Complete in code (manual PO checks M-1..M-3 pending) | 2026-10-28 |
-| US-080 | Native ESC/POS Printing 58/80mm | ⬜ Pending | |
+| US-080 | Native ESC/POS Printing 58/80mm | [x] Complete in code (manual PO hardware checks P-1..P-4 pending; logo and reprint deferred) | 2026-11-05 |
 | US-081 | Multi-Register LAN Concurrency and Stability | ⬜ Pending | |
 
 **Total estimated effort: ~6 days**
@@ -258,15 +258,38 @@ QA: round 1 OK, 0 BLOCKER, 3 MINOR (latent drawer state keyed by pathname; `data
 - If network, store IP and port. If local, store the name of the shared Windows printer.
 
 **Acceptance Criteria:**
-- [ ] In the POS configuration, the user can enable "Impresión Directa" (direct printing).
-- [ ] On charging or reprinting a ticket, the backend dispatches the raw ESC/POS command.
-- [ ] The printer outputs the paper immediately with no pop-ups on screen.
-- [ ] The logo (if possible), the header, the items and the footer from the business configuration are printed correctly.
+- [x] In the POS configuration, the user can enable "Impresión Directa" (direct printing). (A 3-way method selector; `Navegador` = off.)
+- [x] On charging a ticket the backend dispatches the raw ESC/POS command; the preview `Imprimir` button sends a second copy. Reprint from sales history is deferred (no such flow exists) -> roadmap R-76.
+- [ ] The printer outputs the paper immediately with no pop-ups on screen. No dialog opens in ESC/POS mode (tests); real paper output is **pending manual PO check** P-1..P-4 (`gaps.md`).
+- [x] The header, the items and the footer from the business configuration are printed (bytes verified by tests and by QA smoke on a TCP listener). The logo was skipped by PO decision -> roadmap R-77.
 
 **DoD:**
-- ESC/POS printing API (`internal/service/printer.go`).
-- Frontend interface to configure the printer.
-- Unit test simulating the thermal command generator.
+- [x] ESC/POS printing API (`internal/service/printer.go`).
+- [x] Frontend interface to configure the printer (`frontend/app/settings/page.tsx`).
+- [x] Unit test simulating the thermal command generator (`internal/service/printer_test.go`).
+
+**Verified criteria (closed 2026-11-05):**
+
+Discrepancies resolved at GATE 1: no reprint flow exists (D-1, deferred); route is chi `{sale_id}` (D-2); no third-party printing library and no CGO: hand-written `winspool.drv` via `syscall.NewLazyDLL` (D-3); paper width is a new setting, ESC/POS only (D-4); there is no separate order ticket, table checkout prints the same sale ticket (D-5); the toggle is a 3-way method selector (D-6); logo skipped (D-7). Spec: `spec/domain/impresion.md`.
+
+- AC-1: WHEN an admin opens Settings, the system SHALL show the method selector (`Navegador` default, `ESC/POS red`, `ESC/POS Windows`), paper width 58/80 mm, method-specific fields (IP + port 9100, or Windows printer name) and, for ESC/POS methods only, `Imprimir prueba` (hidden in `Navegador` mode, `frontend/app/settings/page.tsx:543`; accepted deviation from the contract text, Gemini MINOR). Tests: `frontend/lib/printerSettings.test.ts` (`buildPrinterPayload`, `isTestPrintDisabled`); layout by code reading.
+- AC-2: WHEN an admin saves Settings, the system SHALL persist `print_method`, `paper_width_mm`, `printer_host`, `printer_port`, `printer_name`; existing databases migrate to `browser`, 58, 9100, `''`, `''`. Tests: `TestSetup_US080_T14_PrinterSettingsPersist` (`internal/handler/setup_test.go`), `TestMigration20_T16_PrinterSettingsDefaults` (`internal/database/migrate_test.go`), `printerSettings.test.ts`.
+- AC-3: IF a non-admin calls `PUT /setup`, THEN 403; IF the method or width is invalid, or network has no host or a port outside 1..65535, or Windows has no name, THEN 400 and nothing stored (port checked only for the network method). Test: `TestSetup_US080_T15_PrinterSettingsValidation`.
+- AC-4: WHEN any authenticated user calls `POST /api/printer/print-ticket/{sale_id}` in an ESC/POS method, the system SHALL send the ticket bytes and return 200 `{"printed": true}`. Test: `TestPrintTicket_T7_NetworkPrintsSale` (`internal/handler/printer_test.go`).
+- AC-5: WHILE `print_method = browser`, the endpoint SHALL return 409 and write nothing. Test: `TestPrintTicket_T8_BrowserModeReturns409`.
+- AC-6: IF `sale_id` is not an integer or `<= 0`, THEN 400; no row, 404; no token, 401; a voided sale prints with `*** ANULADO ***`. Test: `TestPrintTicket_T9_IdValidationAndVoided`. (In browser mode the 409 is returned before the sale lookup, QA MINOR.)
+- AC-7: IF the printer is unreachable or the write fails, THEN 502 with the cause, and the sale stays committed. Test: `TestPrintTicket_T10_UnreachablePrinterReturns502` (network only; the Windows failure path is not executed in CI).
+- AC-8: IF the server is not Windows and the method is `escpos_windows`, THEN 501 (print-ticket and test). Test: `TestPrintTicket_T11_WindowsMethodOffWindowsReturns501` (`internal/handler/printer_other_test.go`).
+- AC-9: WHILE a job is in progress for a printer key, a second job for the same key SHALL wait; different keys run in parallel. Tests: `TestPrinterService_T12_SamePrinterJobsAreSerialized`, `TestPrinterService_T12_DifferentPrintersRunConcurrently` (`internal/service/printer_test.go`).
+- AC-10: WHEN an admin calls `POST /api/printer/test`, the system SHALL print `PRUEBA DE IMPRESION` through the saved config (200); 409 browser, 502 printer failure, 501 Windows off Windows, 403 non-admin. Tests: `TestPrintTest_T13_AdminTestPrint`, `TestPrintTicket_T11_...`.
+- AC-11, AC-12, AC-13: WHEN a sale is created from `/pos` or table checkout in an ESC/POS method, the system SHALL call the print endpoint once, open no print dialog, keep the preview and show a success or error toast; in `browser` mode the flow is unchanged; in ESC/POS modes the `Imprimir` button calls the endpoint instead of `window.print()`. Tests: `frontend/lib/printFlow.test.ts` (`shouldAutoPrint`, `handleTicketPrint`).
+- AC-14, AC-16, AC-17: the generator SHALL emit init + CP858 codepage, header, items, `Descuento`/`IVA` only when > 0, bold double-height `TOTAL`, `Recibido`/`Cambio`, footer, feed 3 and partial cut, wrapped to 32 (58 mm) / 48 (80 mm) columns, money as `$1.234.567`. Tests: `TestPrinterBuildTicket_T1_Layout58mm`, `_T2_Layout80mm`, `_T3_LongNameTruncated`, `_T6_DiscountAndTaxOnlyWhenPositive`.
+- AC-15: text SHALL be CP858 with the fixed Spanish table and `?` for any other rune, never panicking. Test: `TestPrinterBuildTicket_T4_CP858Encoding`.
+- AC-18: a voided sale SHALL start with `*** ANULADO ***`; a credit sale SHALL print `*** CREDITO ***` and the customer name/phone. Test: `TestPrinterBuildTicket_T5_VoidedAndCredit`.
+
+QA: round 1 OK, 0 BLOCKER, 5 MINOR (stale `print_method` on other LAN sessions until reload -> R-80; `ctx` ignored by `WindowsTransport.Send` and winspool only cross-compiled -> R-81; 409 before 404 in browser mode -> R-82; spec delta, applied at close; `Imprimir prueba` hidden in browser mode while contract AC-1 listed it unconditionally, found by the Gemini diff review, accepted and recorded in `spec/domain/impresion.md`). `go build ./...`, `GOOS=windows go build ./...`, `go test ./...`, `pnpm lint` (0 problems), `pnpm test` (10 files, 90 tests) and `pnpm build` passed. Smoke on port 18082 with a TCP listener: test print bytes start `1B 40 1B 74 13` and end `1B 64 03 1D 56 01`; a real sale ticket was not smoked (covered by T-7..T-9). Out of scope, sent to roadmap: reprint from history (R-76), logo (R-77), cash drawer (R-78), register-close ticket over ESC/POS (R-79).
+
+**Pending, PO (contract Q-9):** real hardware checks P-1..P-4 in `gaps.md`. Q-10 (keep the 2-day estimate) is still open in the contract; no re-baseline recorded.
 
 ---
 

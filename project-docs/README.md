@@ -1,6 +1,6 @@
 # project-docs — Index
 
-> **Updated:** 2026-10-01
+> **Updated:** 2026-11-05 (US-080: `spec/domain/impresion.md` row)
 
 **Read this before believing any document in this folder.** Not all of them are current: some specs must always be true, some research is dated months ago, and some is MVP history. They used to be all mixed together and written in the same present tense, and that produced plans with false claims about the code.
 
@@ -34,6 +34,7 @@ Each document opens with a status stamp that says which is which.
 | How do you say this in Colombian? | [spec/domain/glosario.md](spec/domain/glosario.md) |
 | What is restaurant mode? How is a table's state derived? | [spec/domain/restaurante.md](spec/domain/restaurante.md) |
 | How does the server bind and serve the frontend? | [spec/domain/servidor.md](spec/domain/servidor.md) |
+| How is a ticket printed? Which printers are supported? | [spec/domain/impresion.md](spec/domain/impresion.md) |
 | **What do we build next?** | [roadmap.md](roadmap.md) — single source |
 | How is a sprint worked? | [workflow.md](workflow.md) |
 | What is the stack, the code conventions and the language rule? | [`../CLAUDE.md`](../CLAUDE.md) |

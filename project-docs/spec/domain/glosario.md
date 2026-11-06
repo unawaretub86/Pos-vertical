@@ -1,7 +1,7 @@
 # Glossary
 
 > **Type:** spec · **Current:** yes · **Rules over:** domain vocabulary
-> **Updated:** 2026-10-01
+> **Updated:** 2026-11-05 (US-080: Tirilla, ESC/POS, Impresión directa)
 
 Colombian shop terms and their equivalent in the code. It exists so that a US and a table speak the same language, and for the local assistant's phrase bank. The Spanish term is the canonical name; docs in English use it with this gloss.
 
@@ -15,7 +15,9 @@ Colombian shop terms and their equivalent in the code. It exists so that a US an
 | **Base** | The cash the shift starts with (opening float) | `registers.opening_amount` |
 | **Faltante / sobrante** | Negative / positive difference of the cuadre (shortage / surplus) | `registers.difference` |
 | **Quincena** | Payday, the 15th and 30th. **It is the fiado collection cycle.** | Not modeled yet — roadmap `R-03` |
-| **Tirilla** | The printed receipt | `TicketPreview`, `CloseTicketPreview` |
+| **Tirilla** | The printed receipt | `TicketPreview`, `CloseTicketPreview`; ESC/POS output in `internal/service/printer.go`. See [impresion.md](impresion.md) |
+| **ESC/POS** | The raw command set of thermal receipt printers (Epson standard) | `internal/service/printer.go` (`BuildTicket`) |
+| **Impresión directa** | Direct printing: the server sends ESC/POS bytes to the printer, with no browser print dialog | `business_config.print_method` = `escpos_network` / `escpos_windows`. See [impresion.md](impresion.md) |
 | **Nequi / Daviplata** | Colombian digital wallets, widely used | Today they fall under `method = 'transfer'` |
 | **Mayorista** | Special price by volume or customer type (wholesale) | `products.wholesale_price` |
 | **Lo que más deja** | The highest-margin product, distinct from the best seller | See [rentabilidad.md](rentabilidad.md) |
