@@ -16,7 +16,7 @@
 
 | US | Name | Status | Date |
 |----|------|--------|------|
-| US-043 | Customer history in the POS at checkout | [ ] Pending | — |
+| US-043 | Customer history in the POS at checkout | Moved to SPRINT-19 (2026-11-05) | — |
 | US-044 | Supplier order suggestion | [ ] Pending | — |
 | US-045 | Catalog shareable over WhatsApp | [ ] Pending | — |
 | US-042c | Dashboard: stock with days remaining (sales velocity) | [x] Completa (2026-10-01) | 2026-10-01 |
