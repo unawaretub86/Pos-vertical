@@ -29,7 +29,7 @@
 | US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-07 |
 | US-084 | Quick *abono* modal from the Customers list | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-07 |
 | US-088 | Voiding a sale no longer subtracts cash from the register (R-110) | [x] Complete | 2026-11-07 |
-| US-085 | Aging filter chips with amounts on the Customers tab | ⬜ Pending | |
+| US-085 | Aging filter chips with amounts on the Customers tab | [x] Complete (manual PO checks pending, see `gaps.md`) | 2026-11-07 |
 
 **Total estimated effort: ~5 days**
 
@@ -477,12 +477,36 @@ QA round 1: OK, 0 BLOCKER, 2 MINOR. M-1: the R-110 roadmap row cited the removed
 - Three chips above the table, each with amount and count: `1–14 días`, `15–30 días`, `Más de 30 días`. Clicking a chip filters the table; clicking it again clears the filter.
 
 **Acceptance Criteria:**
-- [ ] Customers owing $75,000 (5 days), $300,000 (20 days), $330,000 (28 days) → chips `1–14 días: $75.000 (1)`, `15–30 días: $630.000 (2)`, `Más de 30 días: $0 (0)`.
-- [ ] Customers with balance 0 are not counted.
-- [ ] Works at 320 px (chips wrap).
+- [x] Customers owing $75,000 (5 days), $300,000 (20 days), $330,000 (28 days) → chips `Hasta 14 días: $75.000 (1)`, `15–30 días: $630.000 (2)`, `Más de 30 días: $0 (0)` (first label renamed at GATE 1, see below).
+- [x] Customers with balance 0 are not counted.
+- [x] Works at 320 px (chips wrap). Emulated by QA; real-device check in `gaps.md`.
 
 **DoD:**
 - Vitest test for the bucketing helper with the numbers above.
+
+**Verified criteria (closed 2026-11-07):**
+
+Contract discrepancies:
+- D-1: a *fiado* given today is 0 days old and fell in no chip labeled `1–14 días`, so the chips would not add up to the receivables total. Resolved at GATE 1: the first chip is `Hasta 14 días` (0–14 days, a `null` date counts as 0).
+- D-2: the technical context cited `agingColor` at `page.tsx:44`; it was at `:48` (and is at `:44` again after this US moved `daysOverdue` to `frontend/lib/aging.ts`).
+- D-3: the R-05 note above is not the real effect. The list counts elapsed 24-hour periods from a correctly parsed UTC instant, so there is no time-zone shift; a debt from yesterday evening reads 0 days the next morning (roadmap R-117).
+- D-4: row colors turn red at 15 days (bands `< 7`, `7–14`, `> 14`), not at the chip boundaries 14/30 (roadmap R-116).
+- D-5: `spec/domain/fiado.md` said the POS badge uses "the same bands as the Customers list … `var(--warning)`", but the list hard-codes `#ca8a04`; corrected in the spec (roadmap R-103).
+- D-6: search is server-side and `total_portfolio` ignores it, so the interaction with the chips had to be defined (Q-2).
+
+GATE 1 (PO, 2026-11-07): Q-1..Q-6 accepted as recommended. First chip `Hasta 14 días`. Chips are computed over the loaded list (the search results while searching), chip AND search, subtitle global. Single selection. An inactive chip with count 0 is not selectable. Row colors and the hard-coded amber stay. Day count stays elapsed 24-hour periods. Gemini contract review, 2 verified and accepted: G-1, the active chip is always tappable to clear, even at count 0; G-2, `Ningún cliente con deuda en este rango` whenever an active chip leaves the table empty, with or without a search.
+
+QA round 1: OK, 0 BLOCKER, 2 MINOR. M-1: `now` is taken only when `GET /customers` answers, so a tab left open across midnight with no refetch shows the previous ages; accepted, because one shared `now` keeps the row badge and the chips in agreement (roadmap R-118). M-2: the chip container has no `role="group"` / `aria-label` (roadmap R-119). RED `5f06ec8`, implementation `df481de`; files `frontend/lib/aging.ts` (new), `frontend/lib/aging.test.ts` (new), `frontend/app/customers/page.tsx`. QA ran `go build ./...`, `go test ./...`, `pnpm build`, `pnpm test` (179 passed) and `pnpm lint` (0), and a smoke test on the compiled binary in headless Edge (11 steps, all ✓, 320 px emulated). Gemini diff round 1: clean. Spec: `spec/domain/fiado.md` → "Rule: debt age" (aging chips), POS debt badge colors (D-5) and Customers-list line refs.
+
+- AC-1, AC-4: WHEN the list is loaded, every customer with `balance > 0` SHALL be in exactly one bucket by `daysOverdue(oldest_debt_at, now)`: 0–14 → `Hasta 14 días`, 15–30 → `15–30 días`, `> 30` → `Más de 30 días`; 0, 14 and a `null` date → first, 15 and 30 → second, 31 → third. Tests (`frontend/lib/aging.test.ts`): `bucketTotals` › `T-3: $10,000 each at 0, 14, 15d-1s, 15, 30, 31 days -> 30,000/3, 20,000/2, 10,000/1; null date -> first bucket`; `T-3: agingBucket boundaries 0, 14 -> 0-14; 15, 30 -> 15-30; 31 -> >30`; `daysOverdue` › `T-4: 1h ago -> 0; 2026-11-07T01:00:00Z -> 0; 14d -> 14; 31d -> 31; null -> 0`.
+- AC-2: each chip SHALL show `<label>: <formatCOP(sum)> (<count>)`; $75.000 @5 d, $300.000 @20 d, $330.000 @28 d → `$75.000 (1)`, `$630.000 (2)`, `$0 (0)`. Tests: `T-1: Ana 75,000 @5d, Beto 300,000 @20d, Caro 330,000 @28d -> 75,000/1, 630,000/2, 0/0`; `bucketLabel` › `T-8: chip labels with formatCOP amount and count (en dash U+2013 in 15–30)`.
+- AC-3: IF a balance is `0` or negative, THEN it SHALL not count and SHALL be hidden while a chip is active; $0,19 counts. Tests: `T-2: balance 0 @40d and -20,000 @45d are not counted; 0.19 @3d counts -> first bucket 75,000.19/2`; `filterByBucket` › `T-5: over T-2 customers: 15-30 -> [Beto, Caro]; >30 -> []; null -> all 6; 0-14 -> [Ana, Hugo]`.
+- AC-5: WHEN an inactive chip with count > 0 is tapped, the table SHALL show only its bucket, keeping the sort; tapping the active chip SHALL clear; tapping another SHALL switch; the active chip carries `aria-pressed`. Tests: `toggleBucket` › `T-6: select, clear, switch; inactive zero-count chip ignored; active zero-count chip still clears`; T-5; QA smoke steps 2-4.
+- AC-6: WHILE a search is typed, chips SHALL cover its results and an active chip SHALL filter them further; the subtitle stays global. Test: QA smoke step 5 (search `Be`).
+- AC-7: WHEN the list refetches after an *abono*, chips SHALL update in place and the active chip SHALL stay active. Test: `refresh after abono` › `T-7: Dora 450,000 + Beto 80,000 @20d -> 530,000/2; Dora 400,000 -> 480,000/2; Beto 0 -> 400,000/1 and filter -> [Dora]`; QA smoke step 7 (full settlement through the real modal). Partial *abono* in the UI: PO check in `gaps.md`.
+- AC-8: IF an inactive chip's count is 0, THEN it SHALL be disabled; the active chip SHALL stay tappable at count 0; WHILE a chip is active with no rows, the table SHALL show `Ningún cliente con deuda en este rango` with no `Agregar primer cliente`. Tests: T-6; QA smoke steps 6-9.
+- AC-9: at 320 px the chips SHALL wrap with no horizontal scroll and stay tappable. Test: QA smoke steps 10-11 (emulated); real device in `gaps.md`.
+- AC-10: no endpoint, query or migration change. Test: T-R1 (`git diff dev...HEAD -- internal/ 'frontend/app/customers/[id]'` empty, checked by QA).
 
 ---
 

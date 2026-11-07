@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-06
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-07
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 19 (US-088, R-110: a void no longer subtracts the sale twice from the register, level L). Before: 18 (US-084), 17 (US-043), 16 (US-087). No `us/*` worktree is open. `dev` is at the US-088 merge (verify with `git log`).
+**Last run:** 20 (US-085, aging filter chips on the Customers tab, level L). Before: 19 (US-088), 18 (US-084), 17 (US-043). No `us/*` worktree is open. `dev` is at the US-085 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**SPRINT-19 (Fiado collection):** US-082, US-083, US-086, US-087, US-043, US-084 and US-088 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1 and US-084 M-1 in `gaps.md`).
+**SPRINT-19 (Fiado collection):** complete in code and tests; all 8 US (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085) merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1, US-084 M-1 and US-085 M-1 in `gaps.md`).
 
-**Next US:** US-085, then US-081. Roadmap items R-102..R-109 and R-111..R-115 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-081. Roadmap items R-102..R-109 and R-111..R-119 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -28,7 +28,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-085` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us US-081` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -65,6 +65,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 17 | 2026-11-07 | US-043 | L | ≥238k recorded (A 111k contract-resume + 111k close · T not recovered · I 54k resume, first run cut off · Q 73k) | ≥99 | ≥12.9 (session 2 only) | 1 (API rate limit killed the implementer; next session restarted cold) | 1 | 8 contract discrepancies (D-1..D-8) + 4 QA MINOR | 4 new (R-102..R-105) | 0 | +465 / −44, 12 files excluding tests (+985 / −44, 16 files total, excluding this benchmark entry) |
 | 18 | 2026-11-07 | US-084 | L | ~416k (A 193k, last of 132k→144k→193k · T 42k · I 75k · Q 107k) | 144 | ~26.1 | 0 | 1 | 8 contract discrepancies (D-1..D-8) + 2 Gemini-verified contract additions (Q-7, Q-8) + 3 QA MINOR + 1 pre-existing money bug (R-110) | 5 new (R-106..R-110) | 0 | +626 / −335, 13 files (excluding this benchmark entry) |
 | 19 | 2026-11-07 | US-088 (R-110) | L | ~348k (A 166k, last of 134k→141k→166k · T 76k · I 26k · Q 80k) | 161 | ~24.8 | 0 | 1 | 5 contract discrepancies (D-1..D-5) + 1 Gemini-verified contract addition (AC-7) + 2 QA MINOR | 5 new (R-111..R-115) + 1 closed (R-110) | 0 | +512 / −22, 8 files (excluding this benchmark entry) |
+| 20 | 2026-11-07 | US-085 | L | ~295k (A 144k, last of 72k→91k→144k · T 33k · I 47k · Q 70k) | 99 | ~17.9 | 0 | 1 | 6 contract discrepancies (D-1..D-6) + 2 Gemini-verified contract fixes (G-1, G-2) + 2 QA MINOR | 4 new (R-116..R-119) | 0 | +312 / −22, 8 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -824,6 +825,40 @@ Second run in a row where a contract-mode false positive came from Gemini readin
 
 ### What to measure in run 20
 - Whether US-085 (aging chips, frontend) keeps QA's headless-Edge T-M1 complete, as in runs 18-19.
+
+## Run 20 — US-085 (aging filter chips with amounts on the Customers tab, level L)
+
+Already registered in SPRINT-19. Same session from contract to merge; metrics from `changes/US-085/progress.md`. The analyst was resumed with `SendMessage` twice (GATE 1 decisions, close) although `ListAgents` no longer listed it.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract; GATE 1 decisions; close) | 144.4k (71.8k → 91.1k → 144.4k) | 49 | ~9.1 min |
+| test-author | 1 | 33.3k | 5 | ~0.9 min |
+| implementer | 1 | 47.4k | 10 | ~2.1 min |
+| qa | 1 round | 69.6k | 35 | ~5.7 min |
+
+**What it found.** The analyst checked by running that `GET /customers` has no pagination (chip totals over the loaded list are complete) and that `total_portfolio` ignores the search, and timed `daysOverdue` at the boundaries. Main discrepancy: a same-day *fiado* is 0 days old and would fall in no `1–14 días` chip (D-1); the PO renamed the first chip `Hasta 14 días` (0–14). Others: stale `file:line` refs in the sprint and the spec, a wrong R-05 premise (elapsed 24-hour periods, no time-zone shift, D-3), row color bands (7/14) that do not match the chip buckets (D-4), and a hard-coded amber the spec described as `var(--warning)` (D-5). GATE 1: Q-1..Q-6 as recommended plus G-1..G-3. The implementer shared one `now` per fetch between chips and row badge so they never disagree; QA accepted it as a MINOR (R-118). QA round 1: OK, 0 BLOCKER, 2 MINOR; T-M1 complete in headless Edge over CDP, including a real *abono* through the modal and 320 px emulation.
+
+**Unplanned stops:** 0. Internal re-dispatches: 0. QA rounds: 1. Violations: 0. The test-author fixed six helper-API details the contract left open (return shape of `bucketTotals`, bucket keys, generic input type, label arguments); the orchestrator passed them to the implementer as binding instead of stopping, since they do not change behavior.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~3 min | 13 (3 RULE_CONFLICT, 6 MISSING_CASE, 3 AMBIGUOUS, 1 UNTESTABLE) | 3 (G-1 an active chip emptied by an *abono* could not be deselected; G-2 empty-range text with search + chip; G-3 labels left on open questions) | 10 (half-open rule applied to day buckets; spec at close ×2; negative age and `null` date already covered; roles — `GET /customers` is open to all, `handler.go:279`; search/refetch race pre-existing; 3 duplicates of G-3) | n/a |
+| diff, round 1 | OK | ~3 min | 0 (`CLEAN`) | 0 | 0 | no; QA's 2 MINOR were the per-fetch `now` trade-off and a missing group label |
+
+G-1 was a real AC conflict (AC-7 vs AC-8) that neither the analyst nor the orchestrator caught; the best contract-mode yield so far for a UI US.
+
+**Operational friction.**
+- New worktree needed `pnpm install` before the test-author could run vitest (known).
+- The QA smoke opened the binary's default-browser tab on the PO's desktop (`localhost:8091`).
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12..16, run-18 proposal 2 and run-19 proposal 2 still pending.
+2. contract template: §5 should state the helper signatures and return shapes when the tests target new pure helpers, so the test-author does not have to choose them (six choices this run).
+
+### What to measure in run 21
+- US-081 (LAN multi-register concurrency) is backend and concurrency-heavy: whether the test-author's tests are deterministic (no flaky goroutine timing) and whether QA can reproduce the race in the binary.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

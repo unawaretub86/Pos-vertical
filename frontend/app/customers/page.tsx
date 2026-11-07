@@ -15,6 +15,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import EmptyState from '@/components/EmptyState';
 import AbonoModal from '@/components/AbonoModal';
 import { customerBalanceLabel } from '@/lib/abono';
+import { daysOverdue, bucketTotals, filterByBucket, toggleBucket, bucketLabel, AGING_BUCKETS, type AgingBucket } from '@/lib/aging';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,11 +40,6 @@ interface CustomersResponse {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function daysOverdue(iso: string | null): number {
-  if (!iso) return 0;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-}
 
 function agingColor(days: number): string {
   if (days > 14) return 'var(--danger)';
@@ -303,6 +299,9 @@ export default function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<CustomerWithBalance | null>(null);
   const [abonoTarget, setAbonoTarget] = useState<CustomerWithBalance | null>(null);
+  const [activeBucket, setActiveBucket] = useState<AgingBucket | null>(null);
+  // Clock used for debt age (chips and row badge), taken at each fetch so both agree.
+  const [now, setNow] = useState(() => Date.now());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetches the list without touching `loading`, so a refresh after an abono
@@ -310,6 +309,7 @@ export default function CustomersPage() {
   const fetchCustomers = useCallback(async (q: string) => {
     try {
       const res = await api.get<CustomersResponse>(`/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+      setNow(Date.now());
       setCustomers(res.customers ?? []);
       setTotalPortfolio(res.total_portfolio ?? 0);
     } catch (err: unknown) {
@@ -345,7 +345,8 @@ export default function CustomersPage() {
     }
   }
 
-  const sorted = [...customers].sort((a, b) => {
+  const totals = bucketTotals(customers, now);
+  const sorted = [...filterByBucket(customers, activeBucket, now)].sort((a, b) => {
     let cmp = 0;
     if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
     else if (sortKey === 'balance') cmp = a.balance - b.balance;
@@ -423,10 +424,51 @@ export default function CustomersPage() {
             </button>
           </div>
 
+          {/* Aging chips (US-085) */}
+          {!loading && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: '8px',
+              padding: isMobile ? '10px 12px 0' : '12px 24px 0',
+            }}>
+              {AGING_BUCKETS.map(b => {
+                const active = activeBucket === b;
+                const selectable = active || totals[b].count > 0;
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    aria-pressed={active}
+                    disabled={!selectable}
+                    onClick={() => setActiveBucket(cur => toggleBucket(cur, b, totals[b].count))}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '16px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums',
+                      cursor: selectable ? 'pointer' : 'default',
+                      opacity: selectable ? 1 : 0.5,
+                      border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                      background: active ? 'var(--accent-dim)' : 'var(--surface-2)',
+                      color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {bucketLabel(b, totals[b].total, totals[b].count)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Table */}
           <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '0 8px 16px' : '0 24px 24px' }}>
             {loading ? (
               <LoadingSpinner message="Cargando clientes..." />
+            ) : sorted.length === 0 && activeBucket !== null ? (
+              <EmptyState
+                icon={<IconUsers />}
+                title="Ningún cliente con deuda en este rango"
+              />
             ) : sorted.length === 0 ? (
               <>
                 <EmptyState
@@ -483,6 +525,7 @@ export default function CustomersPage() {
                         key={c.id}
                         customer={c}
                         maxBalance={maxBalance}
+                        now={now}
                         isMobile={isMobile}
                         onEdit={() => { setEditing(c); setShowModal(true); }}
                         onDelete={() => handleDelete(c)}
@@ -534,6 +577,7 @@ export default function CustomersPage() {
 interface CustomerRowProps {
   customer: CustomerWithBalance;
   maxBalance: number;
+  now: number;
   isMobile: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -542,7 +586,7 @@ interface CustomerRowProps {
 }
 
 // Rendered inside AppLayout (via CustomersPage), so useBusinessConfig sees the provider.
-function CustomerRow({ customer: c, maxBalance, isMobile, onEdit, onDelete, onOpen, onAbonar }: CustomerRowProps) {
+function CustomerRow({ customer: c, maxBalance, now, isMobile, onEdit, onDelete, onOpen, onAbonar }: CustomerRowProps) {
   const { config: bizConfig } = useBusinessConfig();
   const hasDebt = c.balance > 0;
   const debtPct = hasDebt ? Math.min((c.balance / maxBalance) * 100, 100) : 0;
@@ -586,7 +630,7 @@ function CustomerRow({ customer: c, maxBalance, isMobile, onEdit, onDelete, onOp
       {!isMobile && (
         <td style={{ verticalAlign: 'top', paddingTop: '12px' }}>
           {hasDebt ? (() => {
-            const days = daysOverdue(c.oldest_debt_at);
+            const days = daysOverdue(c.oldest_debt_at, now);
             return (
               <span style={{
                 display: 'inline-block',
