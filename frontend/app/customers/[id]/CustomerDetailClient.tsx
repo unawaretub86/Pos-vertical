@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
@@ -9,7 +9,8 @@ import { useToast } from '@/components/Toast';
 import { formatCOP } from '@/lib/format';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { buildCollectionWhatsAppUrl } from '@/lib/whatsapp';
-import { ABONO_METHOD_OPTIONS, DEFAULT_ABONO_METHOD, showsNoRegisterNotice, type AbonoMethod } from '@/lib/abono';
+import { customerBalanceLabel, type AbonoMethod } from '@/lib/abono';
+import AbonoModal from '@/components/AbonoModal';
 import { resolveRouteParam, parseCustomerId } from '@/lib/routeParam';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -76,11 +77,6 @@ const IconCreditCard = () => (
     <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
   </svg>
 );
-const IconX = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-);
 const IconReceipt = () => (
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -101,190 +97,6 @@ const IconWhatsApp = () => (
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
   </svg>
 );
-
-// ─── Payment Modal ────────────────────────────────────────────────────────────
-
-interface PaymentModalProps {
-  customerName: string;
-  balance: number;
-  onClose: () => void;
-  onSaved: () => void;
-  customerId: number;
-}
-
-function PaymentModal({ customerName, balance, onClose, onSaved, customerId }: PaymentModalProps) {
-  const { toast } = useToast();
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const [method, setMethod] = useState<AbonoMethod>(DEFAULT_ABONO_METHOD);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const parsedAmount = parseFloat(amount.replace(/\./g, '').replace(',', '.')) || 0;
-  const isValid = parsedAmount > 0 && parsedAmount <= balance;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-    if (!isValid) {
-      setError(parsedAmount <= 0 ? 'Ingresa un monto válido' : `El monto no puede superar ${formatCOP(balance)}`);
-      return;
-    }
-    setLoading(true);
-    try {
-      const saved = await api.post<CustomerPayment>(`/customers/${customerId}/payments`, { amount: parsedAmount, method, note });
-      toast('Abono registrado exitosamente', 'success');
-      if (showsNoRegisterNotice(saved.method, saved.register_id)) {
-        toast('Este abono no quedará en ningún cierre de caja', 'info');
-      }
-      onSaved();
-      onClose();
-    } catch (err: unknown) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleAmountChange(val: string) {
-    // Only allow digits
-    const digits = val.replace(/[^0-9]/g, '');
-    const num = parseInt(digits || '0', 10);
-    if (num === 0) { setAmount(''); return; }
-    setAmount(num.toLocaleString('es-CO'));
-    setError('');
-  }
-
-  const overlayStyle: React.CSSProperties = {
-    position: 'fixed', inset: 0,
-    background: 'rgba(0,0,0,0.6)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    zIndex: 50,
-  };
-  const modalStyle: React.CSSProperties = {
-    background: 'var(--surface-1)',
-    border: '1px solid var(--border-emphasis)',
-    borderRadius: '12px',
-    padding: '24px',
-    width: '420px',
-    maxWidth: '90vw',
-  };
-
-  return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={modalStyle} onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-          <div>
-            <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>
-              Registrar abono
-            </h2>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-              {customerName}
-            </p>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
-            <IconX />
-          </button>
-        </div>
-
-        {/* Balance info */}
-        <div style={{
-          background: 'var(--danger-dim)',
-          border: '1px solid var(--danger)',
-          borderRadius: '8px',
-          padding: '12px 14px',
-          marginBottom: '20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Saldo pendiente</span>
-          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--danger)', fontVariantNumeric: 'tabular-nums' }}>
-            {formatCOP(balance)}
-          </span>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px' }}>
-              Monto del abono *
-            </label>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>$</span>
-              <input
-                ref={inputRef}
-                value={amount}
-                onChange={e => handleAmountChange(e.target.value)}
-                placeholder="0"
-                style={{ paddingLeft: '26px', width: '100%', boxSizing: 'border-box', fontSize: '16px', fontWeight: 600 }}
-              />
-            </div>
-            {parsedAmount > 0 && parsedAmount <= balance && (
-              <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '4px' }}>
-                Saldo restante: {formatCOP(balance - parsedAmount)}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="abono-method" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px' }}>
-              Método de pago
-            </label>
-            <select
-              id="abono-method"
-              className="input"
-              value={method}
-              onChange={e => setMethod(e.target.value as AbonoMethod)}
-              style={{ width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}
-            >
-              {ABONO_METHOD_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px' }}>
-              Nota (opcional)
-            </label>
-            <input
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="Ej: referencia de la transferencia"
-              style={{ width: '100%', boxSizing: 'border-box' }}
-            />
-          </div>
-
-          {error && (
-            <div style={{ fontSize: '12px', color: 'var(--danger)', padding: '8px 12px', background: 'var(--danger-dim)', borderRadius: '6px' }}>
-              {error}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
-            <button type="button" onClick={onClose} className="btn btn-sm">
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !isValid}
-              className="btn btn-sm btn-accent"
-              style={{ opacity: !isValid ? 0.5 : 1 }}
-            >
-              {loading ? 'Guardando...' : `Registrar ${parsedAmount > 0 ? formatCOP(parsedAmount) : ''}`}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -354,6 +166,7 @@ function CustomerDetailContent() {
 
   const { customer, balance, payments, credit_sales } = detail;
   const salesList = credit_sales ?? [];
+  const balanceLabel = customerBalanceLabel(balance);
   const paymentsList = payments ?? [];
 
   return (
@@ -403,8 +216,8 @@ function CustomerDetailContent() {
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
                   Saldo pendiente
                 </div>
-                <div style={{ fontSize: '22px', fontWeight: 700, color: balance > 0 ? 'var(--danger)' : 'var(--success)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.5px' }}>
-                  {formatCOP(balance)}
+                <div style={{ fontSize: '22px', fontWeight: 700, color: balanceLabel.color, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.5px' }}>
+                  {balanceLabel.text}
                 </div>
               </div>
 
@@ -583,7 +396,7 @@ function CustomerDetailContent() {
       </div>
 
       {showPaymentModal && detail && (
-        <PaymentModal
+        <AbonoModal
           customerId={customer.id}
           customerName={customer.name}
           balance={balance}

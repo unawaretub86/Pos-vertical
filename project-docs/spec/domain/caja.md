@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-07 (known defect: a void inserts a `cash_out`, R-110) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -41,6 +41,7 @@ Source: `internal/service/register.go:116` (`Summary`) and `:149` (`Close`).
 - The register summary (`GET /registers/{id}`, `GET /registers/open`, `POST /registers/{id}/close`) returns `cash_abonos` (`internal/service/register.go:21-31`). The close modal, the close ticket and the close email always show the line `Abonos en efectivo`, also at `$0` (`frontend/app/register/page.tsx:366`, `frontend/components/CloseTicketPreview.tsx:135`, `internal/mailer/mailer.go:81`).
 - If summing cash *abonos* fails, `Close` returns an error and does not close the register (`internal/service/register.go:143-148`), and `Summary` returns an error (`:95-98`). `GET /registers/{id}` answers 404 only when the register does not exist and 500 for any other failure (`internal/handler/register.go:54-62`); `GET /registers/open` answers 500 on a summary failure (`:76-80`).
 - **Known inconsistency:** `Close` still ignores errors from `SumCashSales`, `SumCashIn` and `SumCashOut` (`internal/service/register.go:140-142`); only the *abono* sum is strict. Roadmap R-88.
+- **Known defect (found in US-084 QA, 2026-11-07):** voiding a sale that belongs to a register inserts a `cash_out` movement `Anulación venta #N` for the full sale total, whatever the payment method (`internal/repository/sale.go:342-347`). The voided sale already leaves `cash_sales` (it counts only `status = 'completed'`, `internal/repository/register.go:166-175`), so a cash sale is subtracted twice and a credit, transfer or card sale subtracts money that never entered the drawer. Run (2026-11-07): opening $100.000 + cash sale $50.000 → expected $150.000; void it → $50.000 (should be $100.000); void a $50.000 credit sale in the same register → $0. Roadmap R-110.
 
 > **Historical note:** `archive/2026-05-plan-mvp.md:1135` (formerly `PLAN.md`) reports that `cash_in` was missing from this formula. **It is already included** (`internal/service/register.go:116`). It is an example of why that document is not a source of truth about current state.
 

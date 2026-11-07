@@ -26,7 +26,7 @@
 | US-086 | Dynamic pages read their id from the URL in the compiled binary (R-92) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-087 | Business config read inside its provider in `/pos`, table checkout and `/barra` (R-93) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-07 |
-| US-084 | Quick *abono* modal from the Customers list | ⬜ Pending | |
+| US-084 | Quick *abono* modal from the Customers list | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-07 |
 | US-085 | Aging filter chips with amounts on the Customers tab | ⬜ Pending | |
 
 **Total estimated effort: ~5 days**
@@ -359,14 +359,44 @@ Frontend tests are in `frontend/lib/creditCheck.test.ts` (T-1..T-8) and `fronten
 - A customer with a negative balance (overpaid) shows `Saldo a favor: $X` in the success color instead of a debt.
 
 **Acceptance Criteria:**
-- [ ] Balance $450,000: `Mitad` fills $225,000; typing $50,000 shows `Nuevo saldo: $400.000`.
-- [ ] Balance $30,000: the `$50.000` button is not shown; `Total` fills $30,000.
-- [ ] An amount above the balance cannot be confirmed (button disabled, message shown).
-- [ ] Works at 320 px.
+- [x] Balance $450,000: `Mitad` fills $225,000; typing $50,000 shows `Nuevo saldo: $400.000`.
+- [x] Balance $30,000: the `$50.000` button is not shown; `Total` fills $30,000.
+- [x] An amount above the balance cannot be confirmed (button disabled, message shown).
+- [x] Works at 320 px.
 
 **DoD:**
 - Vitest tests for the quick-amount and new-balance helpers.
 - Uses `formatCOP`, `api`, CSS variables only.
+
+**Verified criteria (closed 2026-11-07):**
+
+Contract discrepancies:
+- D-1: the sprint's `frontend/app/customers/page.tsx:485` was stale; `Abonar` and the whole row shared one handler that navigated. The row click now opens the detail and `Abonar` opens the modal.
+- D-2: the over-balance check is at `internal/service/customer.go:148-149`, not `:94-95`.
+- D-3: the old detail modal never showed its over-balance message (button disabled, message only set on submit). The shared modal shows it.
+- D-4: negative balances are reachable (run: $50.000 on credit, *abono* $50.000, void → −$50.000); they read `Al día` / `$-50.000` before. Now `Saldo a favor`.
+- D-5: balances can carry cents from IVA (run: $10.001 + 19% → $11.901,19, a $0,19 residue after paying $11.901). Root cause is R-106.
+- D-6: the dashboard modal sent no method, so every *abono* there was stored as cash. Fixed here (PO Q-2).
+- D-7: the server's over-balance message is not in peso format (R-107).
+- D-8: the `Clientes` menu is admin-only while `GET /customers` returns `total_portfolio` to a cashier (R-108).
+
+GATE 1 (PO, 2026-11-07): Q-1..Q-8 accepted as recommended. One shared `AbonoModal` (`frontend/components/AbonoModal.tsx`) for the Customers list, the detail and the dashboard (whose title is now `Registrar abono`); `Saldo a favor` on the list and the detail card; `Total` sends the exact balance; `Mitad` = `floor(balance/2)`; the menu stays admin-only. Q-7 and Q-8 came from the Gemini contract review (11 raised, 2 verified, 9 discarded): `Total` shows below $1, and the digits-only field gets the amount rounded to whole pesos, at least 1, mapped back to the exact balance on send.
+
+QA round 1: OK, 0 BLOCKER, 3 MINOR. M-1: the modal can be closed while the request is in flight (R-109). M-2, M-3: a sub-$1 residue reads `$0` / `Registrar $0` in the modal and `$0` in red with `Abonar` in the list (folded into R-106). Out-of-scope observation, pre-existing and verified by running: voiding a sale inserts a `cash_out` for its full total, so the register's expected cash comes out too low (R-110, high priority). RED `c53c566`, implementation `9a28d52`. QA ran `go build ./...`, `go test ./...` green, `pnpm build`, `pnpm test` 170 passed, `pnpm lint` exit 0, and T-M1 in headless Edge over the compiled binary (all steps passed). Gemini diff round 1: clean. Spec: `spec/domain/fiado.md` → "Rule: customer balance" (display, cents), "Rule: payments (*abonos*)" (*abono* modal); `spec/domain/glosario.md` (`Saldo a favor`); `spec/domain/caja.md` (known defect R-110).
+
+Unit tests are in `frontend/lib/abono.test.ts` (T-1..T-8, T-10; the US-082 tests, T-9, are unchanged). T-M1 was run by QA; the real-device part is `gaps.md` US-084 M-1.
+- AC-1, AC-2, AC-3: WHEN `Abonar` is pressed on a row with balance `> 0`, the system SHALL open the modal over the list with no navigation (`Registrar abono`, name, `Saldo pendiente`); a click on the row itself SHALL still open `/customers/{id}`; `Cancelar`, `×`, overlay or `Escape` SHALL close it and send nothing. Test: T-M1 step (1) and the AC-3 close paths.
+- AC-4: The modal SHALL show `Total` (exact balance, whenever balance `> 0`), `Mitad` (`floor(balance/2)`), `$50.000`, `$20.000`, the last three only when `1 ≤ amount ≤ balance`. Tests: `T-1`..`T-4` (450,000 → four buttons, `Mitad` 225,000; 30,000 → no `$50.000`; 15,000; 50,000; 45,001 → `Mitad` 22,500; 11,901.19 → `Total` 11901.19, `Mitad` 5,950; 1 → `Total`; 0.19 → `[{Total,0.19}]`; 0 and −50,000 → none).
+- AC-5, AC-6: A quick amount SHALL fill the digits-only field with `abonoFieldValue` (whole pesos, at least 1) and SHALL NOT submit; typing SHALL keep digits only. Tests: `T-10` (225,000; 11,901.19 → 11,901; 11,901.6 → 11,902; 0.19 → 1; 0.5 → 1; 0 → 0); T-M1 step (2) (`Mitad` → `225.000`, `12a3` → `123`).
+- AC-7, AC-9: WHILE `0 < amount ≤ balance`, the system SHALL show `Saldo anterior: $450.000 → Nuevo saldo: $400.000`; IF the amount is above the balance, THEN confirm SHALL be disabled with `El monto no puede superar $30.000`; empty → disabled, no message. Tests: `T-5`, `T-6`.
+- AC-8: WHEN the field equals the balance's field value, the system SHALL send the exact balance (11,901.19 / 11,901.6 / 0.19), so the balance reaches 0. Tests: `T-7`; T-M1 residue step (POST `0.19000000000050932`, row → `Al día`).
+- AC-10, AC-11, AC-12: The modal SHALL send `{amount, method, note}` through `api` with `Efectivo` / `Transferencia` / `Tarjeta` (default `Efectivo`); while in flight confirm SHALL read `Guardando...` and a second press SHALL send nothing; on 201 the success toast and, for cash with `register_id: null`, `Este abono no quedará en ningún cierre de caja`. Tests: `T-9` (existing helpers); T-M1 steps (3), (6) and the AC-12 notice.
+- AC-13: WHEN a 201 arrives on the list, the system SHALL re-read `GET /customers` without the loading spinner and update the row and subtitle (Dora $450.000 → `$400.000`, `$480.000 por cobrar en total`). Test: T-M1 step (3) (MutationObserver: rows never removed).
+- AC-14: IF the server rejects, THEN the modal SHALL stay open with the server message and the list SHALL not change. Test: T-M1 step (5) (cashier, no open register → 403 message).
+- AC-15, AC-18: WHEN balance `< 0`, the list row and the detail card SHALL show `Saldo a favor: $50.000` in `var(--success)`; `0` → `Al día`. Tests: `T-8`; T-M1 steps (4) and (8).
+- AC-16, AC-17: The detail and the dashboard SHALL open the same modal; the dashboard sends `method`. Test: T-M1 step (8) (dashboard `Transferencia` → stored `method: "transfer"`).
+- AC-19: The modal SHALL fit 320 px with no horizontal scroll, CSS variables only, `formatCOP`, `pnpm lint` at 0. Test: T-M1 step (7) (`scrollWidth` 320, quick buttons wrap); QA diff scan (no new hex or `rgba`); `pnpm lint` exit 0. Real-device check: `gaps.md` US-084 M-1.
+- AC-20: No file under `internal/` SHALL change. Test: T-R1 (`git diff dev...HEAD --stat -- internal/` empty).
 
 ---
 

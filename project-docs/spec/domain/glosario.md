@@ -1,7 +1,7 @@
 # Glossary
 
 > **Type:** spec · **Current:** yes · **Rules over:** domain vocabulary
-> **Updated:** 2026-11-05 (US-080: Tirilla, ESC/POS, Impresión directa)
+> **Updated:** 2026-11-07 (US-084: Saldo a favor) · 2026-11-05 (US-080: Tirilla, ESC/POS, Impresión directa)
 
 Colombian shop terms and their equivalent in the code. It exists so that a US and a table speak the same language, and for the local assistant's phrase bank. The Spanish term is the canonical name; docs in English use it with this gloss.
 
@@ -10,6 +10,7 @@ Colombian shop terms and their equivalent in the code. It exists so that a US an
 | **Fiar / fiado** | Selling on credit, the customer pays later | `sale_payments.method = 'credit'` |
 | **Cartera** | The total owed to the business (receivables) | Sum of balances with `balance > 0` |
 | **Abono** | Partial payment against the debt, not against an invoice | `customer_payments` |
+| **Saldo a favor** | Credit in the customer's favor: a balance below zero (overpaid). Not part of the cartera | Balance `< 0`; UI `Saldo a favor: $X` |
 | **Cuadrar / cuadre** | Counting the cash at close and comparing it to what is expected | `registers.expected_close` vs `actual_close` |
 | **Arqueo** | Same as the cuadre, more formal term | Register close |
 | **Base** | The cash the shift starts with (opening float) | `registers.opening_amount` |

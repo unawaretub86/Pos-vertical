@@ -13,6 +13,8 @@ import { buildCollectionWhatsAppUrl } from '@/lib/whatsapp';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import EmptyState from '@/components/EmptyState';
+import AbonoModal from '@/components/AbonoModal';
+import { customerBalanceLabel } from '@/lib/abono';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -300,20 +302,29 @@ export default function CustomersPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<CustomerWithBalance | null>(null);
+  const [abonoTarget, setAbonoTarget] = useState<CustomerWithBalance | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async (q: string) => {
-    setLoading(true);
+  // Fetches the list without touching `loading`, so a refresh after an abono
+  // updates rows in place instead of replacing the table by the spinner (US-084).
+  const fetchCustomers = useCallback(async (q: string) => {
     try {
       const res = await api.get<CustomersResponse>(`/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`);
       setCustomers(res.customers ?? []);
       setTotalPortfolio(res.total_portfolio ?? 0);
     } catch (err: unknown) {
       toast((err as Error).message, 'error');
+    }
+  }, [toast]);
+
+  const load = useCallback(async (q: string) => {
+    setLoading(true);
+    try {
+      await fetchCustomers(q);
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [fetchCustomers]);
 
   useEffect(() => {
     queueMicrotask(() => load(''));
@@ -475,7 +486,8 @@ export default function CustomersPage() {
                         isMobile={isMobile}
                         onEdit={() => { setEditing(c); setShowModal(true); }}
                         onDelete={() => handleDelete(c)}
-                        onAbonar={() => router.push(`/customers/${c.id}`)}
+                        onOpen={() => router.push(`/customers/${c.id}`)}
+                        onAbonar={() => setAbonoTarget(c)}
                       />
                     ))}
                   </tbody>
@@ -491,6 +503,16 @@ export default function CustomersPage() {
           initial={editing}
           onClose={() => setShowModal(false)}
           onSaved={() => load(search)}
+        />
+      )}
+
+      {abonoTarget && (
+        <AbonoModal
+          customerId={abonoTarget.id}
+          customerName={abonoTarget.name}
+          balance={abonoTarget.balance}
+          onClose={() => setAbonoTarget(null)}
+          onSaved={() => fetchCustomers(search)}
         />
       )}
 
@@ -515,17 +537,19 @@ interface CustomerRowProps {
   isMobile: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onOpen: () => void;
   onAbonar: () => void;
 }
 
 // Rendered inside AppLayout (via CustomersPage), so useBusinessConfig sees the provider.
-function CustomerRow({ customer: c, maxBalance, isMobile, onEdit, onDelete, onAbonar }: CustomerRowProps) {
+function CustomerRow({ customer: c, maxBalance, isMobile, onEdit, onDelete, onOpen, onAbonar }: CustomerRowProps) {
   const { config: bizConfig } = useBusinessConfig();
   const hasDebt = c.balance > 0;
   const debtPct = hasDebt ? Math.min((c.balance / maxBalance) * 100, 100) : 0;
+  const balanceLabel = customerBalanceLabel(c.balance);
 
   return (
-    <tr className="customer-row" style={{ cursor: 'pointer' }} onClick={onAbonar}>
+    <tr className="customer-row" style={{ cursor: 'pointer' }} onClick={onOpen}>
       <td style={{ verticalAlign: 'top', paddingTop: '12px', paddingBottom: '12px' }}>
         <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px', marginBottom: '2px' }}>
           {c.name}
@@ -585,15 +609,15 @@ function CustomerRow({ customer: c, maxBalance, isMobile, onEdit, onDelete, onAb
             className="danger-amount"
             style={{
               fontWeight: 600,
-              color: 'var(--danger)',
+              color: balanceLabel.color,
               fontVariantNumeric: 'tabular-nums',
               fontFeatureSettings: '"tnum"',
             }}
           >
-            {formatCOP(c.balance)}
+            {balanceLabel.text}
           </span>
         ) : (
-          <span style={{ color: 'var(--success)', fontSize: '12px', fontWeight: 500 }}>Al día</span>
+          <span style={{ color: balanceLabel.color, fontSize: '12px', fontWeight: 500 }}>{balanceLabel.text}</span>
         )}
       </td>
       <td style={{ textAlign: 'right', verticalAlign: 'top', paddingTop: '10px' }}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AppLayout from '@/components/AppLayout';
@@ -9,6 +9,7 @@ import { api, getSetupStatus } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { formatCOP } from '@/lib/format';
+import AbonoModal from '@/components/AbonoModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -215,119 +216,6 @@ function CuadernoTile({
       <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
       <div style={{ fontSize: '20px', fontWeight: 700, color, lineHeight: 1.2 }}>{value}</div>
       {sub && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sub}</div>}
-    </div>
-  );
-}
-
-// ─── Payment Modal ─────────────────────────────────────────────────────────────
-
-interface PaymentModalProps {
-  customer: AgingReceivable;
-  onClose: () => void;
-  onSuccess: (customerId: number, paidAmount: number) => void;
-}
-
-function PaymentModal({ customer, onClose, onSuccess }: PaymentModalProps) {
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
-  async function handleConfirm() {
-    const parsed = parseFloat(amount.replace(/\./g, '').replace(',', '.'));
-    if (!parsed || parsed <= 0) {
-      setError('Ingresa un monto válido');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      await api.post(`/customers/${customer.customer_id}/payments`, { amount: parsed, note });
-      onSuccess(customer.customer_id, parsed);
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e.message ?? 'Error al registrar el pago');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '16px',
-      }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          background: 'var(--surface-1)', borderRadius: '12px',
-          padding: '24px', width: '100%', maxWidth: '360px',
-          display: 'flex', flexDirection: 'column', gap: '16px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.24)',
-        }}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div>
-          <div style={{ fontSize: '15px', fontWeight: 600 }}>Registrar pago</div>
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            {customer.name} — deuda {formatCOP(customer.balance)}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Monto *</label>
-          <input
-            ref={inputRef}
-            type="number"
-            className="input"
-            placeholder="0"
-            value={amount}
-            onChange={e => { setAmount(e.target.value); setError(''); }}
-            onKeyDown={e => { if (e.key === 'Enter') handleConfirm(); }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Nota (opcional)</label>
-          <input
-            type="text"
-            className="input"
-            placeholder="Ej: pagó en efectivo"
-            value={note}
-            onChange={e => setNote(e.target.value)}
-          />
-        </div>
-
-        {error && (
-          <div style={{ fontSize: '12px', color: 'var(--danger)', padding: '8px', background: 'var(--danger-dim)', borderRadius: '6px' }}>
-            {error}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>
-            Cancelar
-          </button>
-          <button className="btn btn-accent" onClick={handleConfirm} disabled={saving}>
-            {saving ? 'Guardando...' : 'Confirmar'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -772,10 +660,12 @@ export default function DashboardPage() {
 
       {/* ── Payment Modal ──────────────────────────────────────────────── */}
       {payTarget && (
-        <PaymentModal
-          customer={payTarget}
+        <AbonoModal
+          customerId={payTarget.customer_id}
+          customerName={payTarget.name}
+          balance={payTarget.balance}
           onClose={() => setPayTarget(null)}
-          onSuccess={handlePaymentSuccess}
+          onSaved={payment => handlePaymentSuccess(payTarget.customer_id, payment.amount)}
         />
       )}
     </AppLayout>

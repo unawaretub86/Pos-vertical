@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 17 (US-043, customer debt and history in the POS at checkout with credit-limit confirmation, level L). Before: 16 (US-087), 15 (US-086), 14 (US-083). No `us/*` worktree is open. `dev` is at the US-087 merge (verify with `git log`).
+**Last run:** 18 (US-084, quick *abono* modal from the Customers list, level L). Before: 17 (US-043), 16 (US-087), 15 (US-086). No `us/*` worktree is open. `dev` is at the US-084 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**SPRINT-19 (Fiado collection):** US-082, US-083, US-086, US-087 and US-043 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1 and US-043 M-1 in `gaps.md`).
+**SPRINT-19 (Fiado collection):** US-082, US-083, US-086, US-087, US-043 and US-084 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1 and US-084 M-1 in `gaps.md`).
 
-**Next US:** US-084, then US-085, then US-081 (PO order, 2026-11-06). Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** R-110 (void double-subtracts from the register close; PO put it ahead of US-085 on 2026-11-07, the analyst registers it as a US), then US-085, then US-081. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -28,7 +28,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-084` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us R-110` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -63,6 +63,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 15 | 2026-11-06 | US-086 | L | ~336k (A 158k, last of 110k→112k→117k→158k · T 32k · I 46k · Q 100k) | 144 | ~28.6 | 1 (AC-7 premise false, PO rewording after QA) | 1 | 4 contract discrepancies (D-1..D-4) + 3 Gemini-verified contract additions + 5 QA MINOR | 4 new (R-95..R-98) + 1 closed (R-92) | 0 | +256 / −27, 13 files (excluding this benchmark entry) |
 | 16 | 2026-11-06/07 | US-087 | L | ~397k (A 179k, last of 121k→128k→130k→179k · T 46k · I 42k · Q 130k) | 215 | ~35.8 | 1 (vacuous T-4 CustomersPage case, PO dropped it before RED) | 1 | 4 contract discrepancies (D-1..D-4, incl. a third broken page `/barra`) + 4 Gemini-verified contract fixes + 1 vacuous test + 0 QA MINOR (3 INFO) | 3 new (R-99..R-101) + 1 closed (R-93) | 0 | +247 / −22, 11 files (excluding this benchmark entry) |
 | 17 | 2026-11-07 | US-043 | L | ≥238k recorded (A 111k contract-resume + 111k close · T not recovered · I 54k resume, first run cut off · Q 73k) | ≥99 | ≥12.9 (session 2 only) | 1 (API rate limit killed the implementer; next session restarted cold) | 1 | 8 contract discrepancies (D-1..D-8) + 4 QA MINOR | 4 new (R-102..R-105) | 0 | +465 / −44, 12 files excluding tests (+985 / −44, 16 files total, excluding this benchmark entry) |
+| 18 | 2026-11-07 | US-084 | L | ~416k (A 193k, last of 132k→144k→193k · T 42k · I 75k · Q 107k) | 144 | ~26.1 | 0 | 1 | 8 contract discrepancies (D-1..D-8) + 2 Gemini-verified contract additions (Q-7, Q-8) + 3 QA MINOR + 1 pre-existing money bug (R-110) | 5 new (R-106..R-110) | 0 | +626 / −335, 13 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -756,6 +757,39 @@ Split across two sessions. Session 1 (2026-11-07, early morning) ran the contrac
 
 ### What to measure in run 18
 - Whether QA can run any of T-M1 itself (headless Edge, as in run 7 and run 16) instead of parking it for the PO.
+
+## Run 18 — US-084 (quick *abono* modal from the Customers list, level L)
+
+First run with the progress log (`changes/<ID>/progress.md`, applied after run 17); every metric below comes from it. Same session as run 17. The analyst was resumed with `SendMessage` twice (GATE 1 fixes, close), so resume-instead-of-relaunch worked for the first time since run 16 even though `ListAgents` did not list the finished agent.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract; GATE 1 fixes; close) | 192.7k (132.2k → 143.7k → 192.7k) | 60 | ~11.6 min |
+| test-author | 1 | 41.6k | 8 | ~1.4 min |
+| implementer | 1 | 74.5k | 24 | ~3.9 min |
+| qa | 1 round | 107.2k | 52 | ~9.2 min |
+
+**What it found.** The analyst ran a throw-away Go probe through `h.Routes()` and found 8 discrepancies, three of them by running: D-4 a negative balance is reachable (credit, full *abono*, void), D-5 credit-sale balances carry IVA cents that the whole-peso field cannot settle, D-8 `GET /customers` answers a cashier with `total_portfolio`. D-6 (read, then confirmed by run) was a money hole left by US-082: the dashboard `Registrar pago` sent no method, so transfers counted as cash. GATE 1: Q-1..Q-8 accepted as recommended (shared `AbonoModal`, dashboard included). The implementer needed no re-dispatch. QA round 1: OK, 0 BLOCKER, 3 MINOR, and it ran all of T-M1 in headless Edge over the binary (first run where the manual browser plan was executed by QA end to end; only real-device input and the light-theme overlay look were left to the PO). QA also found a pre-existing money bug outside the story; the close analyst ran it and showed it is wider (cash voids too): R-110, every voided sale is subtracted twice from the expected register cash.
+
+**Unplanned stops:** 0. Internal re-dispatches: 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~3 min | 11 (2 RULE_CONFLICT, 2 AMBIGUOUS, 2 UNTESTABLE, 5 MISSING_CASE) | 2 (sub-$1 balance unpayable → Q-7; `Total` with cents vs digits-only field → Q-8) | 9 (spec at close: design; 4 pending-question items resolved by the gate; 2 from a truncated input — Q-6 and §6 looked missing; concurrency already out of scope; detail button already hidden at balance ≤ 0, `CustomerDetailClient.tsx:370`, `:545`) | n/a |
+| diff, round 1 | OK | ~6 min | 0 (`CLEAN`) | 0 | 0 | no; QA found 3 MINOR and R-110 |
+
+Two of the nine contract false positives came from Gemini reading a truncated contract: the input builder cuts long contracts. Worth checking the size limit in `scripts/gemini-review.sh`.
+
+**Operational friction.**
+- None blocking. The progress log made metrics and the gate record trivial to assemble.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12..16 proposals still pending.
+2. `scripts/gemini-review.sh contract`: check the truncation limit; a contract of this size (8 sections, 20 ACs) lost its tail and produced 2 false positives.
+
+### What to measure in run 19
+- Whether QA's headless-Edge T-M1 holds up for a backend-only fix (R-110), or the plan shrinks to Go tests plus a register-close smoke run.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 
