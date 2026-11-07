@@ -1,7 +1,7 @@
 # Domain — Fiado (credit to customers)
 
 > **Type:** spec · **Current:** yes · **Rules over:** customer balance, payments (*abonos*), receivables (*cartera*)
-> **Updated:** 2026-11-05 (US-082: *abono* method, register link, who may register; line refs re-verified) · Verified against the code on 2026-11-05 for *abonos* (US-082) and on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
+> **Updated:** 2026-11-06 (US-083: collection WhatsApp message with the business name) · 2026-11-05 (US-082: *abono* method, register link, who may register; line refs re-verified) · Verified against the code on 2026-11-06 for the collection message (US-083), on 2026-11-05 for *abonos* (US-082) and on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
 
 *Fiado* (selling on credit) is **the product's differentiator**. Competitors treat it as an accounting field; here it is a relationship with history. Any change to these rules changes the value proposition, not just the code.
 
@@ -72,7 +72,7 @@ Schema: migration 21 (`internal/database/migrate.go:588-595`, US-082). Every *ab
 - **Method.** `POST /customers/{id}/payments` takes `{amount, method, note}`. A missing or empty `method` is stored as `cash`; any value other than `cash`, `transfer`, `card` → 400 (`internal/service/customer.go:113-119`). The form offers `Efectivo` / `Transferencia` / `Tarjeta`, default `Efectivo`; the note stays optional (`frontend/lib/abono.ts`, `frontend/app/customers/[id]/CustomerDetailClient.tsx`).
 - **Register link.** The server links the *abono* to the open register, if any, whatever the method and the role (`internal/service/customer.go:121-133`). Only cash *abonos* linked to a register enter its expected cash (`caja.md`, "Rule: expected cash at close").
 - **Who may register one** (PO, 2026-11-05). Any authenticated role may call the endpoint; it is outside the admin group (`internal/handler/handler.go:285-287`) and the check lives in the service. While a register is open, a cashier or an admin may register an *abono*. With no open register, only an admin may; a cashier gets 403 `Debe haber una caja abierta para registrar un abono` (`internal/service/customer.go:126-130`, `:35`).
-- **Unattributed *abonos*.** An admin's *abono* with no open register is stored with `register_id NULL` and appears in no register close. When it is cash, the UI shows the toast `Este abono no quedará en ningún cierre de caja` next to the save confirmation (`CustomerDetailClient.tsx:139-141`).
+- **Unattributed *abonos*.** An admin's *abono* with no open register is stored with `register_id NULL` and appears in no register close. When it is cash, the UI shows the toast `Este abono no quedará en ningún cierre de caja` next to the save confirmation (`CustomerDetailClient.tsx:140-142`).
 - An amount `≤ 0` or above the current balance is rejected (`internal/service/customer.go:110-111`, `:148-149`).
 - `GET /customers/{id}/payments`, `GET /customers/{id}/detail` (`payments`) and the 201 response carry `method` and `register_id`.
 - **HTTP codes of `POST /customers/{id}/payments`** (`internal/handler/customer.go:190-207`): validation errors → 400 (amount, method, amount above the balance, unknown customer); cashier with no open register → 403; internal failures (open-register lookup, a customer lookup failing for a reason other than "not found", the balance query) → 500 `error registrando abono`, and nothing is stored. An unknown customer answers 400 `cliente no encontrado`, not 404 (`internal/service/customer.go:136-139`); roadmap R-83.
@@ -87,6 +87,23 @@ Schema: migration 21 (`internal/database/migrate.go:588-595`, US-082). Every *ab
 - A credit sale (`fiado`, payment method `credit`) to an inactive or missing customer is rejected (400, `internal/repository/sale.go`, `ErrCustomerInactive`). A cash, card or transfer sale that merely names an inactive customer is accepted. A payment (`abono`) cannot target an inactive customer either: its balance is never above zero, and `CreatePayment` rejects an amount above the balance.
 
 Source: `internal/service/customer.go:83`, `internal/repository/customer.go:31,107`, `internal/handler/customer.go:110`.
+
+## Rule: collection WhatsApp message
+
+The customer detail `Cobrar` button and the WhatsApp link on each Customers list row open the user's own WhatsApp with a pre-filled reminder; nothing is sent automatically and no WhatsApp API is used (`product.md:34`). Both build the URL with the same helper, `buildCollectionWhatsAppUrl` (`frontend/lib/whatsapp.ts:22-27`), and read the business name from the business config (`GET /setup`, available to every role).
+
+```
+URL:            https://wa.me/<phone>?text=<URL-encoded message>
+<phone>:        the customer phone's digits, prefixed with 57 unless they already start with 57
+with a name:    Hola <cliente>, le escribimos de <negocio>. Le recordamos que tiene un saldo pendiente de <$saldo>. Gracias.
+without a name: Hola <cliente>, le recordamos que tiene un saldo pendiente de <$saldo>. Gracias.
+```
+
+Example: business `Tienda Don Carlos`, customer `Ana`, balance 45,000 → `Hola Ana, le escribimos de Tienda Don Carlos. Le recordamos que tiene un saldo pendiente de $45.000. Gracias.`
+
+- The business name is trimmed. An empty or whitespace-only name (not configured, config still loading, or `GET /setup` failed) uses the text without a name; the action stays available (`frontend/lib/whatsapp.ts:9-16`).
+- Visibility is unchanged: on the detail, `Cobrar` appears when the balance is `> 0` and is disabled without a phone; on the list, the link appears only with debt and a phone.
+- The business name must be read inside `AppLayout`, which mounts `BusinessConfigProvider`: `CustomerDetailContent` (`frontend/app/customers/[id]/CustomerDetailClient.tsx:295`) and `CustomerRow` (`frontend/app/customers/page.tsx:523`). A hook in a component that itself returns `<AppLayout>` gets the empty default (US-083, formerly R-61).
 
 ---
 

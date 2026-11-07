@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-05
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-06
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 13 (US-082, payment method on *abonos*, level L). Before: 12 (US-080), 11 (US-079), 10 (US-077). No `us/*` worktree is open. `dev` is at the US-082 merge (verify with `git log`).
+**Last run:** 14 (US-083, business name in the collection WhatsApp message, level L). Before: 13 (US-082), 12 (US-080), 11 (US-079). No `us/*` worktree is open. `dev` is at the US-083 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**SPRINT-19 (Fiado collection):** US-082 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3 in `gaps.md`).
+**SPRINT-19 (Fiado collection):** US-082 and US-083 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3 and US-083 M-1 in `gaps.md`).
 
-**Next US:** US-083, then US-043, US-084, US-085, then US-081. Run `/us US-083 [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-043, then US-084, US-085, then US-081. Pending PO decision: whether R-92 (customer detail broken in the static export) and R-93 (business config read outside its provider in `/pos` and table checkout; US-080 direct printing never fires) go first. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -28,7 +28,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-083` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us US-043` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -59,6 +59,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 11 | about 2026-10-28 (steps 1-5; GATE 2 re-verified 2026-11-04) | US-079 | L | not recorded (lost with the earlier session) | not recorded | not recorded | not recorded | 1 | not recorded | 2 new (R-74, R-75) + 1 closed (R-35) | not recorded | +200 / −145, 32 files |
 | 12 | 2026-11-05 | US-080 | L | ~535k (A 276k=76k+45k+73k+82k · T 84k · I 124k · Q 51k) | 167 | ~23.9 | 1 (two orchestrator sessions ran the close in parallel; PO closed one before merge) | 1 | 7 contract discrepancies (D-1..D-7) + 5 at close + 2 Gemini-verified MINOR | 7 new (R-76..R-82) | 1 (duplicate close by a parallel session) | +1,988 / −30, 32 files (excluding this benchmark entry) |
 | 13 | 2026-11-05 | US-082 | L | ~929k (A 409k=110k+127k+172k · T 243k=119k+124k · I 205k=95k+110k · Q 72k) | 232 | ~39.3 | 1 (analyst lost when the earlier session ended; resumed from transcript) | 1 | 6 contract discrepancies (D-1..D-6) + 5 Gemini-verified contract fixes + 1 red-test gap + 1 AC-7 miss + 6 QA MINOR | 7 new (R-83..R-89) | 0 | +1,146 / −93, 29 files (excluding this benchmark entry) |
+| 14 | 2026-11-06 | US-083 | L | ~372k (A 220k=56k+60k+105k · T 28k · I 40k · Q 85k) | 131 | ~21.8 | 0 | 1 | 4 contract discrepancies (D-1..D-4) + 1 Gemini-verified contract fix + 3 QA MINOR (pre-existing) | 5 new (R-90..R-94) | 0 | +160 / −35, 9 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -615,6 +616,40 @@ The diff answer was mostly the model's own reasoning text (~150 lines) instead o
 
 ### What to measure in run 14
 - Whether the filtered Gemini diff output stays within format and drops the "no spec update" false positive.
+
+## Run 14 — US-083 (business name in the collection WhatsApp message, R-61, level L)
+
+Step 0 checked `ListAgents` by hand (one idle peer session, no `us/US-083` branch), so no ownership question was needed. The step-1 analyst was resumed with `SendMessage` twice (contract update, close) even though finished subagents did not appear in `ListAgents`; the resume by agent id worked both times.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract; contract update after GATE 1; close) | 220k (55.6k + 59.5k + 105.0k) | 60 | ~7.4 min |
+| test-author | 1 | 27.5k | 5 | ~0.8 min |
+| implementer | 1 | 39.9k | 11 | ~1.9 min |
+| qa | 1 round | 84.7k | 55 | ~11.7 min |
+
+**What it found.** Contract: D-1 (stale line refs in the sprint and R-61), D-2 (two different current texts, neither with the business name, so "keep the current text" was undefined), D-3 (the analyst reproduced the defect with a copy of the component tree under `react-dom/server` instead of only reading), D-4 (empty business name is reachable: fresh DB, `/setup` loading or failed, whitespace-only name accepted by `PUT /setup`). The PO accepted Q-1..Q-4 as recommended plus one Gemini-verified addition (AC-8 browser step). Red tests and implementation needed no re-dispatch. QA round 1: OK, 0 BLOCKER, 3 MINOR, all pre-existing: the customer detail page in the static export reads `params.id = '_'` (`web/static.go:48-49` serves the placeholder) and requests `/api/customers/NaN/detail` → R-92; the same provider-outside-AppLayout defect in `/pos` and table checkout, so US-080 direct printing never fires → R-93; 320 px clipping → R-94. QA ran T-M1 in headless Edge with playwright-core against a binary on port 18083, including `GET /api/setup` aborted.
+
+**Unplanned stops:** 0. Internal re-dispatches: 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | not recorded | 5 (1 RULE_CONFLICT, 3 MISSING_CASE, 1 UNTESTABLE) | 1 (T-M1 had no step for AC-8) | 4 (spec at close: pipeline design; zero balance: callers guard at `CustomerDetailClient.tsx:364` / `page.tsx:606`; empty customer name: rejected at `internal/service/customer.go:56`; no-digit phone: pre-existing, unchanged) | n/a |
+| diff, round 1 | OK | not recorded (finished before QA) | 0 (`CLEAN`) | 0 | 0 | no (QA's 3 MINOR are pre-existing code outside the diff) |
+
+The filtered diff output stayed in format and did not repeat the "no spec update" false positive (run-13 measure: yes).
+
+**Operational friction.**
+- QA's most valuable finding (R-92) came from running the real binary, not from the diff: the defect is outside the changed lines and invisible to unit tests and to a diff-only reviewer.
+- QA took ~12 min, most of it building a scratch binary and driving the browser.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12/13 proposals 1–3 still pending (peer-session check in step 0, contract template not assigning the spec, test-stub grep).
+2. When a US touches a page, QA's smoke should open that page in the binary by direct URL (not only through in-app navigation), since dynamic routes behave differently in the static export.
+
+### What to measure in run 15
+- Whether a binary smoke by direct URL finds more pre-existing defects per run, and its time cost.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

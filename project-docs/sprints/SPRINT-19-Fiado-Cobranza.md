@@ -20,7 +20,7 @@
 | US | Name | Status | Date |
 |----|------|--------|------|
 | US-082 | Payment method on *abonos*; cash *abonos* count in the register close | [x] Complete in code (manual PO checks pending, see `gaps.md`) | 2026-11-05 |
-| US-083 | Business name in the collection WhatsApp message (R-61) | ⬜ Pending | |
+| US-083 | Business name in the collection WhatsApp message (R-61) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | ⬜ Pending | |
 | US-084 | Quick *abono* modal from the Customers list | ⬜ Pending | |
 | US-085 | Aging filter chips with amounts on the Customers tab | ⬜ Pending | |
@@ -113,12 +113,25 @@ Contract discrepancies: the over-balance check is at `internal/service/customer.
 - Both messages (detail and list) start with the business name when it is set; without a name, the current text is kept.
 
 **Acceptance Criteria:**
-- [ ] With business name `Tienda Don Carlos`, the WhatsApp link from the customer detail and from the list includes `Tienda Don Carlos`.
-- [ ] With an empty business name, the message is still valid and does not show an empty gap.
+- [x] With business name `Tienda Don Carlos`, the WhatsApp link from the customer detail and from the list includes `Tienda Don Carlos`.
+- [x] With an empty business name, the message is still valid and does not show an empty gap.
 
 **DoD:**
 - Vitest test for the message builder covering both cases.
 - R-61 closed in `roadmap.md`.
+
+**Verified criteria (closed 2026-11-06):**
+
+Contract discrepancies: line refs in this US and in R-61 were stale after US-082 (D-1); the two existing texts differed and the detail one ended with the filler `en el negocio` (D-2); the provider failure was confirmed by running a mirror of the component tree (D-3); an empty name happens on a fresh database, while `GET /setup` loads or fails, and with a whitespace-only name, which `PUT /setup` accepts (D-4, R-91). GATE 1 (PO, 2026-11-06): Q-1..Q-4 accepted as recommended. The name goes in the first sentence (`le escribimos de <negocio>`), both buttons share one builder and one text, the no-name text drops `en el negocio`, and the new `frontend/lib/whatsapp.ts` comes with no DOM test dependency. QA round 1: OK, 0 BLOCKER, 3 MINOR, all pre-existing (R-92, R-93, R-94). Gemini diff round 1: clean. Spec: `spec/domain/fiado.md` "Rule: collection WhatsApp message".
+
+- AC-1: WHEN the message is built with business `Tienda Don Carlos`, customer `Ana` and balance 45,000, the system SHALL produce `Hola Ana, le escribimos de Tienda Don Carlos. Le recordamos que tiene un saldo pendiente de $45.000. Gracias.` Test: `T-1 names the business after the greeting` (`frontend/lib/whatsapp.test.ts`).
+- AC-2: IF the business name is empty or whitespace-only, THEN the system SHALL produce `Hola Ana, le recordamos que tiene un saldo pendiente de $45.000. Gracias.`, with no `el negocio` and no double space. Tests: `T-2 empty or whitespace-only business name drops the business sentence`, `T-6 empty business name yields the no-name message in the URL`.
+- AC-3: WHEN the name has surrounding spaces, the system SHALL use it trimmed. Test: `T-3 trims leading and trailing spaces of the business name`.
+- AC-4: The URL SHALL be `https://wa.me/<57 + digits>?text=<encodeURIComponent(text)>` with no double `57`, and `&` in the name SHALL be encoded as `%26` (phone `300 123 4567`, balance 1,234,567 → `wa.me/573001234567`, text contains `$1.234.567`). Tests: `T-4 prefixes 57 to the phone digits and encodes the message with name and balance`, `T-5 does not double the 57 prefix and percent-encodes & in the business name`.
+- AC-5: The detail `Cobrar` button and the list link SHALL use the one shared builder `buildCollectionWhatsAppUrl` (`frontend/lib/whatsapp.ts`); the local builders are removed. Covered by QA grep review (T-7): no `wa.me`, `buildWhatsAppUrl` or `whatsappUrl` left in `frontend/app/customers/`.
+- AC-6, AC-7: The business name SHALL be read inside `<AppLayout>`, in `CustomerDetailContent` (`frontend/app/customers/[id]/CustomerDetailClient.tsx:295`) and `CustomerRow` (`frontend/app/customers/page.tsx:523`). QA ran this in a browser (T-M1: playwright-core + Edge over the compiled binary, admin and cashier, 1280 px and 320 px). The detail URL and the list `href` contain `Tienda Don Carlos`.
+- AC-8: WHILE `GET /setup` has not answered or has failed, the system SHALL use the no-name text and keep the action enabled. T-M1 with `/api/setup` aborted showed `Cobrar` enabled and the AC-2 text.
+- AC-9: The visibility rules SHALL stay unchanged (detail button disabled without a phone, list link only with debt and a phone), with lint at 0 and working at 320 px. Covered by review, `pnpm lint` (0 problems) and T-M1 at 320 px (`Cobrar` visible, no horizontal overflow). Not exercised: the disabled state without a phone, a manual PO check in `gaps.md`.
 
 ---
 

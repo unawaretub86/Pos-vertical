@@ -1,4 +1,4 @@
-> **Type:** current · **Rules over:** what is missing for production · **Updated:** 2026-11-05
+> **Type:** current · **Rules over:** what is missing for production · **Updated:** 2026-11-06
 
 This document lists **verified** limitations and debt of the current product; what will be built in the future lives in [roadmap.md](roadmap.md), which is a different thing.
 
@@ -20,6 +20,7 @@ Code and tests are done for these; only a human check on a real browser or devic
 
 | US | What to check | Where it is described |
 |---|---|---|
+| US-083 M-1 | AC-9, the part of T-M1 that QA did not exercise. Create a customer with no phone and give them debt (one fiado sale of $45.000). On that customer's detail, `Cobrar` is shown but disabled, at reduced opacity, with the tooltip `Agrega teléfono al cliente`. On the Customers list, that row has no WhatsApp icon, only `Abonar`. In the compiled binary the customer detail may not load at all (`Cliente no encontrado`, R-92); if so, record it under R-92 and do this check once R-92 is fixed. | `SPRINT-19-Fiado-Cobranza.md` (US-083) |
 | US-082 M-1 | AC-14, close modal and ticket. Open a register with $100.000, make a cash sale of $30.000, register a cash *abono* of $20.000 from a customer's detail, then `Cerrar Caja`: the modal shows `Abonos en efectivo` $20.000 and `Total esperado` $150.000; after closing, the printed close ticket shows the same line. Repeat with a register that has no *abonos*: the line is still there with `$0`. | `SPRINT-19-Fiado-Cobranza.md` (US-082) |
 | US-082 M-2 | AC-17. Log in as a cashier with no open register, open a customer with debt, `Registrar abono`, enter an amount and save: the modal stays open and shows `Debe haber una caja abierta para registrar un abono`. As admin with no open register, save a cash *abono*: the toast `Este abono no quedará en ningún cierre de caja` appears after `Abono registrado exitosamente`. | same |
 | US-082 M-3 | AC-18. At 320 px (DevTools device mode) the *abono* modal with the `Efectivo` / `Transferencia` / `Tarjeta` selector fits without horizontal scroll, in dark and light themes (colors follow the theme, nothing hard-coded). | same |

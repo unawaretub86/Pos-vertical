@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { formatCOP } from '@/lib/format';
 import { useBusinessConfig } from '@/lib/business-config-context';
+import { buildCollectionWhatsAppUrl } from '@/lib/whatsapp';
 import { ABONO_METHOD_OPTIONS, DEFAULT_ABONO_METHOD, showsNoRegisterNotice, type AbonoMethod } from '@/lib/abono';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -286,16 +287,8 @@ function PaymentModal({ customerName, balance, onClose, onSaved, customerId }: P
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-function buildWhatsAppUrl(phone: string, customerName: string, balance: number, businessName: string): string {
-  const digits = phone.replace(/\D/g, '');
-  const fullPhone = digits.startsWith('57') ? digits : `57${digits}`;
-  const amount = formatCOP(balance);
-  const biz = businessName || 'el negocio';
-  const text = `Hola ${customerName}, le recordamos que tiene un saldo pendiente de ${amount} en ${biz}. Gracias.`;
-  return `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`;
-}
-
-export default function CustomerDetailPage() {
+// Inner component: must render INSIDE AppLayout so useBusinessConfig sees the provider.
+function CustomerDetailContent() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
@@ -325,24 +318,24 @@ export default function CustomerDetailPage() {
 
   if (loading) {
     return (
-      <AppLayout>
+      <>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '13px' }}>
           Cargando...
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   if (!detail) {
     return (
-      <AppLayout>
+      <>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px' }}>
           <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Cliente no encontrado</div>
           <button className="btn btn-sm" onClick={() => router.push('/customers')}>
             Volver a clientes
           </button>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
@@ -351,7 +344,7 @@ export default function CustomerDetailPage() {
   const paymentsList = payments ?? [];
 
   return (
-    <AppLayout>
+    <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <Topbar
           title={customer.name}
@@ -368,7 +361,7 @@ export default function CustomerDetailPage() {
                     disabled={!customer.phone}
                     title={!customer.phone ? 'Agrega teléfono al cliente' : 'Cobrar por WhatsApp'}
                     onClick={() => {
-                      const url = buildWhatsAppUrl(customer.phone, customer.name, balance, bizConfig.name);
+                      const url = buildCollectionWhatsAppUrl(customer.phone, customer.name, balance, bizConfig.name);
                       window.open(url, '_blank');
                     }}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#25D366', opacity: !customer.phone ? 0.45 : 1 }}
@@ -585,6 +578,14 @@ export default function CustomerDetailPage() {
           onSaved={load}
         />
       )}
+    </>
+  );
+}
+
+export default function CustomerDetailPage() {
+  return (
+    <AppLayout>
+      <CustomerDetailContent />
     </AppLayout>
   );
 }

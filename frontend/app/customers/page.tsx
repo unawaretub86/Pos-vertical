@@ -8,6 +8,8 @@ import Topbar from '@/components/Topbar';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { formatCOP } from '@/lib/format';
+import { useBusinessConfig } from '@/lib/business-config-context';
+import { buildCollectionWhatsAppUrl } from '@/lib/whatsapp';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import EmptyState from '@/components/EmptyState';
@@ -51,15 +53,6 @@ function agingBg(days: number): string {
   if (days > 14) return 'rgba(239,68,68,0.1)';
   if (days >= 7) return 'rgba(202,138,4,0.1)';
   return 'var(--surface-3)';
-}
-
-function whatsappUrl(phone: string, name: string, balance: number): string {
-  const digits = phone.replace(/\D/g, '');
-  const intl = digits.startsWith('57') ? digits : `57${digits}`;
-  const msg = encodeURIComponent(
-    `Hola ${name}, le recuerdo que tiene una deuda de ${formatCOP(balance)} pendiente con nosotros. Por favor comuníquese con nosotros para ponerse al día.`
-  );
-  return `https://wa.me/${intl}?text=${msg}`;
 }
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -525,7 +518,9 @@ interface CustomerRowProps {
   onAbonar: () => void;
 }
 
+// Rendered inside AppLayout (via CustomersPage), so useBusinessConfig sees the provider.
 function CustomerRow({ customer: c, maxBalance, isMobile, onEdit, onDelete, onAbonar }: CustomerRowProps) {
+  const { config: bizConfig } = useBusinessConfig();
   const hasDebt = c.balance > 0;
   const debtPct = hasDebt ? Math.min((c.balance / maxBalance) * 100, 100) : 0;
 
@@ -605,7 +600,7 @@ function CustomerRow({ customer: c, maxBalance, isMobile, onEdit, onDelete, onAb
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
           {hasDebt && c.phone && (
             <a
-              href={whatsappUrl(c.phone, c.name, c.balance)}
+              href={buildCollectionWhatsAppUrl(c.phone, c.name, c.balance, bizConfig.name)}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-sm"
