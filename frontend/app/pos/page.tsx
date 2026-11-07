@@ -15,6 +15,7 @@ import { shouldAutoPrint, handleTicketPrint } from '@/lib/printFlow';
 import { calcSubtotal, calcTax, calcTotal } from '@/lib/saleCalc';
 import { readActiveCart, writeActiveCart } from '@/lib/activeCart';
 import SalePaymentPanel, { type CheckoutData, type Customer } from '@/components/SalePaymentPanel';
+import { decideUsualAdd, type PosSummaryTopProduct } from '@/lib/posSummary';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,17 @@ function saveParkedCarts(carts: ParkedCart[]) {
   } catch {
     // storage unavailable — parked carts just won't persist across reloads
   }
+}
+
+/** Cart with one more unit of `product` (stock is checked by the caller). */
+function addOneUnit(cart: CartItem[], product: Product): CartItem[] {
+  const idx = cart.findIndex(i => i.product.id === product.id);
+  if (idx >= 0) {
+    const updated = [...cart];
+    updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + 1 };
+    return updated;
+  }
+  return [...cart, { product, quantity: 1, unitPrice: product.sale_price, priceInput: String(product.sale_price), priceMode: 'retail' as const, discount: 0, discountType: 'fixed', discountInput: '' }];
 }
 
 function formatElapsed(ts: number): string {
@@ -473,6 +485,8 @@ function POSContent() {
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
+  const cartRef = useRef<CartItem[]>([]);
+  useEffect(() => { cartRef.current = cart; }, [cart]);
   const [globalDiscountInput, setGlobalDiscountInput] = useState<string>('');
 
   // Checkout key for reset
@@ -572,15 +586,29 @@ function POSContent() {
         blocked = true;
         return prev;
       }
-      if (idx >= 0) {
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], quantity: nextQty };
-        return updated;
-      }
-      return [...prev, { product, quantity: 1, unitPrice: product.sale_price, priceInput: String(product.sale_price), priceMode: 'retail' as const, discount: 0, discountType: 'fixed', discountInput: '' }];
+      return addOneUnit(prev, product);
     });
     if (blocked) toast(`Solo hay ${product.stock} unidades disponibles de ${product.name}`, 'error');
     // On mobile, briefly flash cart tab badge — stay on products so user can keep adding
+  }
+
+  // "Agregar lo de siempre": one unit of each usual product, fetched fresh
+  // because the loaded list is filtered by search/category. A product that is
+  // inactive, failed to load or has no stock left is skipped with a toast.
+  async function addUsualProducts(top: PosSummaryTopProduct[]) {
+    const fetched = await Promise.all(
+      top.map(tp => api.get<Product>(`/products/${tp.product_id}`).catch(() => null)),
+    );
+    // Decided against the latest committed cart (the click-time closure is
+    // stale after the await), so the toasts match what was actually added.
+    let next = cartRef.current;
+    fetched.forEach((product, i) => {
+      const inCart = product ? next.find(item => item.product.id === product.id)?.quantity ?? 0 : 0;
+      const decision = decideUsualAdd(product?.name ?? top[i].name, product, inCart);
+      if (!decision.add) toast(decision.toast, 'error');
+      else if (product) next = addOneUnit(next, product);
+    });
+    setCart(next);
   }
 
   // Barcode scanner: fires when Enter is pressed in the search field.
@@ -1054,10 +1082,10 @@ function POSContent() {
             <SalePaymentPanel
               key={checkoutKey}
               total={total}
-              cartTotal={calcItems.reduce((s, i) => s + i.unitPrice * i.quantity - i.discount, 0)}
               selectedCustomer={selectedCustomer}
               onCustomerChange={setSelectedCustomer}
               onCheckout={handleCobrar}
+              onAddUsual={addUsualProducts}
               loading={cobrarLoading}
               disabled={cart.length === 0}
             />

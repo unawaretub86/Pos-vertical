@@ -56,10 +56,11 @@ export function calcChange(cashReceived: number, total: number): number {
 
 /**
  * Whether a credit sale would push the customer over their credit limit.
- * Mirrors the inline check in frontend/app/pos/page.tsx: customers with no
- * `creditLimit` set (0/undefined) are never blocked.
+ * `amount` is what the sale adds to the debt: the sum of its credit payment
+ * lines (see creditAmount in ./creditCheck). Customers with no `creditLimit`
+ * set (0/undefined) are never over it.
  */
-export function exceedsCreditLimit(customerBalance: number, cartTotal: number, creditLimit: number | undefined | null): boolean {
+export function exceedsCreditLimit(customerBalance: number, amount: number, creditLimit: number | undefined | null): boolean {
   if (!creditLimit) return false;
-  return customerBalance + cartTotal > creditLimit;
+  return customerBalance + amount > creditLimit;
 }

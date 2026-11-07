@@ -25,7 +25,7 @@
 | US-083 | Business name in the collection WhatsApp message (R-61) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-086 | Dynamic pages read their id from the URL in the compiled binary (R-92) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-087 | Business config read inside its provider in `/pos`, table checkout and `/barra` (R-93) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
-| US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | ⬜ Pending | |
+| US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-07 |
 | US-084 | Quick *abono* modal from the Customers list | ⬜ Pending | |
 | US-085 | Aging filter chips with amounts on the Customers tab | ⬜ Pending | |
 
@@ -282,15 +282,62 @@ Moved from SPRINT-09 on 2026-11-05. The original definition and criteria stay in
 **Change from SPRINT-09 (PO, 2026-11-05):** when a sale with a credit line would exceed the customer's limit, or the customer has debt older than 30 days, `Cobrar` asks for a confirmation (`¿Fiar de todas formas?`) before completing. The backend does not reject the sale: the shopkeeper decides, not the system. A hard block waits for an admin PIN (R-11).
 
 **Acceptance Criteria (in addition to SPRINT-09's):**
-- [ ] The panel uses `pos-summary`; the separate `/balance` call is removed.
-- [ ] Customer with balance $450,000 and `days_overdue` 26 → badge `Debe: $450.000 (26 días)` shown as soon as the customer is selected.
-- [ ] Limit $500,000, balance $450,000, credit sale of $60,000 → confirmation shown; cancel leaves the cart intact; confirm completes the sale.
-- [ ] Credit sale of $40,000 to the same customer with `days_overdue` 10 → no confirmation.
+- [x] The panel uses `pos-summary`; the separate `/balance` call is removed.
+- [x] Customer with balance $450,000 and `days_overdue` 26 → badge `Debe: $450.000 (26 días)` shown as soon as the customer is selected.
+- [x] Limit $500,000, balance $450,000, credit sale of $60,000 → confirmation shown; cancel leaves the cart intact; confirm completes the sale.
+- [x] Credit sale of $40,000 to the same customer with `days_overdue` 10 → no confirmation.
 
 **DoD:**
 - Vitest tests for the confirmation rule (limit exceeded, >30 days, neither).
 - `spec/domain/fiado.md` "Rule: credit limit" updated (warns and asks for confirmation; still does not block).
 - SPRINT-09 row for US-043 points here.
+
+**Verified criteria (closed 2026-11-07):**
+
+Contract discrepancies:
+- D-1: stale line refs in this section (handler at `internal/handler/customer.go:247`, model at `internal/model/model.go:122-128`).
+- D-2: the endpoint had no tests (SPRINT-09's DoD tests were never written), and it swallowed the last-visit query error (`internal/repository/customer.go:263`). Fixed here.
+- D-3: `last_visit_at` is a zone-less UTC string; a naive browser parse is 5 h off in Bogotá. The frontend parses it as UTC.
+- D-4: `days_overdue` counts from the oldest credit sale ever, even if paid off (run: 90 days for a 5-day-old debt). Kept by the PO; FIFO age is R-102.
+- D-5: the old limit notice added `cartTotal`, the subtotal before IVA and the global discount. It now uses the sum of the credit lines.
+- D-6: a customer can only be picked inside the credit block, not "in the cart" as SPRINT-09 says. Kept.
+- D-7: the contract said the spec's `internal/service/customer.go:54,68` refs were off by one; at close they were re-verified as correct (`Create` at `:54`, `Update` at `:68`), so they were not changed.
+- D-8 (Gemini, PO-approved): `top_products` returned inactive products. Fixed (AC-21).
+
+GATE 1 (PO, 2026-11-07): Q-1..Q-8 accepted as recommended. The panel and confirmation stay in the credit block; `> 30` days uses the existing debt-age rule; the limit is checked against the sum of the credit lines; `hace X días` counts Bogotá calendar days; `Cobrar` waits for the summary and is fail-open on error; the last-visit error is fixed; `Agregar lo de siempre` is `/pos` only; the dialog labels are `¿Fiar de todas formas?` / `Fiar` / `Cancelar`. Approved the same day: the active-product filter (D-8), the both-reasons message, and the in-flight guard on `Agregar lo de siempre`.
+
+QA round 1: OK, 0 BLOCKER, 4 MINOR:
+- M-1: re-selecting the same customer shows the old summary and enables `Cobrar` until the new one arrives (R-104).
+- M-2: `addUsualProducts` writes the cart as a value from `cartRef`, not a functional update (R-105).
+- M-3: the `cartTotal` prop was removed from `OrderClient` (`frontend/app/mesas/[orderId]/OrderClient.tsx`), which the contract did not predict; it is the minimum change after AC-9.
+- M-4: four UI strings the contract did not name (`Cargando historial...`, `Historial del cliente`, `Ver más ▾` / `Ocultar ▴`, `Agregando...`); recorded in the spec at close. The browser part of T-M1 was not run by QA (no browser automation); it is a PO check in `gaps.md`.
+
+RED `26d1dd7`, implementation `992d1ad`. QA ran `go build ./...`, `go test ./...` green, `pnpm build`, `pnpm test` 144 passed, `pnpm lint` exit 0; `posSummary.test.ts` also passes with `TZ=UTC`. Gemini diff round 1: clean. Spec: `spec/domain/fiado.md` → "Rule: credit limit", new "Rule: customer context at checkout (POS summary)", "What does NOT exist yet".
+
+Frontend tests are in `frontend/lib/creditCheck.test.ts` (T-1..T-8) and `frontend/lib/posSummary.test.ts` (T-9..T-13); Go tests in `internal/handler/customer_pos_summary_test.go` (T-14, T-15) and `internal/repository/customer_test.go` (T-16..T-18). T-M1 is manual.
+- AC-1: WHEN a customer is selected in the payment panel, the system SHALL request `GET /customers/{id}/pos-summary` once for that selection and SHALL NOT request `/customers/{id}/balance`; typing in the picker search sends no request. Test: T-M1 (Network tab, `gaps.md` US-043 M-1); QA code review (`grep "/balance"` → 0 hits in `SalePaymentPanel.tsx`).
+- AC-2: IF the selected customer changes or is cleared before a pending summary arrives, THEN the stale response SHALL be discarded; WHEN the customer is cleared, the summary panel SHALL disappear. Test: QA code review (`stale` flag in the effect cleanup); T-M1.
+- AC-3: WHILE the summary is loading and a payment line is credit, `Cobrar` SHALL be disabled. Test: QA code review; T-M1. Gap on re-selection: R-104.
+- AC-4: WHEN `last_visit_at` is not null, the panel SHALL show `Última visita: hoy` / `hace 1 día` / `hace N días`, counting Bogotá calendar days and reading `last_visit_at` as UTC. Tests: `T-10: last_visit_at is read as UTC and counted in Bogotá calendar days`, `T-10: Bogotá midnight edge — 05:00:00 UTC is today, 04:59:59 UTC is yesterday`, `T-10: uses Bogotá days, not UTC days (now 07/11 22:00 Bogotá = 08/11 03:00 UTC)`, `T-10: null -> null`.
+- AC-5: IF `last_visit_at` is null and `top_products` is empty, THEN the panel SHALL show `Cliente nuevo — sin historial` and no `Lo de siempre`. Test: `T-11: no history -> "Cliente nuevo — sin historial" and no "Lo de siempre"`.
+- AC-6: WHEN `top_products` is not empty, the panel SHALL show `Lo de siempre: ` and the names in server order joined with ` · `. Test: `T-11: two products in server order joined with " · "`.
+- AC-7: WHEN `balance > 0`, the panel SHALL show `Debe: $450.000 (26 días)` (`(1 día)` for 1, no parenthesis when null), colored `var(--text-muted)` `< 7`, `var(--warning)` `7–14`, `var(--danger)` `> 14`; WHEN `balance ≤ 0`, no badge. Tests: `T-9: badge text`, `T-9: no badge when balance <= 0`, `T-9: color band 6 muted, 7 and 14 warning, 15 danger`.
+- AC-8: IF `credit_limit > 0` and `balance > credit_limit`, THEN the panel SHALL show `Superó tope de crédito ($500.000)`. Tests: `T-12: limit 150,000, balance 180,000 -> exceeded text`, `T-12: balance equal to the limit -> none`, `T-12: no limit (null) -> none`.
+- AC-9: The pre-sale limit notice SHALL use the summary's `balance` and `credit_limit` and the sum of the credit payment lines, formatted with `formatCOP`. Tests: `T-7: /pos sale 50,000 + 19% IVA = 59,500 all on credit -> credit amount 59,500 -> limit`, `T-7: mixed 60,000 = 40,000 cash + 20,000 credit -> credit amount 20,000 -> none`.
+- AC-10: The panel SHALL collapse and expand with one click, never hiding the confirmation; a new selection starts expanded. Test: QA code review (`collapsedFor` reset on customer change); T-M1.
+- AC-11: The rule SHALL live in a pure helper (`needsCreditConfirmation`, `frontend/lib/creditCheck.ts`): `limit` WHEN `credit_limit > 0` and `balance + creditAmount > credit_limit` (equal is not exceeding); `overdue` WHEN `balance > 0` and `days_overdue > 30`; nothing WHEN `creditAmount ≤ 0`. Tests: `T-1: limit 500,000, balance 450,000, credit 60,000, 26 days -> limit`, `T-2: limit 500,000, balance 450,000, credit 40,000, 10 days -> none`, `T-3: balance + credit equal to the limit (500,000) is not exceeding -> none`, `T-4: no limit (null and 0), balance 80,000, 31 days -> overdue; 30 days -> none`, `T-5: limit 500,000, balance 480,000, 45 days, credit 30,000 -> limit and overdue, in that order`, `T-6: credit amount 0 (cash sale), balance 480,000, 45 days -> none`.
+- AC-12: WHEN `Cobrar` is pressed, the validations pass and a reason applies, the system SHALL open `ConfirmDialog` titled `¿Fiar de todas formas?`, labels `Fiar` / `Cancelar`, with one sentence per reason, limit first, separated by one space. Tests: `T-8: limit reason names the resulting debt and the limit`, `T-8: overdue reason names the debt age`, `T-8: both reasons -> limit sentence first, one space, overdue sentence`; T-M1 for the dialog.
+- AC-13: IF the user cancels, THEN nothing is sent and cart, payment lines, cash received and customer stay; WHEN the user confirms, `onCheckout` SHALL receive the same data as today. Test: QA code review; T-M1.
+- AC-14: WHEN no reason applies, `Cobrar` SHALL complete with no dialog. Test: T-2 (helper); QA code review; T-M1 ($40.000 cart).
+- AC-15: IF the summary request fails, THEN the panel SHALL show `No se pudo cargar el historial del cliente`, no badge, and `Cobrar` SHALL work without confirmation. Test: QA code review.
+- AC-16: The backend SHALL keep accepting credit sales over the limit; no change under `internal/{service,repository,handler}/sale.go`. Test: QA (`git diff dev...HEAD --stat`).
+- AC-17: WHEN `top_products` is not empty in `/pos`, `Agregar lo de siempre` SHALL show; never in table checkout or without history. Test: QA code review (`OrderClient` passes no `onAddUsual`); T-M1.
+- AC-18: WHEN `Agregar lo de siempre` is pressed, each top product SHALL be fetched (`GET /products/{id}`) and one unit added; no stock → `Arroz no tiene stock — no se agregó`; inactive or failed → `Arroz no está disponible — no se agregó`; WHILE in flight the button SHALL be disabled and a second press SHALL add nothing. Tests: `T-13: product with stock 0 -> skipped with stock toast`, `T-13: stock 5 with 4 already in cart -> added`, `T-13: stock 5 with 5 already in cart -> skipped with stock toast`, `T-13: inactive product -> skipped with unavailable toast`, `T-13: failed product request (null) -> skipped with unavailable toast`, `T-13: service-type product with stock 0 -> added`; in-flight guard: T-M1.
+- AC-19: The panel, badge and confirmation SHALL work in `/pos` and table checkout, at 320 px, with CSS variables only and `pnpm lint` at 0. Test: `pnpm lint` exit 0, QA review (no new hex); 320 px and dark theme: T-M1.
+- AC-20: `GET /customers/{id}/pos-summary` SHALL answer 200 to a cashier with the documented shape; 404 for an unknown id; 400 for a non-numeric id; 200 with `last_visit_at: null`, `top_products: []`, `balance: 0`, `days_overdue: null` with no sales. Tests: `TestPOSSummary_T14_CashierGetsSummaryAnd404And400` (subtests `known customer as cashier`, `unknown id is 404`, `non-numeric id is 400`), `TestPOSSummary_T15_CustomerWithNoSales`.
+- AC-21: `top_products` SHALL return at most 3 active products by distinct completed sales, descending, ties by name ascending, ignoring voided sales. Test: `TestPOSSummaryRepo_T16_TopProducts` (subtests `top 3 by distinct completed sales, voided sale ignored`, `tie broken by name ascending`, `inactive product never returned`). AC-20 also covers the last visit: `TestPOSSummaryRepo_T17_LastVisitIgnoresVoidedSale`.
+- AC-22: IF the last-visit query fails, THEN the endpoint SHALL return an error (500) instead of `last_visit_at: null`. Test: `TestPOSSummaryRepo_T18_LastVisitQueryErrorIsReturned` (subtest `only the last-visit query fails`).
+- Manual PO check: `gaps.md`, US-043 M-1.
 
 ---
 

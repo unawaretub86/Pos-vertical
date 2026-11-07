@@ -260,7 +260,10 @@ func (r *customerRepo) GetPOSSummary(ctx context.Context, id int64) (*model.Cust
 	var lastVisit sql.NullString
 	err = r.db.QueryRowContext(ctx, `
 		SELECT MAX(created_at) FROM sales WHERE customer_id = ? AND status = 'completed'`, id).Scan(&lastVisit)
-	if err == nil && lastVisit.Valid {
+	if err != nil {
+		return nil, fmt.Errorf("customer summary last visit: %w", err)
+	}
+	if lastVisit.Valid {
 		summary.LastVisitAt = &lastVisit.String
 	}
 
@@ -270,7 +273,7 @@ func (r *customerRepo) GetPOSSummary(ctx context.Context, id int64) (*model.Cust
 		FROM sale_items si
 		JOIN sales s ON s.id = si.sale_id
 		JOIN products p ON p.id = si.product_id
-		WHERE s.customer_id = ? AND s.status = 'completed'
+		WHERE s.customer_id = ? AND s.status = 'completed' AND p.active = 1
 		GROUP BY p.id, p.name
 		ORDER BY times_bought DESC, p.name ASC
 		LIMIT 3`, id)

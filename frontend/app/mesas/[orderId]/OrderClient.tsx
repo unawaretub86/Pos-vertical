@@ -311,7 +311,6 @@ function OrderContent() {
                </div>
                <SalePaymentPanel
                  total={order?.total ?? 0}
-                 cartTotal={order?.total ?? 0}
                  selectedCustomer={selectedCustomer}
                  onCustomerChange={setSelectedCustomer}
                  onCheckout={onCheckout}

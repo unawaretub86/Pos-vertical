@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 16 (US-087, pages read the business config outside its provider, R-93, level L). Before: 15 (US-086), 14 (US-083), 13 (US-082). No `us/*` worktree is open. `dev` is at the US-087 merge (verify with `git log`).
+**Last run:** 17 (US-043, customer debt and history in the POS at checkout with credit-limit confirmation, level L). Before: 16 (US-087), 15 (US-086), 14 (US-083). No `us/*` worktree is open. `dev` is at the US-087 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**SPRINT-19 (Fiado collection):** US-082, US-083, US-086 and US-087 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1 and US-087 M-1 in `gaps.md`).
+**SPRINT-19 (Fiado collection):** US-082, US-083, US-086, US-087 and US-043 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1 and US-043 M-1 in `gaps.md`).
 
-**Next US:** US-043, then US-084, US-085, then US-081 (PO order, 2026-11-06). Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-084, then US-085, then US-081 (PO order, 2026-11-06). Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -28,7 +28,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-043` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us US-084` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -62,6 +62,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 14 | 2026-11-06 | US-083 | L | ~372k (A 220k=56k+60k+105k · T 28k · I 40k · Q 85k) | 131 | ~21.8 | 0 | 1 | 4 contract discrepancies (D-1..D-4) + 1 Gemini-verified contract fix + 3 QA MINOR (pre-existing) | 5 new (R-90..R-94) | 0 | +160 / −35, 9 files (excluding this benchmark entry) |
 | 15 | 2026-11-06 | US-086 | L | ~336k (A 158k, last of 110k→112k→117k→158k · T 32k · I 46k · Q 100k) | 144 | ~28.6 | 1 (AC-7 premise false, PO rewording after QA) | 1 | 4 contract discrepancies (D-1..D-4) + 3 Gemini-verified contract additions + 5 QA MINOR | 4 new (R-95..R-98) + 1 closed (R-92) | 0 | +256 / −27, 13 files (excluding this benchmark entry) |
 | 16 | 2026-11-06/07 | US-087 | L | ~397k (A 179k, last of 121k→128k→130k→179k · T 46k · I 42k · Q 130k) | 215 | ~35.8 | 1 (vacuous T-4 CustomersPage case, PO dropped it before RED) | 1 | 4 contract discrepancies (D-1..D-4, incl. a third broken page `/barra`) + 4 Gemini-verified contract fixes + 1 vacuous test + 0 QA MINOR (3 INFO) | 3 new (R-99..R-101) + 1 closed (R-93) | 0 | +247 / −22, 11 files (excluding this benchmark entry) |
+| 17 | 2026-11-07 | US-043 | L | ≥238k recorded (A 111k contract-resume + 111k close · T not recovered · I 54k resume, first run cut off · Q 73k) | ≥99 | ≥12.9 (session 2 only) | 1 (API rate limit killed the implementer; next session restarted cold) | 1 | 8 contract discrepancies (D-1..D-8) + 4 QA MINOR | 4 new (R-102..R-105) | 0 | +465 / −44, 12 files excluding tests (+985 / −44, 16 files total, excluding this benchmark entry) |
 
 ### Trend
 
@@ -723,6 +724,38 @@ Gemini's T-4 finding (Sidebar invisible to the test) sat next to the real gap th
 
 ### What to measure in run 17
 - Whether the new `vitest.config.mts` lets later US cover page-level behaviour in unit tests and shortens QA's browser time.
+
+## Run 17 — US-043 (customer debt and history in the POS at checkout, with credit-limit confirmation, level L)
+
+Split across two sessions. Session 1 (2026-11-07, early morning) ran the contract, GATE 1, Gemini contract review and red tests (`26d1dd7`), then launched the implementer, which was killed mid-work by the API 5-hour rate limit (HTTP 429). Session 2 found the worktree with the implementer's uncommitted work, could not resume the agent (`SendMessage`: "No transcript found" — agent transcripts do not cross sessions), and launched cold implementer, QA and close-analyst agents. Session-1 metrics were recovered from the session `.jsonl`; the test-author notification and the first implementer's usage were not found there.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | contract (session 1, last notification is a 2-tool resume) + close (session 2, cold) | 111.1k (contract, last) · 111.4k (close) | ≥54 (2 recorded for contract + 52 close) | ≥5.3 min (0.3 + 4.9) |
+| test-author | 1 (session 1) | not recovered | not recovered | not recovered |
+| implementer | 2 (session 1 cut off by rate limit; session 2 cold, reviewed and verified) | 53.8k (session 2) | 11 (session 2) | ~2.3 min (session 2) |
+| qa | 1 round | 72.7k | 34 | ~5.6 min |
+
+**What it found.** The contract listed 8 discrepancies (D-1..D-8) between spec, sprint and code; the D-7 line-number correction turned out unnecessary at close (`internal/service/customer.go:54,68` already correct, verified by the orchestrator). The session-1 implementer had finished the code before the rate limit hit; the session-2 implementer found every AC (AC-1..AC-22) already met and wrote no code. QA round 1: OK, 0 BLOCKER, 4 MINOR — stale summary on re-selecting the same customer (R-104), `addUsualProducts` writes a plain cart value from `cartRef` (R-105), the one-line `OrderClient.tsx` prop removal outside the contract file list (forced by AC-9), and four UI strings the contract did not name (documented in the spec at close). The smoke test checked `pos-summary` in the binary (200 / empty 200 / 404 / 400 / cashier 200, inactive product excluded). T-M1 (browser) was not run: parked as US-043 M-1 in `gaps.md`. The close also sent R-102 (debt age from oldest unpaid credit) and R-103 (hard-coded aging colours) to the roadmap, as the contract assigned.
+
+**Unplanned stops:** 1 (API rate limit during implementation). Internal re-dispatches: 0. QA rounds: 1. Violations: 0 (no test file changed after RED; QA left no tracked changes).
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | not recorded (session 1) | 11 (2 RULE_CONFLICT, 3 AMBIGUOUS, 1 UNTESTABLE, 5 MISSING_CASE) | not recovered (verified at GATE 1 in session 1; the final contract has AC-21 inactive products excluded, an AC-18 double-press guard and AC-22 error wrapping, matching three of them) | not recovered (the spec-at-close RULE_CONFLICT is pipeline design) | n/a |
+| diff, round 1 | OK | ~3 min | 0 (`CLEAN`) | 0 | 0 | no; QA found 4 MINOR that Gemini did not raise |
+
+**Operational friction.**
+- A rate-limited subagent leaves a half-done worktree and a dead agent id. The orchestrator recovered state from `git status`, the branch log and the previous session's `.jsonl` (task-notification summaries), which worked but took manual digging.
+- Gate decisions and per-finding Gemini verification from session 1 live only in that session's transcript; the run entry cannot fully reconstruct them.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12..16 proposals still pending.
+2. At each gate and after each agent notification, the orchestrator appends a one-line progress note (agent, tokens, tools, duration, gate decision) to `changes/<ID>/progress.md`, so a run interrupted by a rate limit or a session end can be resumed and benchmarked without mining transcripts.
+
+### What to measure in run 18
+- Whether QA can run any of T-M1 itself (headless Edge, as in run 7 and run 16) instead of parking it for the PO.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/andreyo/pos/internal/database"
 	"github.com/andreyo/pos/internal/model"
@@ -262,4 +263,179 @@ func TestCustomerRepo_T11_CreatePaymentStoresMethodAndRegister(t *testing.T) {
 	if storedMethod != "transfer" || !storedReg.Valid || storedReg.Int64 != 1 {
 		t.Errorf("stored row = %q/%v, want transfer/1", storedMethod, storedReg)
 	}
+}
+
+// ─── US-043: GetPOSSummary (contract US-043 §4, T-16..T-18) ─────────────────
+
+// seedTopProductsUS043 seeds customer 1 with 5 completed cash sales over 8
+// distinct active products, plus 1 voided sale:
+//
+//	Arroz  in 4 sales (s1..s4)
+//	Leche  in 3 sales (s1..s3)
+//	Pan    in 2 sales (s1, s2)
+//	Huevos, Café, Azúcar, Sal, Fríjol in 1 sale each
+//	s6 (voided): Café x3
+//
+// If the voided sale were counted, Café would tie Pan at 2 and win on name
+// ("Café" < "Pan"), so the voided-sale rule is observable in the top 3.
+// withInactive adds Gaseosa (active = 0) to all 5 completed sales.
+func seedTopProductsUS043(t *testing.T, db *database.DB, withInactive bool) {
+	t.Helper()
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Pedro', '', '')`)
+	products := []struct {
+		id     int
+		name   string
+		active int
+	}{
+		{1, "Arroz", 1}, {2, "Leche", 1}, {3, "Pan", 1}, {4, "Huevos", 1},
+		{5, "Café", 1}, {6, "Azúcar", 1}, {7, "Sal", 1}, {8, "Fríjol", 1},
+		{9, "Gaseosa", 0},
+	}
+	for _, p := range products {
+		metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active) VALUES (?, ?, ?, 1000, 0, 'unit', ?)`, p.id, p.name, p.name, p.active)
+	}
+	sales := []struct {
+		id    int
+		items []int
+	}{
+		{1, []int{1, 2, 3, 4}},
+		{2, []int{1, 2, 3, 5}},
+		{3, []int{1, 2, 6}},
+		{4, []int{1, 7}},
+		{5, []int{8}},
+	}
+	for _, s := range sales {
+		metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (?, 1, 1, 1000, 1000, 'completed', 'cash', datetime('now', '-' || ? || ' days'))`, s.id, s.id+1)
+		items := s.items
+		if withInactive {
+			items = append(items, 9)
+		}
+		for _, pid := range items {
+			metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, 1, 1000, 1000)`, s.id, pid)
+		}
+	}
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (6, 1, 1, 3000, 3000, 'voided', 'cash', datetime('now','-1 days'))`)
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (6, 5, 3, 1000, 3000)`)
+}
+
+type topProductWant struct {
+	name  string
+	times int
+}
+
+func assertTopProducts(t *testing.T, got []model.CustomerTopProduct, want []topProductWant) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("top_products = %+v, want %d entries %+v", got, len(want), want)
+	}
+	for i, w := range want {
+		if got[i].Name != w.name || got[i].TimesBought != w.times {
+			t.Errorf("top_products[%d] = %s(%d), want %s(%d)", i, got[i].Name, got[i].TimesBought, w.name, w.times)
+		}
+	}
+}
+
+// ─── T-16: AC-21 ─────────────────────────────────────────────────────────────
+
+func TestPOSSummaryRepo_T16_TopProducts(t *testing.T) {
+	ctx := context.Background()
+	wantTop3 := []topProductWant{{"Arroz", 4}, {"Leche", 3}, {"Pan", 2}}
+
+	t.Run("top 3 by distinct completed sales, voided sale ignored", func(t *testing.T) {
+		db := openMetricsDB(t)
+		seedTopProductsUS043(t, db, false)
+		s, err := NewCustomerRepository(db.DB).GetPOSSummary(ctx, 1)
+		if err != nil {
+			t.Fatalf("GetPOSSummary: %v", err)
+		}
+		assertTopProducts(t, s.TopProducts, wantTop3)
+	})
+
+	t.Run("tie broken by name ascending", func(t *testing.T) {
+		db := openMetricsDB(t)
+		metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Pedro', '', '')`)
+		// Panela gets the lower id and is inserted first, so id or insertion
+		// order would put it first; name order must put Arepa first.
+		metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active) VALUES (1, 'Panela', 'PNL', 3000, 0, 'unit', 1)`)
+		metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active) VALUES (2, 'Arepa', 'ARP', 2000, 0, 'unit', 1)`)
+		metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 3000, 3000, 'completed', 'cash', datetime('now','-2 days'))`)
+		metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 1, 3000, 3000)`)
+		metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 1, 2000, 2000, 'completed', 'cash', datetime('now','-1 days'))`)
+		metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (2, 2, 1, 2000, 2000)`)
+		s, err := NewCustomerRepository(db.DB).GetPOSSummary(ctx, 1)
+		if err != nil {
+			t.Fatalf("GetPOSSummary: %v", err)
+		}
+		assertTopProducts(t, s.TopProducts, []topProductWant{{"Arepa", 1}, {"Panela", 1}})
+	})
+
+	t.Run("inactive product never returned", func(t *testing.T) {
+		db := openMetricsDB(t)
+		seedTopProductsUS043(t, db, true) // Gaseosa (active = 0) in all 5 completed sales
+		s, err := NewCustomerRepository(db.DB).GetPOSSummary(ctx, 1)
+		if err != nil {
+			t.Fatalf("GetPOSSummary: %v", err)
+		}
+		for _, p := range s.TopProducts {
+			if p.Name == "Gaseosa" {
+				t.Errorf("inactive product Gaseosa returned with times_bought %d", p.TimesBought)
+			}
+		}
+		assertTopProducts(t, s.TopProducts, wantTop3)
+	})
+}
+
+// ─── T-17: AC-20 ─────────────────────────────────────────────────────────────
+
+func TestPOSSummaryRepo_T17_LastVisitIgnoresVoidedSale(t *testing.T) {
+	db := openMetricsDB(t)
+	now := time.Now().UTC()
+	cashAt := now.Add(-72 * time.Hour).Format("2006-01-02 15:04:05")   // completed cash sale, 3 days ago
+	voidedAt := now.Add(-24 * time.Hour).Format("2006-01-02 15:04:05") // voided sale, 1 day ago
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Pedro', '', '')`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 12000, 12000, 'completed', 'cash', ?)`, cashAt)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 1, 8000, 8000, 'voided', 'cash', ?)`, voidedAt)
+
+	s, err := NewCustomerRepository(db.DB).GetPOSSummary(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("GetPOSSummary: %v", err)
+	}
+	if s.LastVisitAt == nil {
+		t.Fatalf("last_visit_at = nil, want %q", cashAt)
+	}
+	if *s.LastVisitAt != cashAt {
+		t.Errorf("last_visit_at = %q, want %q (the completed sale; the voided one is %q)", *s.LastVisitAt, cashAt, voidedAt)
+	}
+}
+
+// ─── T-18: AC-22 ─────────────────────────────────────────────────────────────
+
+func TestPOSSummaryRepo_T18_LastVisitQueryErrorIsReturned(t *testing.T) {
+	ctx := context.Background()
+
+	// Only the last-visit query fails: sales is replaced by a view whose
+	// created_at raises "malformed JSON" when evaluated. The balance query
+	// evaluates created_at only for rows joined to credit sale_payments (none
+	// here) and the top-products query only for rows joined to sale_items
+	// (none here); the last-visit query evaluates MAX(created_at) over the
+	// customer's one completed sale.
+	t.Run("only the last-visit query fails", func(t *testing.T) {
+		db := openMetricsDB(t)
+		metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Pedro', '', '')`)
+		metricsExec(t, db, `DROP TABLE sales`)
+		metricsExec(t, db, `CREATE TABLE sales_src (id INTEGER PRIMARY KEY, customer_id INTEGER, status TEXT)`)
+		metricsExec(t, db, `INSERT INTO sales_src (id, customer_id, status) VALUES (1, 1, 'completed')`)
+		metricsExec(t, db, `CREATE VIEW sales AS SELECT id, customer_id, status, json_extract('not-json-' || id, '$') AS created_at FROM sales_src`)
+
+		// Precondition: the fixture really makes the last-visit query fail.
+		var lv sql.NullString
+		if err := db.DB.QueryRowContext(ctx, `SELECT MAX(created_at) FROM sales WHERE customer_id = 1 AND status = 'completed'`).Scan(&lv); err == nil {
+			t.Fatalf("fixture broken: last-visit query succeeded (%v)", lv)
+		}
+
+		s, err := NewCustomerRepository(db.DB).GetPOSSummary(ctx, 1)
+		if err == nil {
+			t.Fatalf("GetPOSSummary err = nil, last_visit_at = %v; want the last-visit query error", s.LastVisitAt)
+		}
+	})
 }

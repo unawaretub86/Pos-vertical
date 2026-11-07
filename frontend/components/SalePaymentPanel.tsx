@@ -1,8 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { paymentsBalanced as linesBalanced, sumPayments, calcChange, exceedsCreditLimit } from '@/lib/saleCalc';
+import { needsCreditConfirmation, creditAmount, creditConfirmationMessage, type CreditCheckInput, type CreditReason } from '@/lib/creditCheck';
+import {
+  debtBadge, lastVisitLabel, newCustomerLabel, usualProductsLabel, limitExceededLabel,
+  type PosSummary, type PosSummaryTopProduct,
+} from '@/lib/posSummary';
 import { useToast } from '@/components/Toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 export type PaymentMethod = 'efectivo' | 'transferencia' | 'tarjeta' | 'credito';
 
@@ -146,22 +152,30 @@ function PayBtn({ label, active, onClick }: { label: string; active: boolean; on
 
 interface SalePaymentPanelProps {
   total: number;
-  cartTotal: number;
   selectedCustomer: Customer | null;
   onCustomerChange: (c: Customer | null) => void;
   onCheckout: (data: CheckoutData) => void;
   loading: boolean;
   disabled: boolean;
+  /** Adds one unit of each usual product to the cart. Omitted in table checkout, which hides the button. */
+  onAddUsual?: (products: PosSummaryTopProduct[]) => Promise<void>;
+}
+
+/** pos-summary result for one customer; `lastVisit` is computed when it arrives. */
+interface SummaryState {
+  customerId: number;
+  data: PosSummary | null; // null when the request failed
+  lastVisit: string | null;
 }
 
 export default function SalePaymentPanel({
   total,
-  cartTotal,
   selectedCustomer,
   onCustomerChange,
   onCheckout,
   loading,
-  disabled
+  disabled,
+  onAddUsual,
 }: SalePaymentPanelProps) {
   const { toast } = useToast();
   
@@ -169,14 +183,38 @@ export default function SalePaymentPanel({
   const [cashReceived, setCashReceived] = useState<string>('');
   const [extraPayments, setExtraPayments] = useState<{ method: PaymentMethod; amountInput: string }[]>([]);
   const [firstAmountInput, setFirstAmountInput] = useState<string>('');
-  const [customerBalance, setCustomerBalance] = useState<number | null>(null);
+  const [summaryState, setSummaryState] = useState<SummaryState | null>(null);
+  const [collapsedFor, setCollapsedFor] = useState<number | null>(null);
+  const [confirmReasons, setConfirmReasons] = useState<CreditReason[] | null>(null);
+  const [addingUsual, setAddingUsual] = useState(false);
+  const addingUsualRef = useRef(false);
 
+  const selectedCustomerId = selectedCustomer?.id ?? null;
   useEffect(() => {
-    if (!selectedCustomer) { queueMicrotask(() => setCustomerBalance(null)); return; }
-    api.get<{ balance: number }>(`/customers/${selectedCustomer.id}/balance`)
-      .then(r => setCustomerBalance(r.balance))
-      .catch(() => setCustomerBalance(null));
-  }, [selectedCustomer]);
+    if (selectedCustomerId === null) return;
+    // A response for a customer that is no longer selected is discarded.
+    let stale = false;
+    api.get<PosSummary>(`/customers/${selectedCustomerId}/pos-summary`)
+      .then(data => {
+        if (!stale) setSummaryState({ customerId: selectedCustomerId, data, lastVisit: lastVisitLabel(data.last_visit_at, new Date()) });
+      })
+      .catch(() => {
+        if (!stale) setSummaryState({ customerId: selectedCustomerId, data: null, lastVisit: null });
+      });
+    return () => { stale = true; };
+  }, [selectedCustomerId]);
+
+  // A summary only counts for the customer it was fetched for.
+  const currentSummary = summaryState && summaryState.customerId === selectedCustomerId ? summaryState : null;
+  const summaryLoading = selectedCustomerId !== null && currentSummary === null;
+  const summary = currentSummary?.data ?? null;
+  const summaryFailed = currentSummary !== null && currentSummary.data === null;
+  const summaryCollapsed = selectedCustomerId !== null && collapsedFor === selectedCustomerId;
+
+  function handleCustomerChange(c: Customer | null) {
+    setCollapsedFor(null);
+    onCustomerChange(c);
+  }
 
   // Derived state
   const cashReceivedNum = parseInputCOP(cashReceived);
@@ -192,6 +230,10 @@ export default function SalePaymentPanel({
   const remaining = total - paymentsCovered;
   const paymentsBalanced = linesBalanced(paymentLines, total);
   const anyLineIsCredit = paymentLines.some(l => l.method === 'credito');
+  const creditAmt = creditAmount(paymentLines);
+  const creditCheck: CreditCheckInput | null = summary
+    ? { balance: summary.balance, creditLimit: summary.credit_limit, daysOverdue: summary.days_overdue, creditAmount: creditAmt }
+    : null;
 
   function addPaymentLine() {
     const used = new Set(paymentLines.map(l => l.method));
@@ -217,7 +259,16 @@ export default function SalePaymentPanel({
       toast('La suma de los pagos debe ser igual al total', 'error');
       return;
     }
-    
+    // Fail-open: without a summary (request failed) the sale goes through unconfirmed.
+    const reasons = anyLineIsCredit && creditCheck ? needsCreditConfirmation(creditCheck) : [];
+    if (reasons.length > 0) {
+      setConfirmReasons(reasons);
+      return;
+    }
+    checkout();
+  }
+
+  function checkout() {
     onCheckout({
       payMethod,
       paymentLines,
@@ -227,7 +278,20 @@ export default function SalePaymentPanel({
     });
   }
 
-  const canCobrar = !disabled && !loading && paymentsBalanced && !(anyLineIsCredit && !selectedCustomer);
+  async function handleAddUsual() {
+    if (!onAddUsual || !summary || addingUsualRef.current) return;
+    addingUsualRef.current = true;
+    setAddingUsual(true);
+    try {
+      await onAddUsual(summary.top_products);
+    } finally {
+      addingUsualRef.current = false;
+      setAddingUsual(false);
+    }
+  }
+
+  const canCobrar = !disabled && !loading && paymentsBalanced && !(anyLineIsCredit && !selectedCustomer)
+    && !(anyLineIsCredit && summaryLoading);
 
   return (
     <>
@@ -240,7 +304,7 @@ export default function SalePaymentPanel({
             onClick={() => {
               setPayMethod(m);
               const stillNeedsCredit = m === 'credito' || extraPayments.some(e => e.method === 'credito');
-              if (!stillNeedsCredit) onCustomerChange(null);
+              if (!stillNeedsCredit) handleCustomerChange(null);
             }}
           />
         ))}
@@ -335,7 +399,7 @@ export default function SalePaymentPanel({
           <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: '6px' }}>
             Cliente *
           </div>
-          <CustomerPicker selected={selectedCustomer} onSelect={onCustomerChange} />
+          <CustomerPicker selected={selectedCustomer} onSelect={handleCustomerChange} />
           {!selectedCustomer && (
             <div style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '4px' }}>
               Requerido para ventas a crédito
@@ -350,16 +414,78 @@ export default function SalePaymentPanel({
               {selectedCustomer.notes}
             </div>
           )}
+          {selectedCustomer && summaryLoading && (
+            <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              Cargando historial...
+            </div>
+          )}
+          {selectedCustomer && summaryFailed && (
+            <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              No se pudo cargar el historial del cliente
+            </div>
+          )}
+          {selectedCustomer && summary && (() => {
+            const badge = debtBadge(summary.balance, summary.days_overdue);
+            const newCustomer = newCustomerLabel(summary);
+            const usual = usualProductsLabel(summary.top_products);
+            const overLimit = limitExceededLabel(summary.balance, summary.credit_limit);
+            return (
+              <div style={{
+                marginTop: '6px', border: '1px solid var(--border)', borderRadius: '6px',
+                background: 'var(--surface-1)', fontSize: '12px', overflow: 'hidden',
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setCollapsedFor(summaryCollapsed ? null : selectedCustomer.id)}
+                  aria-expanded={!summaryCollapsed}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+                    padding: '6px 10px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: badge ? badge.color : 'var(--text-secondary)', minWidth: 0, overflowWrap: 'anywhere' }}>
+                    {badge ? badge.text : 'Historial del cliente'}
+                  </span>
+                  <span style={{ flexShrink: 0, color: 'var(--text-muted)', fontSize: '11px' }}>
+                    {summaryCollapsed ? 'Ver más ▾' : 'Ocultar ▴'}
+                  </span>
+                </button>
+                {!summaryCollapsed && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 10px 8px', color: 'var(--text-secondary)' }}>
+                    {overLimit && <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{overLimit}</span>}
+                    {newCustomer && <span>{newCustomer}</span>}
+                    {currentSummary?.lastVisit && <span>{currentSummary.lastVisit}</span>}
+                    {usual && <span style={{ overflowWrap: 'anywhere' }}>{usual}</span>}
+                    {usual && onAddUsual && (
+                      <button
+                        type="button"
+                        onClick={handleAddUsual}
+                        disabled={addingUsual}
+                        style={{
+                          alignSelf: 'flex-start', marginTop: '2px', padding: '5px 8px', border: '1px solid var(--accent)',
+                          borderRadius: '4px', background: 'transparent', color: 'var(--accent)', fontSize: '12px',
+                          cursor: addingUsual ? 'not-allowed' : 'pointer', opacity: addingUsual ? 0.6 : 1,
+                        }}
+                      >
+                        {addingUsual ? 'Agregando...' : 'Agregar lo de siempre'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {(() => {
-            if (!selectedCustomer?.credit_limit || customerBalance === null) return null;
-            if (exceedsCreditLimit(customerBalance, cartTotal, selectedCustomer.credit_limit)) {
+            // Pre-sale notice: what the debt becomes with this sale's credit lines.
+            if (!creditCheck || !creditCheck.creditLimit) return null;
+            if (exceedsCreditLimit(creditCheck.balance, creditCheck.creditAmount, creditCheck.creditLimit)) {
               return (
                 <div style={{
                   marginTop: '6px', padding: '8px 10px', background: 'var(--danger-dim)',
                   border: '1px solid var(--danger)', borderRadius: '6px', fontSize: '12px',
                   color: 'var(--danger)', fontWeight: 500,
                 }}>
-                  ⚠️ Tope de crédito: ${selectedCustomer.credit_limit.toLocaleString('es-CO')}. Deuda actual: ${customerBalance.toLocaleString('es-CO')}.
+                  ⚠️ Tope de crédito: {formatCOP(creditCheck.creditLimit)}. Deuda actual: {formatCOP(creditCheck.balance)}.
                 </div>
               );
             }
@@ -410,6 +536,16 @@ export default function SalePaymentPanel({
       >
         {loading ? 'Procesando...' : `Cobrar ${formatCOP(total)}`}
       </button>
+
+      <ConfirmDialog
+        open={confirmReasons !== null}
+        title="¿Fiar de todas formas?"
+        message={confirmReasons && creditCheck ? creditConfirmationMessage(confirmReasons, creditCheck) : ''}
+        confirmLabel="Fiar"
+        cancelLabel="Cancelar"
+        onConfirm={() => { setConfirmReasons(null); checkout(); }}
+        onCancel={() => setConfirmReasons(null)}
+      />
     </>
   );
 }
