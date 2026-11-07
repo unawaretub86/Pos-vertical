@@ -752,7 +752,7 @@ Split across two sessions. Session 1 (2026-11-07, early morning) ran the contrac
 
 ### Proposed adjustments (not applied; need the PO's yes)
 1. Run-12..16 proposals still pending.
-2. At each gate and after each agent notification, the orchestrator appends a one-line progress note (agent, tokens, tools, duration, gate decision) to `changes/<ID>/progress.md`, so a run interrupted by a rate limit or a session end can be resumed and benchmarked without mining transcripts.
+2. **Applied 2026-11-07 (PO yes)** in `.claude/commands/us.md` (conventions + step 0.3): at each gate and after each agent notification, the orchestrator appends a one-line progress note (agent, tokens, tools, duration, gate decision) to `changes/<ID>/progress.md`, so a run interrupted by a rate limit or a session end can be resumed and benchmarked without mining transcripts.
 
 ### What to measure in run 18
 - Whether QA can run any of T-M1 itself (headless Edge, as in run 7 and run 16) instead of parking it for the PO.

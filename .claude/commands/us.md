@@ -16,13 +16,14 @@ Conventions of this command:
 - To each subagent you pass in the prompt: the `ID`, the absolute path of `WT`, the sprint and the mode (if applicable).
 - **Resume instead of relaunching (mandatory check, not optional):** before each `Agent` call in this pipeline, first run `ListAgents` and look for a live agent of the same role (`analyst`, `test-author`, `implementer`, `qa`) for this same `$ID`. If one shows up, use `SendMessage` to its name/ID instead of `Agent`. Only launch `Agent` (cold start) if `ListAgents` shows none alive for that role+US. This check was botched two runs in a row (3 and 4, see `project-docs/pipeline-bench.md`) by skipping it on reaching step 5 (`close`) — do not skip it there either.
 - **Benchmark:** from each agent notification, record `subagent_tokens`, `tool_uses` and `duration_ms`, and keep count of unplanned stops (outside GATE 1 and 2). They are logged in step 6.
+- **Progress log (run 17):** after each agent notification, each checkpoint commit, each Gemini result and each gate decision, append one line to `$WT/changes/$ID/progress.md`: `<ISO time> | <step> | <agent/event> | tokens <n> | tools <n> | <duration> | <outcome or PO decision, one clause>`. For Gemini, include raised / verified / false positives. Subagent transcripts do not cross sessions, so this file is what lets an interrupted run (rate limit, session end) be resumed and benchmarked. It is ignored by git and disappears with the worktree after step 6 has used it.
 - gopls errors inside the worktree ("not included in your workspace", `undefined` symbols) are IDE noise; what counts is `go build` and `go test`.
 
 ## 0. Prepare the worktree
 
 1. In the main checkout, run `git status --porcelain`. If there are uncommitted changes in `CLAUDE.md`, `project-docs/`, `.claude/` or the code, **stop and tell Andrey**: the worktree is cut from the last commit of `dev` and the agents would not see those changes.
 2. Locate the US with Grep in `project-docs/sprints/`. If it does not exist but `$ID` matches an `R-NN` item of the roadmap (`project-docs/roadmap.md`), it is a US coming from the roadmap: do not register it here; the `analyst` registers it in step 1 (mode `contract`) and the orchestrator commits it separately before `RED` (see step 1). If it exists, confirm it is still `[ ]`.
-3. Create the worktree: `git worktree add "../Pos-vertical-wt/$ID" -b "us/$ID" dev`. If the branch already exists, ask Andrey whether to resume or discard it.
+3. Create the worktree: `git worktree add "../Pos-vertical-wt/$ID" -b "us/$ID" dev`. If the branch already exists, read `$WT/changes/$ID/progress.md` and `git -C "$WT" status` to see where it stopped, then ask Andrey whether to resume or discard it. On resume, agents from an earlier session cannot be resumed with `SendMessage`; launch them cold and tell them what the worktree already holds.
 4. `mkdir -p "$WT/changes/$ID"`.
 
 ## 1. Contract — agent `analyst`, mode `contract`
