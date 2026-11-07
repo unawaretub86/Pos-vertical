@@ -38,7 +38,7 @@ func NewSaleRepository(db *sql.DB) SaleRepository {
 func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("sale create begin tx: %w", err)
+		return nil, fmt.Errorf("sale create begin tx: %w", mapBusy(err))
 	}
 	defer tx.Rollback() //nolint:errcheck
 
@@ -50,7 +50,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 			return nil, ErrCustomerInactive
 		}
 		if err != nil {
-			return nil, fmt.Errorf("sale customer check: %w", err)
+			return nil, fmt.Errorf("sale customer check: %w", mapBusy(err))
 		}
 	}
 
@@ -64,11 +64,11 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		sale.Reference, sale.Status,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("sale insert: %w", err)
+		return nil, fmt.Errorf("sale insert: %w", mapBusy(err))
 	}
 	saleID, err := res.LastInsertId()
 	if err != nil {
-		return nil, fmt.Errorf("sale last id: %w", err)
+		return nil, fmt.Errorf("sale last id: %w", mapBusy(err))
 	}
 
 	for _, p := range sale.Payments {
@@ -76,7 +76,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 			`INSERT INTO sale_payments (sale_id, method, amount, reference) VALUES (?, ?, ?, ?)`,
 			saleID, p.Method, p.Amount, p.Reference,
 		); err != nil {
-			return nil, fmt.Errorf("sale_payments insert: %w", err)
+			return nil, fmt.Errorf("sale_payments insert: %w", mapBusy(err))
 		}
 	}
 
@@ -91,7 +91,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 			item.SaleID, item.ProductID, item.Quantity, item.UnitPrice, item.OriginalPrice, item.Discount, item.Subtotal, item.TaxRate,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("sale_item insert: %w", err)
+			return nil, fmt.Errorf("sale_item insert: %w", mapBusy(err))
 		}
 
 		// Write audit log entry if price was overridden by admin
@@ -102,7 +102,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 				sale.UserID, saleID, details,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("audit_log insert: %w", err)
+				return nil, fmt.Errorf("audit_log insert: %w", mapBusy(err))
 			}
 		}
 
@@ -111,7 +111,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		var productStock float64
 		err = tx.QueryRowContext(ctx, `SELECT type, name, stock FROM products WHERE id = ?`, item.ProductID).Scan(&productType, &productName, &productStock)
 		if err != nil {
-			return nil, fmt.Errorf("sale_item product type: %w", err)
+			return nil, fmt.Errorf("sale_item product type: %w", mapBusy(err))
 		}
 		if productType == "product" {
 			res, err := tx.ExecContext(ctx,
@@ -119,11 +119,11 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 				item.Quantity, item.ProductID, item.Quantity,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("sale stock update: %w", err)
+				return nil, fmt.Errorf("sale stock update: %w", mapBusy(err))
 			}
 			affected, err := res.RowsAffected()
 			if err != nil {
-				return nil, fmt.Errorf("sale stock rows affected: %w", err)
+				return nil, fmt.Errorf("sale stock rows affected: %w", mapBusy(err))
 			}
 			if affected == 0 {
 				return nil, fmt.Errorf("stock insuficiente: hay %.0f unidades de %s, intentas vender %.0f", productStock, productName, item.Quantity)
@@ -142,7 +142,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 			*sale.RegisterID, sale.Total, desc,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("register movement insert: %w", err)
+			return nil, fmt.Errorf("register movement insert: %w", mapBusy(err))
 		}
 	}
 
@@ -150,7 +150,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 	if sale.Discount > 0 {
 		details := fmt.Sprintf(`{"amount":%.2f}`, sale.Discount)
 		if err := InsertAuditLog(ctx, tx, sale.UserID, "discount", "sale", saleID, details); err != nil {
-			return nil, err
+			return nil, mapBusy(err)
 		}
 	}
 
@@ -158,11 +158,11 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 	if sale.OrderID != nil {
 		resOrder, err := tx.ExecContext(ctx, `UPDATE orders SET status = 'closed', closed_at = CURRENT_TIMESTAMP, sale_id = ? WHERE id = ? AND status = 'open'`, saleID, *sale.OrderID)
 		if err != nil {
-			return nil, fmt.Errorf("sale close order update: %w", err)
+			return nil, fmt.Errorf("sale close order update: %w", mapBusy(err))
 		}
 		affected, err := resOrder.RowsAffected()
 		if err != nil {
-			return nil, fmt.Errorf("sale close order rows: %w", err)
+			return nil, fmt.Errorf("sale close order rows: %w", mapBusy(err))
 		}
 		if affected == 0 {
 			return nil, fmt.Errorf("el pedido no está abierto o no existe")
@@ -170,7 +170,7 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("sale commit: %w", err)
+		return nil, fmt.Errorf("sale commit: %w", mapBusy(err))
 	}
 
 	return r.GetByID(ctx, saleID)
@@ -275,7 +275,7 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model.Sale, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("void begin tx: %w", err)
+		return nil, fmt.Errorf("void begin tx: %w", mapBusy(err))
 	}
 	defer tx.Rollback() //nolint:errcheck
 
@@ -288,7 +288,7 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("void get sale: %w", err)
+		return nil, fmt.Errorf("void get sale: %w", mapBusy(err))
 	}
 	if status == "voided" {
 		return nil, fmt.Errorf("la venta ya fue anulada")
@@ -301,7 +301,7 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 		JOIN products p ON p.id = si.product_id
 		WHERE si.sale_id = ?`, saleID)
 	if err != nil {
-		return nil, fmt.Errorf("void get items: %w", err)
+		return nil, fmt.Errorf("void get items: %w", mapBusy(err))
 	}
 	type itemRow struct {
 		productID   int64
@@ -313,13 +313,13 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 		var ir itemRow
 		if err := rows.Scan(&ir.productID, &ir.quantity, &ir.productType); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("void item scan: %w", err)
+			return nil, fmt.Errorf("void item scan: %w", mapBusy(err))
 		}
 		items = append(items, ir)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("void items rows: %w", err)
+		return nil, fmt.Errorf("void items rows: %w", mapBusy(err))
 	}
 
 	for _, item := range items {
@@ -327,7 +327,7 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 			if _, err := tx.ExecContext(ctx,
 				`UPDATE products SET stock = stock + ? WHERE id = ?`,
 				item.quantity, item.productID); err != nil {
-				return nil, fmt.Errorf("void restore stock: %w", err)
+				return nil, fmt.Errorf("void restore stock: %w", mapBusy(err))
 			}
 		}
 	}
@@ -337,16 +337,16 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE sales SET status = 'voided', voided_by = ?, voided_at = ? WHERE id = ?`,
 		userID, now, saleID); err != nil {
-		return nil, fmt.Errorf("void update sale: %w", err)
+		return nil, fmt.Errorf("void update sale: %w", mapBusy(err))
 	}
 
 	details := fmt.Sprintf(`{"total":%.2f}`, total)
 	if err := InsertAuditLog(ctx, tx, userID, "void", "sale", saleID, details); err != nil {
-		return nil, err
+		return nil, mapBusy(err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("void commit: %w", err)
+		return nil, fmt.Errorf("void commit: %w", mapBusy(err))
 	}
 
 	return r.GetByID(ctx, saleID)

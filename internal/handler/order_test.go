@@ -667,10 +667,10 @@ func TestOrder_T21b_ReadyAtClearedWhenLeavingReady(t *testing.T) {
 	}
 }
 
-// T-22: SQLITE_BUSY while opening an order must map to 409, never 500. A real
-// BUSY is produced by holding the write lock on another connection (the DSN
-// busy_timeout is 5s, so this test takes about 5s).
-func TestOrder_T22_BusyMapsTo409(t *testing.T) {
+// T-22: SQLITE_BUSY while opening an order must map to 503 (US-081 AC-5, was
+// 409), never 500. A real BUSY is produced by holding the write lock on another
+// connection (the DSN busy_timeout is 5s, so this test takes about 5s).
+func TestOrder_T22_BusyMapsTo503(t *testing.T) {
 	db, err := database.New(filepath.Join(t.TempDir(), "pos.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -692,11 +692,11 @@ func TestOrder_T22_BusyMapsTo409(t *testing.T) {
 	})
 
 	w := f.do(http.MethodPost, "/orders", fmt.Sprintf(`{"table_id":%d}`, mesa))
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status under BUSY = %d, want 409; %s", w.Code, w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status under BUSY = %d, want 503; %s", w.Code, w.Body.String())
 	}
-	if msg := errMsg(t, w); msg == "" {
-		t.Errorf("409 must carry an error message")
+	if msg := errMsg(t, w); msg != "El sistema está ocupado, reintenta en un momento" {
+		t.Errorf("503 error = %q, want msgBusy", msg)
 	}
 	if _, err := conn.ExecContext(t.Context(), `ROLLBACK`); err != nil {
 		t.Fatalf("rollback: %v", err)

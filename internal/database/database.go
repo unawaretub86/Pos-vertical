@@ -17,7 +17,10 @@ func New(path string) (*DB, error) {
 	// modernc.org/sqlite only honours _pragma=name(value), which it runs on every
 	// new pooled connection (busy_timeout first). The mattn-style _journal_mode,
 	// _busy_timeout and _foreign_keys keys are silently ignored.
-	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_time_format=sqlite")
+	// _txlock=immediate makes every BeginTx a BEGIN IMMEDIATE: the write lock is
+	// taken at BEGIN, where busy_timeout waits for it, instead of failing later
+	// with SQLITE_BUSY on a read-to-write upgrade (US-081).
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_time_format=sqlite&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}

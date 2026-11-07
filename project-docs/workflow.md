@@ -69,5 +69,5 @@ It applies to ways of interacting that the user has not seen before. Not to incr
 | SPRINT-15 | Assistant Continuation and UTC Debt (R-02, R-03, R-05, R-48) | ⬜ Pending |
 | SPRINT-16 | Security and Production (JWT, Tx, Backup) | ✅ Complete |
 | SPRINT-17 | Factus Sandbox, WhatsApp and Responsive | ✅ Complete except US-074 (responsive 320px): criteria unchecked, requires manual verification on a phone/emulator |
-| SPRINT-18 | Production Stabilization | 🔄 In progress: US-075..US-080 done in code (manual PO checks pending, see `gaps.md`; US-080 needs real printers); US-081 pending |
+| SPRINT-18 | Production Stabilization | ✅ Complete in code and tests (US-075..US-081). **Pending: PO manual checks, see `gaps.md`** (US-080 needs real printers; US-081 M-1..M-3 need a PC and 2 phones on the LAN) |
 | SPRINT-19 | Fiado Collection (cash-correct abonos, R-61, R-92, R-93, US-043, quick abono, R-110, aging chips) | ✅ Complete in code and tests (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085). **Pending: PO manual checks, see `gaps.md`** |

@@ -89,7 +89,7 @@ func (h *Handler) deleteTable(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, repository.ErrTableHasOpenOrder):
 		respondError(w, http.StatusConflict, "La mesa tiene un pedido abierto")
 	case errors.Is(err, repository.ErrBusy):
-		respondError(w, http.StatusConflict, msgBusy)
+		respondError(w, http.StatusServiceUnavailable, msgBusy)
 	case err != nil:
 		respondError(w, http.StatusInternalServerError, "error desactivando la mesa")
 	default:

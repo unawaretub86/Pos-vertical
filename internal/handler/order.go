@@ -12,6 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// msgBusy is sent with 503 when SQLITE_BUSY prevented a write; a 503 means
+// nothing was committed, so the client may retry.
 const msgBusy = "El sistema está ocupado, reintenta en un momento"
 
 // respondOrderError maps repository/service errors to HTTP statuses.
@@ -21,7 +23,7 @@ func respondOrderError(w http.ResponseWriter, err error, fallback string) {
 	case errors.As(err, &ve):
 		respondError(w, http.StatusBadRequest, ve.Msg)
 	case errors.Is(err, repository.ErrBusy):
-		respondError(w, http.StatusConflict, msgBusy)
+		respondError(w, http.StatusServiceUnavailable, msgBusy)
 	case errors.Is(err, repository.ErrNotFound), errors.Is(err, repository.ErrTableInactive):
 		respondError(w, http.StatusNotFound, "no encontrado")
 	case errors.Is(err, repository.ErrProductInactive):
@@ -228,6 +230,10 @@ func (h *Handler) checkoutOrder(w http.ResponseWriter, r *http.Request) {
 	req.Sale.Total = subtotal - req.Sale.Discount + req.Sale.Tax
 
 	created, err := h.sales.Create(r.Context(), &req.Sale)
+	if errors.Is(err, repository.ErrBusy) {
+		respondError(w, http.StatusServiceUnavailable, msgBusy)
+		return
+	}
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return

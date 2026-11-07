@@ -27,7 +27,7 @@
 | US-078 | Enable Foreign Keys in SQLite (R-56) | [x] Complete in code (PO validation pending) | 2026-10-13 |
 | US-079 | Fix 48 Lint Problems (R-35) | [x] Complete in code (manual PO checks M-1..M-3 pending) | 2026-10-28 |
 | US-080 | Native ESC/POS Printing 58/80mm | [x] Complete in code (manual PO hardware checks P-1..P-4 pending; logo and reprint deferred) | 2026-11-05 |
-| US-081 | Multi-Register LAN Concurrency and Stability | ⬜ Pending | |
+| US-081 | Multi-Register LAN Concurrency and Stability | [x] Complete in code (manual PO real-device checks M-1..M-3 pending) | 2026-11-07 |
 
 **Total estimated effort: ~6 days**
 
@@ -310,14 +310,43 @@ QA: round 1 OK, 0 BLOCKER, 5 MINOR (stale `print_method` on other LAN sessions u
 - Reinforce error handling: if the frontend receives `HTTP 503` or `locked`, it must retry automatically (retry policy in `api.ts`).
 
 **Acceptance Criteria:**
-- [ ] Load the POS on one PC and on 2 phones through the LAN IP.
-- [ ] Simulate two charges from different tables/customers in the exact same second.
-- [ ] Validate that no request dies with a white crash; if there is a collision, a *toast* warns that there was an error or the app retries invisibly.
-- [ ] Review the register close to confirm that all amounts of both sessions match perfectly with no phantom records.
+- [ ] Load the POS on one PC and on 2 phones through the LAN IP. **Pending manual PO check** M-1 (`gaps.md`).
+- [x] Simulate two charges from different tables/customers in the exact same second. Automated with 20 to 50 simultaneous sales against a file-backed WAL DB (T-2..T-5, T-8) and smoked by QA on the binary. On real devices: M-1/M-2, pending.
+- [x] Validate that no request dies with a white crash; if there is a collision, a *toast* warns that there was an error or the app retries invisibly. (A busy write answers 503 and the client retries it invisibly; after 3 attempts one Spanish toast appears.)
+- [x] Review the register close to confirm that all amounts of both sessions match perfectly with no phantom records. (Exact totals in T-2..T-5 and the QA smoke; real-device close M-3 pending. There is one shared open register, not one per device, D-2.)
 
 **DoD:**
-- Add retry logic in `frontend/lib/api.ts` for requests that fail due to temporary locking.
-- Console validations that no Go panics occur when handling concurrent transactions.
+- [x] Add retry logic in `frontend/lib/api.ts` for requests that fail due to temporary locking.
+- [x] Console validations that no Go panics occur when handling concurrent transactions. (The handler tests run through `h.Routes()`, which has no `Recoverer`, so a panic would fail them.)
+
+**Verified criteria (closed 2026-11-07):**
+
+Discrepancies resolved at GATE 1:
+- D-1: the backend never returned 503. Lock errors on sales came back as 400 with the raw `database is locked` text, and orders/tables answered 409.
+- D-2: "both sessions" means several devices sharing the single open register; independent registers are R-18.
+- Root cause, found by running: deferred transactions that read before writing (credit sales, voids) failed on the read-to-write lock upgrade, which `busy_timeout` does not cover. Only 5–26 of 20–50 simultaneous credit sales succeeded.
+
+PO decisions: Q-1 `ErrBusy` → 503 on orders/tables too; Q-2 idempotency key → roadmap R-120; Q-3 network-error texts; Q-4 retry budget accepted; Q-5 device checks to `gaps.md`.
+
+- AC-1: WHEN a write transaction is opened with `BeginTx`, the system SHALL take the write lock at `BEGIN` (`_txlock=immediate`, `internal/database/database.go:23`). Test: `TestTxLock_T1_BeginTxTakesWriteLockAtBegin` (`internal/database/txlock_test.go`).
+- AC-2: WHEN N devices post sales at the same moment with enough stock, the system SHALL commit all N, with exact stock, one `sale` movement per sale, and exact `cash_sales` / per-method totals, for cash, credit and mixed payments. Tests: `TestConcurrency_T2_TwentyCashSales`, `_T3_FiftyCreditSales`, `_T4_MixedPaymentsThirtySales` (`internal/handler/concurrency_test.go`).
+- AC-3: WHEN concurrent sales ask for more units than the stock, the system SHALL commit exactly as many as the stock allows, reject the rest with 400 `stock insuficiente…` and leave no rows for them; stock never goes negative. Test: `TestConcurrency_T5_StockContention`.
+- AC-4: IF `POST /sales`, `POST /orders/{id}/checkout` or `DELETE /sales/{id}/void` hits `SQLITE_BUSY`, THEN the system SHALL answer 503 `El sistema está ocupado, reintenta en un momento` with nothing committed. Test: `TestConcurrency_T6_BusyWriteAnswers503` (busy at `BEGIN`; busy after `BEGIN` or at commit is reviewed, not executed, R-122).
+- AC-5: IF an orders/tables endpoint gets `ErrBusy`, THEN the system SHALL answer 503 instead of 409. Tests: `TestConcurrency_T7_OrderItemBusyAnswers503`, `TestConcurrency_T9_DeleteTableBusyAnswers503`, `TestOrder_T22_BusyMapsTo503` (`internal/handler/order_test.go`).
+- AC-6: WHEN two devices void the same sale or check out the same order at the same moment, the system SHALL do it once. Test: `TestConcurrency_T8_DoubleVoidAndDoubleCheckout`.
+- AC-7: WHILE AC-2, AC-3 and AC-6 run, the system SHALL not panic (implicit: the tests go through `h.Routes()` with no `Recoverer`).
+- AC-8, AC-9, AC-10: WHEN a response is 503, `api.ts` SHALL retry up to 3 attempts in total (500 ms, then 1000 ms), with no toast in between, and then throw the server message (busy fallback for a non-JSON body); every other status SHALL NOT be retried and the 401 redirect is unchanged. Tests F-1..F-4 (`frontend/lib/api.test.ts`, `describe('api 503 retry and network errors (US-081)')`).
+- AC-11: IF `fetch` rejects, THEN `api.ts` SHALL NOT retry and SHALL throw `No se pudo conectar con el servidor. Revise la red y el historial de ventas antes de cobrar de nuevo.` for `POST /sales` and `POST /orders/{id}/checkout`, or `No se pudo conectar con el servidor. Revise la red e intente de nuevo.` for anything else. Test: F-5 (`networkErrorMessage` truth table and the five cases).
+- AC-12: manual real-device checks M-1..M-3 (`gaps.md`), **pending PO**.
+
+QA: round 1 OK, 0 BLOCKER, 3 MINOR:
+- The contract gave the wrong reason why a failed `COMMIT` leaves nothing committed. The real reason, the driver's own rollback (`modernc.org/sqlite@v1.46.1/tx.go:41-50`), is now in `spec/domain/servidor.md`.
+- T-6 does not exercise BUSY after `BEGIN` or at commit → R-122.
+- A future `AbortError` would show the network message → R-123.
+
+`go build ./...`, `go test ./...`, `pnpm build`, `pnpm test` (17 files, 193 tests) and `pnpm lint` (0 problems) passed. The binary smoke on port 18081 gave exact totals: 30 mixed sales, then 50 credit sales, both all 201; 25 sales with stock 20 → 20 × 201 + 5 × 400; no 503, 500 or `locked`.
+
+Out of scope, sent to the roadmap: idempotency key (R-120), the `RegisterService.Open` race (R-121).
 
 ---
 

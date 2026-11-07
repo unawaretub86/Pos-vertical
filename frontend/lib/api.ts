@@ -26,6 +26,26 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+const MSG_BUSY = 'El sistema está ocupado, reintenta en un momento';
+const MSG_NET_SALE =
+  'No se pudo conectar con el servidor. Revise la red y el historial de ventas antes de cobrar de nuevo.';
+const MSG_NET_NEUTRAL = 'No se pudo conectar con el servidor. Revise la red e intente de nuevo.';
+
+// Waits before the 2nd and 3rd attempt after a 503. The server answers 503
+// only when SQLITE_BUSY kept a write from committing, so any method is safe
+// to retry.
+const BUSY_RETRY_DELAYS_MS = [500, 1000];
+
+// A network error gives no answer, so a charge may already be committed: the
+// two charge endpoints tell the cashier to check the sales history first.
+export function networkErrorMessage(method: string, path: string): string {
+  const p = path.split('?')[0];
+  const isCharge = p === '/sales' || /^\/orders\/[^/]+\/checkout$/.test(p);
+  return method.toUpperCase() === 'POST' && isCharge ? MSG_NET_SALE : MSG_NET_NEUTRAL;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -37,7 +57,17 @@ async function request<T>(
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(`${BASE}${path}`, { ...options, headers });
+    } catch {
+      // Never retried: the request may have reached the server.
+      throw new Error(networkErrorMessage(options.method ?? 'GET', path));
+    }
+    if (res.status !== 503 || attempt >= BUSY_RETRY_DELAYS_MS.length) break;
+    await sleep(BUSY_RETRY_DELAYS_MS[attempt]);
+  }
 
   // Expired session: clear it and go to /login before parsing the body,
   // which may not be JSON.
@@ -59,7 +89,9 @@ async function request<T>(
   try {
     json = await res.json();
   } catch (err) {
-    // Only a 401 may have a non-JSON body; any other status keeps failing loudly.
+    // Only a 401 may have a non-JSON body; a 503 falls back to the busy text;
+    // any other status keeps failing loudly.
+    if (res.status === 503) throw new Error(MSG_BUSY);
     if (res.status !== 401) throw err;
   }
 

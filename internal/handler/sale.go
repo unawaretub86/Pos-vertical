@@ -39,6 +39,10 @@ func (h *Handler) createSale(w http.ResponseWriter, r *http.Request) {
 	req.Sale.Total = subtotal - req.Sale.Discount + req.Sale.Tax
 
 	created, err := h.sales.Create(r.Context(), &req.Sale)
+	if errors.Is(err, repository.ErrBusy) {
+		respondError(w, http.StatusServiceUnavailable, msgBusy)
+		return
+	}
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -94,6 +98,10 @@ func (h *Handler) voidSale(w http.ResponseWriter, r *http.Request) {
 			"cude":                 cnErr.CUDE,
 			"requires_credit_note": true,
 		})
+		return
+	}
+	if errors.Is(err, repository.ErrBusy) {
+		respondError(w, http.StatusServiceUnavailable, msgBusy)
 		return
 	}
 	if err != nil {

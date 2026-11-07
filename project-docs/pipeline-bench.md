@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 20 (US-085, aging filter chips on the Customers tab, level L). Before: 19 (US-088), 18 (US-084), 17 (US-043). No `us/*` worktree is open. `dev` is at the US-085 merge (verify with `git log`).
+**Last run:** 21 (US-081, LAN concurrency, level L). Before: 20 (US-085), 19 (US-088), 18 (US-084). No `us/*` worktree is open. `dev` is at the US-081 merge (verify with `git log`).
 
-**SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
+**SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN concurrency) is done in code and tests (real-device checks M-1..M-3 in `gaps.md`). SPRINT-18 is complete in code. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
 **SPRINT-19 (Fiado collection):** complete in code and tests; all 8 US (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085) merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1, US-084 M-1 and US-085 M-1 in `gaps.md`).
 
-**Next US:** US-081. Roadmap items R-102..R-109 and R-111..R-119 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** none planned; the PO picks from the roadmap. Roadmap items R-102..R-109 and R-111..R-123 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -28,7 +28,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us US-081` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us <ID>` for the US the PO prioritizes and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -66,6 +66,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 18 | 2026-11-07 | US-084 | L | ~416k (A 193k, last of 132k→144k→193k · T 42k · I 75k · Q 107k) | 144 | ~26.1 | 0 | 1 | 8 contract discrepancies (D-1..D-8) + 2 Gemini-verified contract additions (Q-7, Q-8) + 3 QA MINOR + 1 pre-existing money bug (R-110) | 5 new (R-106..R-110) | 0 | +626 / −335, 13 files (excluding this benchmark entry) |
 | 19 | 2026-11-07 | US-088 (R-110) | L | ~348k (A 166k, last of 134k→141k→166k · T 76k · I 26k · Q 80k) | 161 | ~24.8 | 0 | 1 | 5 contract discrepancies (D-1..D-5) + 1 Gemini-verified contract addition (AC-7) + 2 QA MINOR | 5 new (R-111..R-115) + 1 closed (R-110) | 0 | +512 / −22, 8 files (excluding this benchmark entry) |
 | 20 | 2026-11-07 | US-085 | L | ~295k (A 144k, last of 72k→91k→144k · T 33k · I 47k · Q 70k) | 99 | ~17.9 | 0 | 1 | 6 contract discrepancies (D-1..D-6) + 2 Gemini-verified contract fixes (G-1, G-2) + 2 QA MINOR | 4 new (R-116..R-119) | 0 | +312 / −22, 8 files (excluding this benchmark entry) |
+| 21 | 2026-11-07 | US-081 | L | ~416k (A 173k, last of 99k→124k→173k · T 101k · I 64k · Q 78k) | 180 | ~31.4 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 2 contract discrepancies (D-1, D-2) + 1 root cause found by probe (deferred tx upgrade) + 3 Gemini-verified contract fixes (G-1..G-3) + 3 QA MINOR | 4 new (R-120..R-123) | 0 | +996 / −54, 17 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -859,6 +860,39 @@ G-1 was a real AC conflict (AC-7 vs AC-8) that neither the analyst nor the orche
 
 ### What to measure in run 21
 - US-081 (LAN multi-register concurrency) is backend and concurrency-heavy: whether the test-author's tests are deterministic (no flaky goroutine timing) and whether QA can reproduce the race in the binary.
+
+## Run 21 — US-081 (multi-register LAN concurrency and stability, level L)
+
+Already registered in SPRINT-18. Same session from contract to merge; metrics from `changes/US-081/progress.md`. The analyst was resumed with `SendMessage` twice (GATE 1 decisions, close) although `ListAgents` did not list it as live.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract; GATE 1 decisions; close) | 173.4k (98.7k → 124.3k → 173.4k) | 112 | ~12.6 min |
+| test-author | 1 | 100.6k | 26 | ~6.9 min |
+| implementer | 1 | 64.0k | 15 | ~4.6 min |
+| qa | 1 round | 78.4k | 27 | ~7.3 min |
+
+**What it found.** The analyst ran a throwaway probe (file-backed WAL DB through `h.Routes()`) instead of reasoning from the sprint text: concurrent credit (fiado) sales lost 50–75 % to `SQLITE_BUSY` because every `BeginTx` was DEFERRED and the credit path reads before it writes; cash sales were unaffected. `_txlock=immediate` fixed it in the probe (50/50), and the fix was one DSN parameter. D-1: the sprint asked the client to retry on 503, but the backend never returned 503 (busy was 409 on orders/tables and a raw 400 on sales). D-2: "multi-register" is really many devices on one open register (R-18 is real multi-register). The contract designed the retry around idempotency: 503 only on rolled-back writes, no retry on network errors. GATE 1: Q-1..Q-5 as recommended plus G-1..G-3. The test-author changed one existing test the contract did not list (T22 409 → 503), which the PO accepted at the PASSES⚠️ stop. QA round 1: OK, 0 BLOCKER, 3 MINOR; smoke in the binary 50/50 concurrent credit sales with exact register totals; concurrency tests repeated 3× with no flakiness. QA MINOR-1 caught a wrong rationale in the contract (deferred `tx.Rollback()` does not undo a failed COMMIT; the driver does, `modernc.org/sqlite tx.go:41-50`), which kept it out of the spec.
+
+**Unplanned stops:** 1 (PASSES⚠️ review of T-2, T-5, T-8, F-4: all expected regression guards, plus the T22 edit). Internal re-dispatches: 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~4 min | 13 | 3 (G-1 sale-specific network text on a shared client; G-2 `tables.go` 503 untested; G-3 "503 means nothing committed" not stated for orders/tables) | 10 (open PO questions ×3, nonexistent `ventas.md`, path prefix, `qty = 0` already rejected at `service/sale.go:154`, inactive entities / register close / void permissions out of scope, `EmitFromSale` recover already in §7) | n/a |
+| diff, round 1 | OK | ~4 min | 0 (`CLEAN`) | 0 | 0 | no; QA's 3 MINOR were a contract rationale, an untested commit-time BUSY and abort handling |
+
+**Operational friction.**
+- New worktree needed `pnpm install` before the test-author (known).
+- `internal/handler` tests now take ~43 s because lock tests wait out the 5 s `busy_timeout`.
+- Token cost was the highest of the L runs since run 1, driven by the analyst's probe and the test-author's 572-line concurrency file.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Earlier pending proposals unchanged (runs 12..16, 18-2, 19-2, 20-2).
+2. contract template §5: list existing tests whose assertions the AC contradicts (here T22), so the test-author does not edit an unlisted test and stop the pipeline.
+
+### What to measure in run 22
+- Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

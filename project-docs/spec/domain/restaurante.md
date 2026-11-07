@@ -1,7 +1,7 @@
 # Domain — Restaurant (restaurant mode and tables)
 
 > **Type:** spec · **Current:** yes · **Rules over:** restaurant mode, tables and table state
-> **Updated:** 2026-11-06 (US-087: `/pos`, table checkout and `/barra` read the business config inside its provider; bar screen rule) · 2026-11-06 (US-086: order and catalog pages read their segment from the URL path) · 2026-10-13 (US-076: `PUT /api/setup` password exception) · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
+> **Updated:** 2026-11-07 (US-081: `SQLITE_BUSY` on orders, tables and table checkout → 503) · 2026-11-06 (US-087: `/pos`, table checkout and `/barra` read the business config inside its provider; bar screen rule) · 2026-11-06 (US-086: order and catalog pages read their segment from the URL path) · 2026-10-13 (US-076: `PUT /api/setup` password exception) · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
 
 Module for cafeterías and restaurants: tables, orders and a bar screen (SPRINT-13). Table management, the switch, per-table orders (open, items, void, cancel), table checkout (US-057) and the bar screen (US-058) all exist. This file covers the mode, tables, orders, their screens and the bar screen; the checkout and KDS endpoints are not specified here yet.
 
@@ -30,7 +30,7 @@ Table `dining_tables`: unique `name`, `zone` (free text for grouping), `seats` (
 - Delete = logical deactivation (`active = 0`), never `DELETE`, because historical orders reference it.
   - With an `status='open'` order on that table: 409 "La mesa tiene un pedido abierto" and the table stays active.
   - `closed` or `cancelled` orders do not block.
-  - The check and the deactivation are atomic: a single `UPDATE ... WHERE NOT EXISTS (open order)` (`internal/repository/dining_table.go:139-144`), so an order opened in parallel cannot leave an inactive table with an open order (R-59 resolved). `SQLITE_BUSY` → 409 "retry" (`internal/handler/order.go:14`, `tables.go`).
+  - The check and the deactivation are atomic: a single `UPDATE ... WHERE NOT EXISTS (open order)` (`internal/repository/dining_table.go:139-144`), so an order opened in parallel cannot leave an inactive table with an open order (R-59 resolved). `SQLITE_BUSY` → **503** "El sistema está ocupado, reintenta en un momento" and the table stays active (`internal/handler/tables.go:91-92`; it was 409 before US-081). Test: `TestConcurrency_T9_DeleteTableBusyAnswers503` (`internal/handler/concurrency_test.go:492`).
 - Opening an order requires an active table (see Orders).
 
 ## Table state (derived, never stored)
@@ -53,7 +53,7 @@ An order is the open tab of a table. All authenticated users (`cashier` and `adm
 
 | Endpoint | Result |
 |---|---|
-| `POST /api/orders` `{table_id}` | 201 `{id,type,table_id,status,created_at}`. 400 if `table_id` is missing/≤0 or `type` differs from `table`; 404 table does not exist or is deactivated; 409 if the table already has an `open` order or `SQLITE_BUSY`. |
+| `POST /api/orders` `{table_id}` | 201 `{id,type,table_id,status,created_at}`. 400 if `table_id` is missing/≤0 or `type` differs from `table`; 404 table does not exist or is deactivated; 409 if the table already has an `open` order; 503 on `SQLITE_BUSY`. |
 | `GET /api/orders?status=open` | `[{id,table_id,table_name,total,items_pending,opened_minutes}]`, `[]` if none. Valid `status`: `open|closed|cancelled`, anything else → 400. `items_pending` = non-void items in `pending` or `preparing`. |
 | `GET /api/orders/{id}` | `{id,type,table_id,status,total,items[]}`; `items` includes the `void` ones and is never `null`. 404 if it does not exist. |
 | `POST /api/orders/{id}/items` `{product_id,quantity,note?}` | 201 with the item `{id,product_id,product_name,quantity,unit_price,subtotal,note,status}`. 404/400 product nonexistent or inactive; 400 invalid quantity; 409 order not `open`. |
@@ -64,7 +64,8 @@ An order is the open tab of a table. All authenticated users (`cashier` and `adm
 Rules:
 
 - Lifecycle: `open → cancelled` (`closed` arrives with US-057). `type` is always `table` in v1.
-- **Only one `open` order per table**, guaranteed by an `INSERT ... SELECT ... WHERE EXISTS (active table) AND NOT EXISTS (open order)` in a single statement (`internal/repository/order.go:131-136`), not by a unique index (there is no migration 19). Whoever loses the race gets 409 (`ErrTableHasOpenOrder`) or, if SQLite answers `SQLITE_BUSY` (code 5), `ErrBusy` → 409 "El sistema está ocupado, reintenta en un momento" (`internal/handler/order.go:14,22-23`), never 500.
+- **Only one `open` order per table**, guaranteed by an `INSERT ... SELECT ... WHERE EXISTS (active table) AND NOT EXISTS (open order)` in a single statement (`internal/repository/order.go:131-136`), not by a unique index (there is no migration 19). Whoever loses the race gets 409 (`ErrTableHasOpenOrder`). If SQLite answers `SQLITE_BUSY` (primary code 5, including 517), they get `ErrBusy` → **503** "El sistema está ocupado, reintenta en un momento" (`internal/handler/order.go:17,25-26`; 409 before US-081), never 500.
+- **Busy writes (US-081):** every orders endpoint that goes through `respondOrderError` answers 503 on `ErrBusy`, and so does table checkout (`internal/handler/order.go:233-236`). A 503 means nothing was written, so the client retries it on its own (`servidor.md`, "Concurrent devices on the LAN"). 409 stays for a table that already has an open order, an order that is not open, and an item that is already void. Tests: `TestConcurrency_T7_OrderItemBusyAnswers503` (`internal/handler/concurrency_test.go:473`), `TestOrder_T22_BusyMapsTo503` (`internal/handler/order_test.go:673`).
 - `unit_price` is a **snapshot** of `products.sale_price` when the item is added; changing the price afterwards does not alter existing orders.
 - `quantity` must be an **integer > 0** (`0.5`, `2.0`, `"2"`, 0 and negatives → 400). It is stored in the REAL column as an integer.
 - Order `total` = Σ `quantity * unit_price` of items with `status != 'void'`; line subtotal = `quantity * unit_price`.

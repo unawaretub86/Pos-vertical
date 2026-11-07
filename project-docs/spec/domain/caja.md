@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -87,5 +87,6 @@ net profit = gross profit − expenses of the same range
 ## What does NOT exist yet
 
 - Printable shift close (X/Z report) beyond what SPRINT-11 covers.
-- Multiple simultaneous registers — roadmap `R-18` (LAN sync).
+- Multiple simultaneous registers — roadmap `R-18` (LAN sync). What does exist (US-081): several devices on the LAN charge into the **one** open register at the same time, and its close adds up all of them (see `servidor.md`, "Concurrent devices on the LAN").
+- Opening the register is check-then-insert (`internal/service/register.go:47-55`), so two simultaneous opens could in theory create two open registers. This was not reproduced (5 runs of 5 concurrent `POST /registers`: always 1 × 201 + 4 × 409). Roadmap `R-121`.
 - Count by denomination beyond what SPRINT-11 delivered (`frontend/lib/denominations.ts`).
