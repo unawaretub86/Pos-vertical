@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 18 (US-084, quick *abono* modal from the Customers list, level L). Before: 17 (US-043), 16 (US-087), 15 (US-086). No `us/*` worktree is open. `dev` is at the US-084 merge (verify with `git log`).
+**Last run:** 19 (US-088, R-110: a void no longer subtracts the sale twice from the register, level L). Before: 18 (US-084), 17 (US-043), 16 (US-087). No `us/*` worktree is open. `dev` is at the US-088 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**SPRINT-19 (Fiado collection):** US-082, US-083, US-086, US-087, US-043 and US-084 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1 and US-084 M-1 in `gaps.md`).
+**SPRINT-19 (Fiado collection):** US-082, US-083, US-086, US-087, US-043, US-084 and US-088 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1 and US-084 M-1 in `gaps.md`).
 
-**Next US:** R-110 (void double-subtracts from the register close; PO put it ahead of US-085 on 2026-11-07, the analyst registers it as a US), then US-085, then US-081. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-085, then US-081. Roadmap items R-102..R-109 and R-111..R-115 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -28,7 +28,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **Open, no adjustment applied:** (1) the pipeline cannot verify UI in a browser (no browser tool in `qa`; run 7 used headless Edge by hand). (2) The auto-mode classifier can stop Bash and PowerShell calls (seen when force-deleting branches and in run 7). (3) Finished agents vanish from `ListAgents`, so resume-instead-of-relaunch rarely applies (every agent in run 10 was cold).
 
-**How to resume:** in a new session, run `/us R-110` (or the next pending US) and read the PO list in `gaps.md` first.
+**How to resume:** in a new session, run `/us US-085` (or the next pending US) and read the PO list in `gaps.md` first.
 
 ## How it is measured
 
@@ -64,6 +64,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 16 | 2026-11-06/07 | US-087 | L | ~397k (A 179k, last of 121k→128k→130k→179k · T 46k · I 42k · Q 130k) | 215 | ~35.8 | 1 (vacuous T-4 CustomersPage case, PO dropped it before RED) | 1 | 4 contract discrepancies (D-1..D-4, incl. a third broken page `/barra`) + 4 Gemini-verified contract fixes + 1 vacuous test + 0 QA MINOR (3 INFO) | 3 new (R-99..R-101) + 1 closed (R-93) | 0 | +247 / −22, 11 files (excluding this benchmark entry) |
 | 17 | 2026-11-07 | US-043 | L | ≥238k recorded (A 111k contract-resume + 111k close · T not recovered · I 54k resume, first run cut off · Q 73k) | ≥99 | ≥12.9 (session 2 only) | 1 (API rate limit killed the implementer; next session restarted cold) | 1 | 8 contract discrepancies (D-1..D-8) + 4 QA MINOR | 4 new (R-102..R-105) | 0 | +465 / −44, 12 files excluding tests (+985 / −44, 16 files total, excluding this benchmark entry) |
 | 18 | 2026-11-07 | US-084 | L | ~416k (A 193k, last of 132k→144k→193k · T 42k · I 75k · Q 107k) | 144 | ~26.1 | 0 | 1 | 8 contract discrepancies (D-1..D-8) + 2 Gemini-verified contract additions (Q-7, Q-8) + 3 QA MINOR + 1 pre-existing money bug (R-110) | 5 new (R-106..R-110) | 0 | +626 / −335, 13 files (excluding this benchmark entry) |
+| 19 | 2026-11-07 | US-088 (R-110) | L | ~348k (A 166k, last of 134k→141k→166k · T 76k · I 26k · Q 80k) | 161 | ~24.8 | 0 | 1 | 5 contract discrepancies (D-1..D-5) + 1 Gemini-verified contract addition (AC-7) + 2 QA MINOR | 5 new (R-111..R-115) + 1 closed (R-110) | 0 | +512 / −22, 8 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -790,6 +791,39 @@ Two of the nine contract false positives came from Gemini reading a truncated co
 
 ### What to measure in run 19
 - Whether QA's headless-Edge T-M1 holds up for a backend-only fix (R-110), or the plan shrinks to Go tests plus a register-close smoke run.
+
+## Run 19 — US-088 (R-110: a void no longer subtracts the sale twice from the register, level L)
+
+Registered from the roadmap (`122918d`, committed after GATE 1 confirmed the sprint placement, before RED). Same session as runs 17-18; metrics from `changes/US-088/progress.md`. The analyst was resumed with `SendMessage` twice (GATE 1 fix, close).
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract + registration; GATE 1 fix; close) | 166.3k (134.1k → 140.7k → 166.3k) | 84 | ~11.2 min |
+| test-author | 1 | 75.8k | 20 | ~3.2 min |
+| implementer | 1 | 25.6k | 9 | ~2.9 min |
+| qa | 1 round | 80.0k | 48 | ~7.5 min |
+
+**What it found.** The analyst reproduced R-110 by running through `h.Routes()` and widened it: transfer and mixed voids also subtract, voids after the close write into the closed register, the dashboard and assistant cash estimate go negative (D-2), and there is no void action in the UI at all (D-1, so shop data is almost certainly clean and no migration was needed). It also found a test hazard: closing a register over HTTP in a `:memory:` test starts the close-email goroutine, and the next query can land on a fresh empty database (8/10 probe runs failed); the contract steered the test-author around it (now R-115). The fix was a 14-line deletion. GATE 1: Q-1..Q-4 as recommended plus one Gemini-found assertion (AC-7, recomputed `expected` of a closed register after a void), which the analyst valued by running before RED. QA round 1: OK, 0 BLOCKER, 2 MINOR; QA re-ran the new tests on a scratch copy of RED to confirm they fail there, and smoke-tested the whole scenario in the binary.
+
+**Unplanned stops:** 0. Internal re-dispatches: 0. QA rounds: 1. Violations: 0. One self-inflicted slip: the implementer ran `git checkout <RED> -- internal/repository/sale.go` at the end of a command, undoing its own edit, then re-applied it; the orchestrator re-checked the diff and re-ran the repository and handler tests before the checkpoint.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~4 min | 10 (2 RULE_CONFLICT, 6 MISSING_CASE, 2 AMBIGUOUS) | 1 (AC-7 recomputed `expected` of the closed register) | 9 (spec at close: design ×2; 5 about void behaviour the fix does not touch; half-open boundary unrelated; Q-3 "truncated" — the input was truncated again) | n/a |
+| diff, round 1 | OK | ~2 min | 0 (`CLEAN`) | 0 | 0 | no; QA's 2 MINOR were a stale roadmap ref and the accepted Q-1 trade-off |
+
+Second run in a row where a contract-mode false positive came from Gemini reading a truncated contract (run 18 proposal 2).
+
+**Operational friction.**
+- None blocking. Registering the US from the roadmap and committing it after GATE 1 (rather than right after the contract) let the PO confirm sprint placement first.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12..16 proposals and run-18 proposal 2 (Gemini contract truncation) still pending.
+2. implementer: never run `git checkout`/`git restore` on non-test files; to compare against RED use `git stash` or a scratch worktree. This run's revert was caught only because the orchestrator re-ran the tests.
+
+### What to measure in run 20
+- Whether US-085 (aging chips, frontend) keeps QA's headless-Edge T-M1 complete, as in runs 18-19.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

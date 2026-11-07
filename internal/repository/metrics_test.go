@@ -1111,3 +1111,38 @@ func TestReportRepo_T23_TopProductsStillOrdersByRevenue(t *testing.T) {
 		}
 	}
 }
+
+// ─── US-088 contract §4, T-7 (AC-6): a void subtracts nothing from CashFlow ──
+
+func TestMetricsRepo_US088_T7_CashFlowIgnoresVoid(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	metricsExec(t, db, `INSERT INTO registers (id, user_id, opening_amount, status) VALUES (1, 1, 100000, 'open')`)
+	// Completed cash sale #1 of $30,000 (keeps counting).
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, register_id, subtotal, total, status, payment_method, reference, created_at) VALUES (1, 1, 1, 30000, 30000, 'completed', 'cash', '', ?)`, now)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'cash', 30000)`)
+	// Cash sale #2 of $50,000, voided below.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, register_id, subtotal, total, status, payment_method, reference, created_at) VALUES (2, 1, 1, 50000, 50000, 'completed', 'cash', '', ?)`, now)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'cash', 50000)`)
+	// Manual cash_out of $5,000.
+	metricsExec(t, db, `INSERT INTO register_movements (register_id, type, amount, description, created_at) VALUES (1, 'cash_out', 5000, 'Pago proveedor', ?)`, now)
+
+	if _, err := NewSaleRepository(db.DB).Void(ctx, 2, 1); err != nil {
+		t.Fatalf("Void(2): %v", err)
+	}
+
+	// Wide range: the void's own row (if any) uses CURRENT_TIMESTAMP (UTC), so
+	// a "today" range would be unreliable (R-05).
+	cashSales, cashOut, err := NewMetricsRepository(db.DB).CashFlow(ctx, now.Add(-24*time.Hour), now.Add(24*time.Hour))
+	if err != nil {
+		t.Fatalf("CashFlow: %v", err)
+	}
+	if cashSales != 30000 {
+		t.Errorf("cashSales = %.0f, want 30000", cashSales)
+	}
+	if cashOut != 5000 {
+		t.Errorf("cashOut = %.0f, want 5000 (only the manual cash_out; estimated cash 25,000)", cashOut)
+	}
+}

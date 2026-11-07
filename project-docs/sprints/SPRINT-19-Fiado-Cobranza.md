@@ -12,6 +12,7 @@
 - US-043 (SPRINT-09, pending): customer history in the POS at checkout. Backend already built; frontend missing. -> **moved here**.
 - R-92 (US-083 QA, confirmed 2026-11-06 on a binary built from `dev`): the customer detail page asks for `/api/customers/NaN/detail` in the compiled binary. -> **US-086**, prioritized by the PO ahead of US-043.
 - R-93 (US-083 QA): `/pos` and table checkout read the business config outside its provider, so ESC/POS auto-print never fires and `/pos` ignores restaurant mode. -> **US-087**, prioritized by the PO on 2026-11-06 right after US-086, ahead of US-043.
+- R-110 (US-084 QA, verified by running): voiding a sale inserts a `cash_out` for its full total, so the register's expected cash comes out too low. -> **US-088**, prioritized by the PO on 2026-11-07 ahead of US-085.
 
 **Out of scope (PO, 2026-11-05):** customer risk scoring (R-17), "quincena" collection mode (R-03), admin PIN to override the credit limit (R-11), tone-based WhatsApp templates, printed *abono* receipt over ESC/POS. Each is a full US and none is a quick win.
 
@@ -27,6 +28,7 @@
 | US-087 | Business config read inside its provider in `/pos`, table checkout and `/barra` (R-93) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-07 |
 | US-084 | Quick *abono* modal from the Customers list | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-07 |
+| US-088 | Voiding a sale no longer subtracts cash from the register (R-110) | [x] Complete | 2026-11-07 |
 | US-085 | Aging filter chips with amounts on the Customers tab | ⬜ Pending | |
 
 **Total estimated effort: ~5 days**
@@ -43,7 +45,8 @@
 | **4** | US-087 | PO priority (2026-11-06), right after US-086: with ESC/POS configured, no ticket prints by itself after a sale, and `/pos` ignores restaurant mode. |
 | **5** | US-043 | Backend endpoint already exists; frontend only. Prevents extending credit to someone already overdue. |
 | **6** | US-084 | Depends on US-082 (method selector) to be cash-correct. |
-| **7** | US-085 | Pure UI over data the list already returns. |
+| **7** | US-088 | PO priority (2026-11-07), ahead of US-085: a money bug in the register close, the same family as US-082. |
+| **8** | US-085 | Pure UI over data the list already returns. |
 
 ---
 
@@ -397,6 +400,63 @@ Unit tests are in `frontend/lib/abono.test.ts` (T-1..T-8, T-10; the US-082 tests
 - AC-16, AC-17: The detail and the dashboard SHALL open the same modal; the dashboard sends `method`. Test: T-M1 step (8) (dashboard `Transferencia` → stored `method: "transfer"`).
 - AC-19: The modal SHALL fit 320 px with no horizontal scroll, CSS variables only, `formatCOP`, `pnpm lint` at 0. Test: T-M1 step (7) (`scrollWidth` 320, quick buttons wrap); QA diff scan (no new hex or `rgba`); `pnpm lint` exit 0. Real-device check: `gaps.md` US-084 M-1.
 - AC-20: No file under `internal/` SHALL change. Test: T-R1 (`git diff dev...HEAD --stat -- internal/` empty).
+
+---
+
+## US-088 — Voiding a sale no longer subtracts cash from the register (R-110)
+
+**As** Don Carlos (owner) and whoever closes the register,
+**I want** a voided sale to leave the register's expected cash as it was before that sale,
+**so that** the close does not show a shortage (*faltante*) that does not exist.
+
+**Estimated effort:** 0.5 day. **Impact:** High (money; every void makes the close and the dashboard cash wrong). **Origin:** R-110 (US-084 QA), PO priority on 2026-11-07 ahead of US-085.
+
+**Technical context (verified 2026-11-07 at `3be043f`, by running through the API):**
+- `SaleRepository.Void` inserts a `cash_out` movement `Anulación venta #N` for the full sale total whenever the sale has a `register_id`, whatever the payment method (`internal/repository/sale.go:342-349`).
+- Expected cash already drops the voided sale, because `cash_sales` counts only `status = 'completed'` (`internal/repository/register.go:166-175`). A cash void is subtracted twice; a credit, transfer or card void subtracts cash that never entered the drawer.
+- Run: opening $100,000 + cash sale $50,000 → expected $150,000; void → $50,000 (should be $100,000); then void a $50,000 credit sale → $0. Cash $30,000 + card $20,000, voided → −$80,000 instead of −$30,000.
+- The dashboard's estimated cash subtracts every `cash_out`, so it subtracts voids too (`internal/repository/metrics.go:142-143`).
+- A void after the register is closed is accepted and writes the `cash_out` into that closed register.
+- There is no void action in the UI: voids happen only through the admin API (`DELETE /api/sales/{id}/void`).
+
+**Business rule:**
+- A void writes no register movement. The voided sale stops counting through the existing `status = 'completed'` filter, so expected cash drops by the sale's cash portion only.
+- `cash_out` rows already written by voids are left as they are (no migration).
+
+**Acceptance Criteria:**
+- [x] Opening $100,000 + cash sale $50,000 → expected $150,000; void it → $100,000.
+- [x] A $50,000 credit, transfer or card sale leaves expected at $100,000 before and after its void.
+- [x] Cash $30,000 + card $20,000 → expected $130,000; void it → $100,000.
+- [x] Closing that register counting $100,000 after the cash void → difference $0.
+- [x] The dashboard's estimated cash does not subtract voided sales.
+- [x] A void after the close writes nothing into the closed register and does not change its stored close.
+
+**DoD:**
+- Regression tests with the numbers above (pattern `setupTestDB`, `internal/handler/dashboard_test.go:14`), failing on `dev` first.
+- `spec/domain/caja.md` updated: the R-110 "known defect" note becomes the voided-sales rule.
+
+**Verified criteria (closed 2026-11-07):**
+
+Contract discrepancies:
+- D-1: there is no void action in the UI, now or in git history; voids are reachable only through the admin API (`DELETE /api/sales/{id}/void`). So the field impact was lower than R-110 stated, and no data migration was needed (roadmap R-111).
+- D-2: the dashboard's estimated cash and the assistant's cash answer subtracted every void too (run: −$250.000 after 5 voids of $50.000). Fixed by the same change.
+- D-3: a void after the close wrote the `cash_out` into the sale's own, already closed register, bypassing the closed-register guard of manual movements.
+- D-4: `spec/domain/caja.md` said `cash_out` "is not a refund" while voids used it; now true again.
+- D-5: transfer, card and mixed sales show as green `+` cash in the movement list (roadmap R-114).
+
+GATE 1 (PO, 2026-11-07): Q-1..Q-4 accepted as recommended. A void writes no register movement. The fix is forward only, with no migration, and old `Anulación venta #N` rows are left as they are. Voids after the close stay allowed and write nothing (refund and closed-register policy: R-112). The US goes in SPRINT-19. Gemini contract review: 10 raised, 1 verified and accepted (AC-7 now states what `GET /registers/{id}` returns for the closed register), 9 discarded.
+
+QA round 1: OK, 0 BLOCKER, 2 MINOR. M-1: the R-110 roadmap row cited the removed `sale.go:342-347`, fixed at close. M-2: after a void the open register still lists `Venta #N +$50.000` with no paired line; this is the accepted Q-1 trade-off (R-113). RED `9d8a6dd`, implementation `f3164b1`, which changes only `internal/repository/sale.go`. QA ran `go build ./...`, `go test -count=1 ./...` green, the new tests 5 times (10/10 ok) and on RED (T-1..T-7 fail with the `dev` numbers), `pnpm build`, `pnpm test` 170 passed and `pnpm lint` 0. It also ran a smoke test on the compiled binary that reproduced the R-110 scenario fixed, including `/register` showing `TOTAL ESPERADO $100.000`. Gemini diff round 1: clean. Spec: `spec/domain/caja.md` → "Movements" (voids write no movement), "Rule: expected cash at close" (voided sales, voids after the close), "Rule: estimated cash of the day".
+
+- AC-1: WHEN a completed sale with a `register_id` is voided, the system SHALL insert no `register_movements` row, whatever the payment method; the rest of the void is unchanged (status `voided`, `voided_by`, stock 9 → 10, one `void` audit row `{"total":50000.00}`). Tests: `TestSaleRepo_T1_VoidWritesNoRegisterMovement` (`internal/repository/sale_void_test.go`); movement counts in `TestRegisterVoid_T3_NonCashSaleVoidKeepsExpected` (`internal/handler/register_void_test.go`).
+- AC-2: WHEN a cash sale is voided while its register is open, opening $100.000 + cash sale $50.000 → `expected` 150,000; void → 100,000, `cash_sales` 0, `cash_out` 0, no `Anulación` movement. Test: `TestRegisterVoid_T2_CashSaleVoidRestoresExpected`.
+- AC-3: WHEN a $50.000 credit, transfer or card sale is voided, `expected` SHALL stay 100,000 before and after, `cash_out` 0. Test: `TestRegisterVoid_T3_NonCashSaleVoidKeepsExpected` (table-driven over the three methods).
+- AC-4: WHEN a mixed sale is voided, `expected` SHALL drop by its cash portion only: cash $30.000 + card $20.000 → 130,000 → 100,000; cash $30.000 + credit $20.000 → 130,000 → 100,000. Test: `TestRegisterVoid_T4_MixedSaleVoidRemovesCashPortionOnly`.
+- AC-5: WHEN a register with a voided $50.000 cash sale is closed counting $100.000, the system SHALL store `expected_close` 100,000 and `difference` 0. Test: `TestRegisterVoid_T5_CloseAfterVoidHasNoShortage` (closes through `RegisterService.Close`, not the HTTP route, see R-115).
+- AC-6: WHEN cash flow is computed over a range with a voided cash sale, the void SHALL not be subtracted: completed cash $30.000 + voided cash $50.000 + manual `cash_out` $5.000 → `cashSales` 30,000, `cashOut` 5,000. Test: `TestMetricsRepo_US088_T7_CashFlowIgnoresVoid` (`internal/repository/metrics_test.go`).
+- AC-7: WHEN a sale of an already closed register is voided, the system SHALL answer 200, write no movement in any register, and keep the stored `expected_close` 150,000, `actual_close` 150,000 and `difference` 0. `GET /registers/1` SHALL return the recomputed `expected` 100,000 (`cash_sales` 0, `cash_out` 0) and `register.expected_close` 150,000. The open register 2 SHALL stay at 80,000. Test: `TestRegisterVoid_T6_VoidAfterCloseWritesNothing`.
+- AC-8: A second void of the same sale SHALL answer 400 `la venta ya fue anulada` with no new row anywhere; an unknown id SHALL answer 404 `venta no encontrada`. Tests: `TestRegisterVoid_T8_SecondVoidAndUnknownID`; the existing `TestVoidSale_WritesAuditLog` (`internal/handler/audit_test.go`) is unchanged and green.
+- AC-9, AC-10: No migration, no change to existing rows, no frontend change. Test: T-R1 (`git diff dev...HEAD -- internal/database/migrate.go frontend/` empty, checked by QA).
 
 ---
 

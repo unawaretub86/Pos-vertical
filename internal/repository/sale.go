@@ -268,8 +268,10 @@ func (r *saleRepo) GetByID(ctx context.Context, id int64) (*model.Sale, error) {
 	return s, payRows.Err()
 }
 
-// Void marks a sale as voided, restores stock for product items, and records
-// a negative register movement — all in a single transaction.
+// Void marks a sale as voided and restores stock for product items, in a
+// single transaction. It writes no register movement: the voided sale already
+// leaves the register's cash_sales because only status = 'completed' sales
+// count there, so a cash_out would subtract the cash a second time.
 func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model.Sale, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -280,9 +282,8 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 	// Verify sale exists and is not already voided
 	var status string
 	var total float64
-	var registerID sql.NullInt64
-	err = tx.QueryRowContext(ctx, `SELECT status, total, register_id FROM sales WHERE id = ?`, saleID).
-		Scan(&status, &total, &registerID)
+	err = tx.QueryRowContext(ctx, `SELECT status, total FROM sales WHERE id = ?`, saleID).
+		Scan(&status, &total)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
@@ -337,15 +338,6 @@ func (r *saleRepo) Void(ctx context.Context, saleID int64, userID int64) (*model
 		`UPDATE sales SET status = 'voided', voided_by = ?, voided_at = ? WHERE id = ?`,
 		userID, now, saleID); err != nil {
 		return nil, fmt.Errorf("void update sale: %w", err)
-	}
-
-	// Register reversal movement
-	if registerID.Valid {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO register_movements (register_id, type, amount, description) VALUES (?, 'cash_out', ?, ?)`,
-			registerID.Int64, total, fmt.Sprintf("Anulación venta #%d", saleID)); err != nil {
-			return nil, fmt.Errorf("void register movement: %w", err)
-		}
 	}
 
 	details := fmt.Sprintf(`{"total":%.2f}`, total)
