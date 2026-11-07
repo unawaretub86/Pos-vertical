@@ -70,4 +70,4 @@ It applies to ways of interacting that the user has not seen before. Not to incr
 | SPRINT-16 | Security and Production (JWT, Tx, Backup) | ✅ Complete |
 | SPRINT-17 | Factus Sandbox, WhatsApp and Responsive | ✅ Complete except US-074 (responsive 320px): criteria unchecked, requires manual verification on a phone/emulator |
 | SPRINT-18 | Production Stabilization | 🔄 In progress: US-075..US-080 done in code (manual PO checks pending, see `gaps.md`; US-080 needs real printers); US-081 pending |
-| SPRINT-19 | Fiado Collection (cash-correct abonos, R-61, US-043, quick abono, aging chips) | 🔄 In progress: US-082 and US-083 done in code (manual PO checks pending, see `gaps.md`); US-043, US-084, US-085 pending |
+| SPRINT-19 | Fiado Collection (cash-correct abonos, R-61, R-92, US-043, quick abono, aging chips) | 🔄 In progress: US-082, US-083 and US-086 done in code (manual PO checks pending, see `gaps.md`); US-043, US-084, US-085 pending |

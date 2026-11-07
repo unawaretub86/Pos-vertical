@@ -1,7 +1,7 @@
 # Domain — Fiado (credit to customers)
 
 > **Type:** spec · **Current:** yes · **Rules over:** customer balance, payments (*abonos*), receivables (*cartera*)
-> **Updated:** 2026-11-06 (US-083: collection WhatsApp message with the business name) · 2026-11-05 (US-082: *abono* method, register link, who may register; line refs re-verified) · Verified against the code on 2026-11-06 for the collection message (US-083), on 2026-11-05 for *abonos* (US-082) and on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
+> **Updated:** 2026-11-06 (US-086: customer detail id from the URL path; US-083: collection WhatsApp message with the business name) · 2026-11-05 (US-082: *abono* method, register link, who may register; line refs re-verified) · Verified against the code on 2026-11-06 for the collection message (US-083), on 2026-11-05 for *abonos* (US-082) and on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`; US-063: aging receivables use the same balance formula; US-064: `total_portfolio` of `GET /customers` uses the same formula and excludes balances `≤ 0`).
 
 *Fiado* (selling on credit) is **the product's differentiator**. Competitors treat it as an accounting field; here it is a relationship with history. Any change to these rules changes the value proposition, not just the code.
 
@@ -103,7 +103,8 @@ Example: business `Tienda Don Carlos`, customer `Ana`, balance 45,000 → `Hola 
 
 - The business name is trimmed. An empty or whitespace-only name (not configured, config still loading, or `GET /setup` failed) uses the text without a name; the action stays available (`frontend/lib/whatsapp.ts:9-16`).
 - Visibility is unchanged: on the detail, `Cobrar` appears when the balance is `> 0` and is disabled without a phone; on the list, the link appears only with debt and a phone.
-- The business name must be read inside `AppLayout`, which mounts `BusinessConfigProvider`: `CustomerDetailContent` (`frontend/app/customers/[id]/CustomerDetailClient.tsx:295`) and `CustomerRow` (`frontend/app/customers/page.tsx:523`). A hook in a component that itself returns `<AppLayout>` gets the empty default (US-083, formerly R-61).
+- The business name must be read inside `AppLayout`, which mounts `BusinessConfigProvider`: `CustomerDetailContent` (`frontend/app/customers/[id]/CustomerDetailClient.tsx:299`) and `CustomerRow` (`frontend/app/customers/page.tsx:523`). A hook in a component that itself returns `<AppLayout>` gets the empty default (US-083, formerly R-61).
+- The customer detail takes its id from the URL path, not the route param (`frontend/app/customers/[id]/CustomerDetailClient.tsx:304-305`, see `servidor.md` → Dynamic pages). The id must be a positive integer. Otherwise (`/customers/abc`, `/customers/_`) no `/customers/<x>/detail` request is sent and the page shows `Cliente no encontrado` (US-086).
 
 ---
 

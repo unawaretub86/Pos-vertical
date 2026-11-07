@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { api } from '@/lib/api';
+import { resolveRouteParam } from '@/lib/routeParam';
 
 interface CatalogProduct {
   id: number;
@@ -20,24 +22,37 @@ interface CatalogData {
   products: CatalogProduct[];
 }
 
-export default function CatalogClient({ token }: { token: string }) {
+// The browser path is only read on the client after hydration: the server
+// snapshot is null, so the first render matches the exported HTML (US-086).
+function subscribePath(onChange: () => void) {
+  window.addEventListener('popstate', onChange);
+  return () => window.removeEventListener('popstate', onChange);
+}
+
+export default function CatalogClient() {
+  const params = useParams<{ token: string }>();
+  const pathname = useSyncExternalStore(subscribePath, () => window.location.pathname, () => null);
+  const token = resolveRouteParam(params.token, pathname ?? '', 'catalogo');
+  // No token from the param and the path is not known yet: keep showing Cargando.
+  const resolvingToken = token === null && pathname === null;
   const [data, setData] = useState<CatalogData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    if (token === null) return;
     api.get<CatalogData>(`/public/catalog/${token}`)
       .then(setData)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [token]);
 
-  if (loading) {
+  if (resolvingToken || (token !== null && loading)) {
     return <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'system-ui' }}>Cargando catálogo...</div>;
   }
 
-  if (error || !data) {
+  if (token === null || error || !data) {
     return <div style={{ padding: '20px', textAlign: 'center', fontFamily: 'system-ui', color: '#666' }}>Catálogo no encontrado o no disponible.</div>;
   }
 

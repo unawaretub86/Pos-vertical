@@ -1,7 +1,7 @@
 # Domain — Restaurant (restaurant mode and tables)
 
 > **Type:** spec · **Current:** yes · **Rules over:** restaurant mode, tables and table state
-> **Updated:** 2026-10-13 (US-076: `PUT /api/setup` password exception) · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
+> **Updated:** 2026-11-06 (US-086: order and catalog pages read their segment from the URL path) · 2026-10-13 (US-076: `PUT /api/setup` password exception) · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
 
 Module for cafeterías and restaurants: tables, orders and a bar screen (SPRINT-13). Today table management, the switch and per-table orders (open, items, void, cancel) exist; checkout and the bar arrive in US-057 and US-058 and will add their rules here.
 
@@ -17,6 +17,7 @@ Enum values below (`libre`, `ocupada`, `por_cobrar`, route names like `/mesas`) 
 - `business_config.lan_access_enabled` (0/1, default 0) is created together with this migration but belongs to US-054 (LAN access); see `servidor.md`.
 - `PUT /api/setup` replaces the whole row, except `owner_email_app_password`: an omitted or empty value keeps the stored one (US-076; see `caja.md`). The Settings form must always resend `restaurant_mode` and `lan_access_enabled` (read from `GET /setup`) so that saving another field does not turn them off.
 - `GET /api/setup` returns `catalog_token` only to `admin`; any other role gets an empty string (R-69, `internal/handler/setup.go`). Name, logo and `restaurant_mode` stay visible to every authenticated user. Test: `TestSetup_R69_CatalogTokenOnlyForAdmin`.
+- The public catalog page `/catalogo/<token>` (link shown in Settings as `${origin}/catalogo/<catalog_token>`, `frontend/app/settings/page.tsx:728`) needs no session. It reads the token from the URL path (`frontend/app/catalogo/[token]/CatalogClient.tsx:34-35`) and calls `GET /api/public/catalog/<token>`. A wrong token → 404 and `Catálogo no encontrado o no disponible.`; a missing or malformed token (`/catalogo/_`, `/catalogo/%E0`) shows the same text with no request (US-086).
 
 ## Tables
 
@@ -79,7 +80,7 @@ Rules:
 
 - `/mesas`: grid of active tables with color by state; occupied ones with total and minutes open; tapping a free one opens an order and navigates to `/mesas/<id>`; tapping an occupied or awaiting-payment one navigates to `open_order_id` without creating another; if the `POST` gives 409 it refreshes and navigates to the existing order. With no tables, a link to Settings → Tables.
 - `/mesas/[orderId]`: catalog with search (tapping adds the item to the server immediately, no "send to kitchen"), lines with quantity, note and status (pendiente/preparando/listo/entregado — pending/preparing/ready/delivered), void with confirmation (struck-through line), cancellation with reason. A failure on add shows a message and leaves no phantom line. At 320px catalog and order alternate through tabs. There are no buttons to advance an item's status (arrives with the bar, US-058).
-- Dynamic route statically exported with `generateStaticParams [{orderId:'_'}]`; see `servidor.md`.
+- Dynamic route statically exported with `generateStaticParams [{orderId:'_'}]`. The order id comes from the URL path, not the route param (`resolveRouteParam`, `frontend/app/mesas/[orderId]/OrderClient.tsx:38`). With no id (`/mesas/_`) the page sends no `/api/orders/...` request and shows the empty order. See `servidor.md` → Dynamic pages.
 
 ## Schema (migration 18)
 

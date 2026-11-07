@@ -1,7 +1,7 @@
 # Domain — Server and LAN access
 
 > **Type:** spec · **Current:** yes · **Rules over:** server bind, access from other devices, serving the embedded frontend
-> **Updated:** 2026-10-01 (US-056: `/mesas/*` route, CORS `PATCH`) · Verified against the code (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
+> **Updated:** 2026-11-06 (US-086: dynamic pages read their segment from the browser path) · 2026-10-01 (US-056: `/mesas/*` route, CORS `PATCH`) · Verified against the code (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
 
 ## LAN access
 
@@ -21,6 +21,16 @@
 ## Embedded frontend
 
 Resolution order: exact file -> `<path>.html` (no redirect) -> `customers/_.html`, `catalogo/_.html` or `mesas/_.html` for `/customers/*`, `/catalogo/*` and `/mesas/*` (`dynamicRoutes`, `web/static.go:19`; a bare `/mesas` still serves `mesas.html`) -> 404 if it starts with `/_next/` or has an extension -> `index.html`.
+
+### Dynamic pages (US-086)
+
+- The export (`output: "export"`, `frontend/next.config.ts:4`) pre-renders each dynamic route only as `_` (`generateStaticParams`, `frontend/app/customers/[id]/page.tsx:3-5`, `frontend/app/mesas/[orderId]/page.tsx:3-5`, `frontend/app/catalogo/[token]/page.tsx:3-5`). The value baked into that page is `_`, so in the binary the route param seen by the page is never the real id.
+- `/customers/<id>`, `/mesas/<orderId>` and `/catalogo/<token>` therefore take their segment from `window.location.pathname` through `resolveRouteParam(param, pathname, prefix)` (`frontend/lib/routeParam.ts:17-36`). The route param wins only when it is a real value, i.e. a non-empty string other than `_`. Otherwise the helper returns the URI-decoded first segment after `/<prefix>/`, ignoring a trailing `/`. It returns `null` when the segment is missing, empty, `_` or badly percent-encoded (`%E0`), and never throws.
+- The path is read with `useSyncExternalStore` and a `null` server snapshot, so the first client render matches the exported HTML (no hydration error). Until the path is known the page shows its loading state.
+- A `null` segment sends no API request. `/customers/<x>` shows `Cliente no encontrado`, `/mesas/<x>` shows the empty order, and `/catalogo/<x>` shows `Catálogo no encontrado o no disponible.`. Customer ids must also be positive integers (`parseCustomerId`, `frontend/lib/routeParam.ts:39-43`), so `/customers/abc` sends no request either. Order ids are not validated: `/mesas/abc` sends `GET /api/orders/abc` → 400 and shows the empty order (R-97).
+- Navigating into these pages from inside the app is a full page load in the binary, not a soft navigation (R-98).
+- Under `pnpm dev` the three pages answer 500 (`missing param ... in "generateStaticParams()"`, required by `output: "export"`). This was unchanged by US-086 (R-95).
+- Tests: `frontend/lib/routeParam.test.ts` T-1..T-8. The Go serving side is unchanged and covered by `TestFileServer_T9_DynamicRoutes` and `TestFileServer_T17_MesasDynamicRoute` (`web/static_test.go`).
 
 The UI uses relative `/api` unless `NEXT_PUBLIC_API_URL` is defined (dev on :3000). CORS only echoes the dev-server origins `http://localhost:3000` and `http://127.0.0.1:3000` (`devOrigins`, `internal/middleware/middleware.go`); any other `Origin` gets no `Access-Control-Allow-Origin`, and the production UI never needs it because it is same-origin. Allowed methods are `GET, POST, PUT, PATCH, DELETE, OPTIONS` (`PATCH` was added with US-056) and `api.patch` exists in `frontend/lib/api.ts`.
 

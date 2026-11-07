@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
@@ -10,6 +10,7 @@ import { formatCOP } from '@/lib/format';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { buildCollectionWhatsAppUrl } from '@/lib/whatsapp';
 import { ABONO_METHOD_OPTIONS, DEFAULT_ABONO_METHOD, showsNoRegisterNotice, type AbonoMethod } from '@/lib/abono';
+import { resolveRouteParam, parseCustomerId } from '@/lib/routeParam';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -287,13 +288,23 @@ function PaymentModal({ customerName, balance, onClose, onSaved, customerId }: P
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// The browser path is only read on the client after hydration: the server
+// snapshot is null, so the first render matches the exported HTML (US-086).
+function subscribePath(onChange: () => void) {
+  window.addEventListener('popstate', onChange);
+  return () => window.removeEventListener('popstate', onChange);
+}
+
 // Inner component: must render INSIDE AppLayout so useBusinessConfig sees the provider.
 function CustomerDetailContent() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
   const { config: bizConfig } = useBusinessConfig();
-  const customerId = Number(params.id);
+  const pathname = useSyncExternalStore(subscribePath, () => window.location.pathname, () => null);
+  const customerId = parseCustomerId(resolveRouteParam(params.id, pathname ?? '', 'customers'));
+  // No id from the param and the path is not known yet: keep showing Cargando.
+  const resolvingId = customerId === null && pathname === null;
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -301,6 +312,7 @@ function CustomerDetailContent() {
   const [activeTab, setActiveTab] = useState<'sales' | 'payments'>('sales');
 
   const load = useCallback(async () => {
+    if (customerId === null) return;
     setLoading(true);
     try {
       const data = await api.get<CustomerDetail>(`/customers/${customerId}/detail`);
@@ -313,10 +325,11 @@ function CustomerDetailContent() {
   }, [customerId, toast]);
 
   useEffect(() => {
+    if (customerId === null) return;
     queueMicrotask(load);
-  }, [load]);
+  }, [customerId, load]);
 
-  if (loading) {
+  if (resolvingId || (customerId !== null && loading)) {
     return (
       <>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '13px' }}>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
@@ -11,6 +11,7 @@ import { useBusinessConfig } from '@/lib/business-config-context';
 import { shouldAutoPrint, handleTicketPrint } from '@/lib/printFlow';
 import { formatCOP } from '@/lib/format';
 import { ITEM_STATUS_LABEL, type Order, type OrderItem } from '@/lib/orders';
+import { resolveRouteParam } from '@/lib/routeParam';
 import TicketPreview, { type TicketData } from '@/components/TicketPreview';
 import SalePaymentPanel, { type CheckoutData, type PaymentMethod, type Customer } from '@/components/SalePaymentPanel';
 
@@ -20,12 +21,21 @@ interface Product {
   sale_price: number;
 }
 
+// The browser path is only read on the client after hydration: the server
+// snapshot is null, so the first render matches the exported HTML (US-086).
+function subscribePath(onChange: () => void) {
+  window.addEventListener('popstate', onChange);
+  return () => window.removeEventListener('popstate', onChange);
+}
+
 export default function OrderClient() {
   const params = useParams<{ orderId: string }>();
   const router = useRouter();
   const { toast } = useToast();
   const { config: businessConfig } = useBusinessConfig();
-  const orderId = params.orderId;
+  const pathname = useSyncExternalStore(subscribePath, () => window.location.pathname, () => null);
+  // null until the id is known; with no id the page sends no order request.
+  const orderId = resolveRouteParam(params.orderId, pathname ?? '', 'mesas');
 
   const [order, setOrder] = useState<Order | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -41,7 +51,7 @@ export default function OrderClient() {
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
 
   const loadOrder = useCallback(async () => {
-    if (!orderId || orderId === '_') return;
+    if (!orderId) return;
     try {
       setOrder(await api.get<Order>(`/orders/${orderId}`));
     } catch (e) {
@@ -50,7 +60,7 @@ export default function OrderClient() {
   }, [orderId, toast]);
 
   useEffect(() => {
-    if (!orderId || orderId === '_') return;
+    if (!orderId) return;
     api.get<Order>(`/orders/${orderId}`)
       .then(setOrder)
       .catch(e => toast(e instanceof Error ? e.message : 'Error al cargar el pedido', 'error'));
@@ -69,6 +79,7 @@ export default function OrderClient() {
 
   // Every mutation reconciles with the server: no optimistic lines.
   async function mutate(fn: () => Promise<unknown>, errMsg: string) {
+    if (!orderId) return;
     setBusy(true);
     try {
       await fn();
@@ -93,6 +104,7 @@ export default function OrderClient() {
   }
 
   async function confirmCancel() {
+    if (!orderId) return;
     if (!reason.trim()) {
       toast('El motivo es obligatorio', 'error');
       return;
@@ -109,6 +121,7 @@ export default function OrderClient() {
   }
 
   async function onCheckout(data: CheckoutData) {
+    if (!orderId) return;
     setBusy(true);
     try {
       const pmMap: Record<PaymentMethod, string> = {

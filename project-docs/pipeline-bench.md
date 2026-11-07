@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 14 (US-083, business name in the collection WhatsApp message, level L). Before: 13 (US-082), 12 (US-080), 11 (US-079). No `us/*` worktree is open. `dev` is at the US-083 merge (verify with `git log`).
+**Last run:** 15 (US-086, dynamic pages read their id from the URL path in the static export, R-92, level L). Before: 14 (US-083), 13 (US-082), 12 (US-080). No `us/*` worktree is open. `dev` is at the US-086 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**SPRINT-19 (Fiado collection):** US-082 and US-083 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3 and US-083 M-1 in `gaps.md`).
+**SPRINT-19 (Fiado collection):** US-082, US-083 and US-086 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1 and US-086 M-1 in `gaps.md`).
 
-**Next US:** US-043, then US-084, US-085, then US-081. Pending PO decision: whether R-92 (customer detail broken in the static export) and R-93 (business config read outside its provider in `/pos` and table checkout; US-080 direct printing never fires) go first. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** R-93 (business config read outside its provider in `/pos` and table checkout; US-080 direct printing never fires), then US-043, US-084, US-085, then US-081 (PO order, 2026-11-06). Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -60,6 +60,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 12 | 2026-11-05 | US-080 | L | ~535k (A 276k=76k+45k+73k+82k · T 84k · I 124k · Q 51k) | 167 | ~23.9 | 1 (two orchestrator sessions ran the close in parallel; PO closed one before merge) | 1 | 7 contract discrepancies (D-1..D-7) + 5 at close + 2 Gemini-verified MINOR | 7 new (R-76..R-82) | 1 (duplicate close by a parallel session) | +1,988 / −30, 32 files (excluding this benchmark entry) |
 | 13 | 2026-11-05 | US-082 | L | ~929k (A 409k=110k+127k+172k · T 243k=119k+124k · I 205k=95k+110k · Q 72k) | 232 | ~39.3 | 1 (analyst lost when the earlier session ended; resumed from transcript) | 1 | 6 contract discrepancies (D-1..D-6) + 5 Gemini-verified contract fixes + 1 red-test gap + 1 AC-7 miss + 6 QA MINOR | 7 new (R-83..R-89) | 0 | +1,146 / −93, 29 files (excluding this benchmark entry) |
 | 14 | 2026-11-06 | US-083 | L | ~372k (A 220k=56k+60k+105k · T 28k · I 40k · Q 85k) | 131 | ~21.8 | 0 | 1 | 4 contract discrepancies (D-1..D-4) + 1 Gemini-verified contract fix + 3 QA MINOR (pre-existing) | 5 new (R-90..R-94) | 0 | +160 / −35, 9 files (excluding this benchmark entry) |
+| 15 | 2026-11-06 | US-086 | L | ~336k (A 158k, last of 110k→112k→117k→158k · T 32k · I 46k · Q 100k) | 144 | ~28.6 | 1 (AC-7 premise false, PO rewording after QA) | 1 | 4 contract discrepancies (D-1..D-4) + 3 Gemini-verified contract additions + 5 QA MINOR | 4 new (R-95..R-98) + 1 closed (R-92) | 0 | +256 / −27, 13 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -650,6 +651,42 @@ The filtered diff output stayed in format and did not repeat the "no spec update
 
 ### What to measure in run 15
 - Whether a binary smoke by direct URL finds more pre-existing defects per run, and its time cost.
+
+## Run 15 — US-086 (dynamic pages read their id from the URL path in the static export, R-92, level L)
+
+PO prioritized R-92 ahead of US-043 (2026-11-06). The analyst registered US-086 in SPRINT-19 from the roadmap (`08f98fa`). It was resumed with `SendMessage` three times (GATE 1 adjustment, contract update after RED, close). The tokens column records the **last value** (158.0k), per "How it is measured"; run 14 summed the analyst's invocations instead, so the two rows are not directly comparable (run 14 last-value: 105k).
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract; GATE 1 adjustment; contract update after RED; close) | 158.0k (110.0k → 112.0k → 116.8k → 158.0k) | 69 | ~12.1 min |
+| test-author | 2 (red; T-8 after contract update) | 31.7k (28.2k → 31.7k) | 13 | ~1.0 min |
+| implementer | 1 | 46.1k | 10 | ~2.5 min |
+| qa | 1 round | 100.0k | 52 | ~13.0 min |
+
+**What it found.** The contract analyst built the binary from `dev` and confirmed R-92 by running it (first confirmation on `dev`), and found the same defect on `/mesas/<orderId>` (actions went to `/api/orders/_/...`) and `/catalogo/<token>` (`/api/public/catalog/undefined`). GATE 1 (Q-1..Q-4, accepted as recommended): both extra pages in scope, client-side helper with URLs unchanged, full-reload navigation left out (D-4 → R-98), verification by QA T-M1 plus a PO manual check. After RED, the PO approved three Gemini-derived additions (null cases for `/mesas` and `/catalogo`, malformed percent-encoding → T-8), committed as `548ece8` (`test: contract update`, step 2b). Implementation needed no re-dispatch. QA round 1: OK, 0 BLOCKER, 5 MINOR. M-1: AC-7 ("SHALL keep working under `pnpm dev`") rested on a false premise, because the three pages already answer 500 under `next dev` with `output: "export"`; the PO reworded it to "unchanged" → R-95. M-2/M-3 duplicated `popstate`-only path hook → R-96. M-4 order id not validated → R-97. M-5 self-contradicting R-92 row, fixed at close. QA drove the compiled binary in headless Edge over CDP with direct-URL loads and in-app clicks (run-14 proposal 2, applied by hand), and captured exceptions and console errors.
+
+**Unplanned stops:** 1 (AC-7 rewording after QA). The post-RED contract update is counted as a late GATE 1 addendum, not a stop: GATE 1 was presented before Gemini finished, as the command allows. Internal re-dispatches: 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | not recorded (finished after GATE 1) | 5 (1 RULE_CONFLICT, 3 MISSING_CASE, 1 UNTESTABLE) | 3 (null `orderId`, null catalog token, malformed percent-encoding) | 1 (spec at close: pipeline design) + 1 discarded at the time but later borne out: UNTESTABLE on AC-7 (`pnpm dev`), which QA then showed could not be met | n/a |
+| diff, round 1 | OK | not recorded (finished before QA) | 0 (`CLEAN`) | 0 | 0 | no (QA's MINORs are in unchanged code or need a running dev server) |
+
+Contract-mode precision this run: 3–4 of 5. It is the best Gemini contract result so far; the discarded AC-7 finding should have been taken as a hint to verify the premise.
+
+**Operational friction.**
+- The orchestrating session ended at GATE 2; the merge and this entry were done from a new session, with metrics read back from the earlier transcript.
+- QA's `next dev` background command first failed (exit 127, `pnpm` not on the Git Bash path in background) before it ran.
+- A stray `python -` process from QA could not be stopped: `taskkill` was denied by the permission classifier.
+- QA took ~13 min, again mostly binary build plus browser driving.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12/13/14 proposals still pending (peer-session check in step 0, contract template not assigning the spec, test-stub grep, direct-URL binary smoke in QA).
+2. The analyst verifies every "SHALL keep working under X" criterion by running X during the contract, not only by reading, since AC-7 was the only defect that reached QA.
+
+### What to measure in run 16
+- Whether a dev-server or binary premise check in the contract removes post-QA PO stops.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

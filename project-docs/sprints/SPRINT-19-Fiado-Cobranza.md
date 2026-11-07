@@ -10,6 +10,7 @@
 - New finding (2026-11-05): a cash *abono* is not counted in the register's expected cash. -> **US-082**.
 - R-61: the collection WhatsApp message goes out without the business name. -> **US-083**.
 - US-043 (SPRINT-09, pending): customer history in the POS at checkout. Backend already built; frontend missing. -> **moved here**.
+- R-92 (US-083 QA, confirmed 2026-11-06 on a binary built from `dev`): the customer detail page asks for `/api/customers/NaN/detail` in the compiled binary. -> **US-086**, prioritized by the PO ahead of US-043.
 
 **Out of scope (PO, 2026-11-05):** customer risk scoring (R-17), "quincena" collection mode (R-03), admin PIN to override the credit limit (R-11), tone-based WhatsApp templates, printed *abono* receipt over ESC/POS. Each is a full US and none is a quick win.
 
@@ -21,11 +22,12 @@
 |----|------|--------|------|
 | US-082 | Payment method on *abonos*; cash *abonos* count in the register close | [x] Complete in code (manual PO checks pending, see `gaps.md`) | 2026-11-05 |
 | US-083 | Business name in the collection WhatsApp message (R-61) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
+| US-086 | Dynamic pages read their id from the URL in the compiled binary (R-92) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | ⬜ Pending | |
 | US-084 | Quick *abono* modal from the Customers list | ⬜ Pending | |
 | US-085 | Aging filter chips with amounts on the Customers tab | ⬜ Pending | |
 
-**Total estimated effort: ~4.5 days**
+**Total estimated effort: ~5 days**
 
 ---
 
@@ -35,9 +37,10 @@
 |-------|----|--------|
 | **1** | US-082 | It is a money bug: the register close shows an unexplained surplus for every cash *abono*. US-084 builds on its `method` field. |
 | **2** | US-083 | Half a day, fixes a pre-existing defect that undermines every collection message. |
-| **3** | US-043 | Backend endpoint already exists; frontend only. Prevents extending credit to someone already overdue. |
-| **4** | US-084 | Depends on US-082 (method selector) to be cash-correct. |
-| **5** | US-085 | Pure UI over data the list already returns. |
+| **3** | US-086 | PO priority (2026-11-06): in the shipped `.exe` the customer detail (*abonos*, `Cobrar`, history) does not load, and US-084 builds on that flow. |
+| **4** | US-043 | Backend endpoint already exists; frontend only. Prevents extending credit to someone already overdue. |
+| **5** | US-084 | Depends on US-082 (method selector) to be cash-correct. |
+| **6** | US-085 | Pure UI over data the list already returns. |
 
 ---
 
@@ -132,6 +135,69 @@ Contract discrepancies: line refs in this US and in R-61 were stale after US-082
 - AC-6, AC-7: The business name SHALL be read inside `<AppLayout>`, in `CustomerDetailContent` (`frontend/app/customers/[id]/CustomerDetailClient.tsx:295`) and `CustomerRow` (`frontend/app/customers/page.tsx:523`). QA ran this in a browser (T-M1: playwright-core + Edge over the compiled binary, admin and cashier, 1280 px and 320 px). The detail URL and the list `href` contain `Tienda Don Carlos`.
 - AC-8: WHILE `GET /setup` has not answered or has failed, the system SHALL use the no-name text and keep the action enabled. T-M1 with `/api/setup` aborted showed `Cobrar` enabled and the AC-2 text.
 - AC-9: The visibility rules SHALL stay unchanged (detail button disabled without a phone, list link only with debt and a phone), with lint at 0 and working at 320 px. Covered by review, `pnpm lint` (0 problems) and T-M1 at 320 px (`Cobrar` visible, no horizontal overflow). Not exercised: the disabled state without a phone, a manual PO check in `gaps.md`.
+
+---
+
+## US-086 — Dynamic pages read their id from the URL in the compiled binary (R-92)
+
+**As** Don Carlos (owner) and whoever works the counter,
+**I want** the customer detail, the table order and the public catalog to open in the installed `pos.exe`,
+**so that** I can register *abonos* (partial payments toward a fiado balance), send `Cobrar`, work table orders and share the catalog link.
+
+**Estimated effort:** 0.5 day. **Impact:** High (three features do not work in the shipped binary). **Origin:** R-92 (US-083 QA), PO priority on 2026-11-06 ahead of US-043.
+
+**Technical context (verified 2026-11-06 by running a binary built from `dev` at `de27ebd` in headless Edge):**
+- The static export pre-renders each dynamic route only as `_` (`frontend/app/customers/[id]/page.tsx:3-5`, `frontend/app/mesas/[orderId]/page.tsx:3-5`, `frontend/app/catalogo/[token]/page.tsx:3-5`). The server serves that placeholder for every `/<prefix>/*` (`web/static.go:19`, `:47-52`).
+- `/customers/1`, opened by direct URL or from the list, requests `/api/customers/NaN/detail` → 400 and shows `Cliente no encontrado` (`frontend/app/customers/[id]/CustomerDetailClient.tsx:292`, `:296`).
+- `/mesas/1` loads no order at all because of the `'_'` guards (`frontend/app/mesas/[orderId]/OrderClient.tsx:44`, `:53`). Every action goes to `/api/orders/_/...` → 400.
+- `/catalogo/<token>` requests `/api/public/catalog/undefined` → 404 (`Catálogo no encontrado o no disponible.`). The page reads `params.token` synchronously (`page.tsx:7-8`), Next 16 passes `params` as a Promise, and the export bakes `"token":"$undefined"`.
+
+**Business rule:**
+- No rule changes. The three pages take their segment from the browser path through one shared pure helper in `frontend/lib/`, and use the route param only when it is a real value (`pnpm dev`). The Go file server and the URLs stay as they are.
+
+**Acceptance Criteria:**
+- [x] In the compiled binary, `/customers/1` opened by direct URL and from the Customers list loads customer 1 (`GET /api/customers/1/detail`); no request carries `NaN`.
+- [x] An invalid customer id (`/customers/abc`) shows `Cliente no encontrado` and sends no detail request.
+- [x] In the compiled binary, `/mesas/1` loads order 1, and adding an item posts to `/api/orders/1/items`.
+- [x] In the compiled binary and with no session, `/catalogo/<token>` loads the catalog of that token.
+- [x] Behavior under `pnpm dev` is unchanged (reworded by the PO on 2026-11-06, see below); no hydration error on hard load; `pnpm lint` stays at 0 problems.
+
+**DoD:**
+- Vitest tests for the helper (placeholder `_`, real param, trailing slash, missing segment, catalog token, table id, invalid customer id).
+- Browser check of the compiled binary (headless) by QA.
+- `spec/domain/servidor.md` (how dynamic pages get their id) updated at close.
+- R-92 closed in `roadmap.md`.
+
+**Verified criteria (closed 2026-11-06):**
+
+Contract discrepancies:
+- D-1: the order page did not request `NaN`. Its `'_'` guards made it load nothing, and every action went to `/api/orders/_/...` → 400.
+- D-2: `/catalogo/<token>` was broken too. It read `params.token` synchronously, Next 16 passes `params` as a Promise, and the export baked `"token":"$undefined"`.
+- D-3: the spec and the Go tests only covered serving the placeholder HTML.
+- D-4: navigating into these pages in the binary is a full page load (R-98).
+
+GATE 1 (PO, 2026-11-06): Q-1..Q-4 accepted as recommended. Mesas and catalog are in scope, the fix is a client-side helper with URLs unchanged, D-4 goes to the roadmap, and verification is QA T-M1 plus a PO manual check in `gaps.md`. A contract update approved by the PO (Gemini G-2, G-3, G-5) added malformed percent-encoding to AC-2 and added AC-10 and AC-11.
+
+QA round 1: OK, 0 BLOCKER, 5 MINOR:
+- M-1: AC-7 was reworded by the PO. Under `next dev` the three pages already answered 500 before this change, because of `output: "export"` (`frontend/next.config.ts:4`) with placeholder-only `generateStaticParams` (R-95).
+- M-2, M-3: duplicated `subscribePath` hook, which listens to `popstate` only (R-96).
+- M-4: order id not validated (R-97).
+- M-5: R-92 row contradicted itself; fixed at close.
+
+Gemini diff round 1: clean. No Go change (`git diff dev...HEAD -- web/ internal/` is empty). Spec: `spec/domain/servidor.md` → Dynamic pages, `spec/domain/restaurante.md` (order and public catalog), `spec/domain/fiado.md` (customer detail id).
+
+- AC-1: WHEN a dynamic page needs its segment, the system SHALL use `resolveRouteParam(param, pathname, prefix)` (`frontend/lib/routeParam.ts`). It SHALL return the route param when it is a non-empty string other than `'_'`. Otherwise it SHALL return the URI-decoded first segment after `/<prefix>/`, ignoring a trailing `/`. Tests (`frontend/lib/routeParam.test.ts`): `T-1 placeholder param reads the customer id from the path` (`'_'`, `/customers/1` → `'1'`), `T-2 placeholder param ignores a trailing slash` (`/customers/42/` → `'42'`), `T-3 a real param wins on the dev server`, `T-4 undefined param reads the catalog token from the path, URI-decoded` (`/catalogo/a%20b` → `'a b'`), `T-5 placeholder param reads the order id from the mesas path` (`/mesas/12` → `'12'`).
+- AC-2: IF the segment is missing, empty, `'_'` or badly percent-encoded, THEN the helper SHALL return `null` and never throw. Tests: `T-6 missing, empty or placeholder segment, or a different prefix, gives null`, `T-8 malformed percent-encoding gives null without throwing` (`/catalogo/%E0` → `null`).
+- AC-3: WHEN `/customers/1` is opened by direct URL or from the Customers list in the binary, the system SHALL request `GET /api/customers/1/detail` and render the customer, never `/NaN/`. Test: QA T-M1 (a), headless Edge over the compiled binary.
+- AC-4: IF the customer segment is not a positive integer, THEN no detail request SHALL be sent and the page SHALL show `Cliente no encontrado`. Tests: `T-7 accepts only a positive integer segment` (`'1'` → 1; `'abc'`, `'0'`, `'-3'`, `'1.5'`, `null` → `null`); T-M1 (b) for `/customers/abc` and `/customers/_`.
+- AC-5: WHEN `/mesas/1` is opened by direct URL or from the `/mesas` grid in the binary, the system SHALL request `GET /api/orders/1`, and add, update, void, cancel and checkout SHALL target `/api/orders/<id>/...`. Test: T-M1 (c), covering `POST /api/orders/1/items` → 201, `PATCH` and `DELETE` → 200, cancel on order 2 → 200, and checkout → 201 with ticket `TOTAL $2.500`.
+- AC-6: WHEN `/catalogo/tok086abc` is opened with no session in the binary, the system SHALL request `GET /api/public/catalog/tok086abc` and render the catalog, never `/undefined` or `/_`. Test: T-M1 (d).
+- AC-7 (reworded by the PO, 2026-11-06): behavior under `pnpm dev` SHALL be unchanged. Originally "SHALL keep working"; QA found that the three pages already answered 500 under `next dev` before this change (R-95). Covered by QA review: `next.config.ts` and the three `page.tsx` `generateStaticParams` are untouched, and the real-param branch is covered by T-3.
+- AC-8: The first client render SHALL match the exported HTML: the path is read with `useSyncExternalStore` and a `null` server snapshot. Test: T-M1 (e), with no hydration error or warning in the console.
+- AC-9: `web/static.go` and its tests SHALL be unchanged, and lint, tests and builds SHALL pass. Test: T-R1 (`git diff dev...HEAD -- web/` empty, `pnpm lint` 0 problems, `pnpm test` 110 passed, `go test ./...` green).
+- AC-10: IF the helper returns `null` on `/mesas/<x>`, THEN no `/api/orders/...` request SHALL be sent and the empty order SHALL show. Test: T-M1 (b2) `/mesas/_`.
+- AC-11: IF the helper returns `null` on `/catalogo/<x>`, THEN no `/api/public/catalog/...` request SHALL be sent and `Catálogo no encontrado o no disponible.` SHALL show. Test: T-M1 (b3), covering `/catalogo/_` and `/catalogo/%E0` with no exception.
+- Manual PO check: `gaps.md`, US-086 M-1.
 
 ---
 
