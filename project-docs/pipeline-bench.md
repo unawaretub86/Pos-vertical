@@ -10,13 +10,13 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 15 (US-086, dynamic pages read their id from the URL path in the static export, R-92, level L). Before: 14 (US-083), 13 (US-082), 12 (US-080). No `us/*` worktree is open. `dev` is at the US-086 merge (verify with `git log`).
+**Last run:** 16 (US-087, pages read the business config outside its provider, R-93, level L). Before: 15 (US-086), 14 (US-083), 13 (US-082). No `us/*` worktree is open. `dev` is at the US-087 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN multi-register concurrency) is pending. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
-**SPRINT-19 (Fiado collection):** US-082, US-083 and US-086 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1 and US-086 M-1 in `gaps.md`).
+**SPRINT-19 (Fiado collection):** US-082, US-083, US-086 and US-087 done in code and tests and merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1 and US-087 M-1 in `gaps.md`).
 
-**Next US:** R-93 (business config read outside its provider in `/pos` and table checkout; US-080 direct printing never fires), then US-043, US-084, US-085, then US-081 (PO order, 2026-11-06). Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-043, then US-084, US-085, then US-081 (PO order, 2026-11-06). Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -61,6 +61,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 13 | 2026-11-05 | US-082 | L | ~929k (A 409k=110k+127k+172k · T 243k=119k+124k · I 205k=95k+110k · Q 72k) | 232 | ~39.3 | 1 (analyst lost when the earlier session ended; resumed from transcript) | 1 | 6 contract discrepancies (D-1..D-6) + 5 Gemini-verified contract fixes + 1 red-test gap + 1 AC-7 miss + 6 QA MINOR | 7 new (R-83..R-89) | 0 | +1,146 / −93, 29 files (excluding this benchmark entry) |
 | 14 | 2026-11-06 | US-083 | L | ~372k (A 220k=56k+60k+105k · T 28k · I 40k · Q 85k) | 131 | ~21.8 | 0 | 1 | 4 contract discrepancies (D-1..D-4) + 1 Gemini-verified contract fix + 3 QA MINOR (pre-existing) | 5 new (R-90..R-94) | 0 | +160 / −35, 9 files (excluding this benchmark entry) |
 | 15 | 2026-11-06 | US-086 | L | ~336k (A 158k, last of 110k→112k→117k→158k · T 32k · I 46k · Q 100k) | 144 | ~28.6 | 1 (AC-7 premise false, PO rewording after QA) | 1 | 4 contract discrepancies (D-1..D-4) + 3 Gemini-verified contract additions + 5 QA MINOR | 4 new (R-95..R-98) + 1 closed (R-92) | 0 | +256 / −27, 13 files (excluding this benchmark entry) |
+| 16 | 2026-11-06/07 | US-087 | L | ~397k (A 179k, last of 121k→128k→130k→179k · T 46k · I 42k · Q 130k) | 215 | ~35.8 | 1 (vacuous T-4 CustomersPage case, PO dropped it before RED) | 1 | 4 contract discrepancies (D-1..D-4, incl. a third broken page `/barra`) + 4 Gemini-verified contract fixes + 1 vacuous test + 0 QA MINOR (3 INFO) | 3 new (R-99..R-101) + 1 closed (R-93) | 0 | +247 / −22, 11 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -687,6 +688,41 @@ Contract-mode precision this run: 3–4 of 5. It is the best Gemini contract res
 
 ### What to measure in run 16
 - Whether a dev-server or binary premise check in the contract removes post-QA PO stops.
+
+## Run 16 — US-087 (pages read the business config outside its provider, R-93, level L)
+
+Started right after the run-15 merge, in the same session. The analyst registered US-087 from the roadmap (`eb94149`) and was resumed with `SendMessage` three times (GATE 1 fixes, CustomersPage drop, close); the test-author once. Tokens are last values.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract; GATE 1 fixes; CustomersPage drop; close) | 178.9k (120.6k → 127.8k → 129.6k → 178.9k) | 109 | ~18.4 min |
+| test-author | 2 (red; drop vacuous case) | 45.7k (43.0k → 45.7k) | 18 | ~2.6 min |
+| implementer | 1 | 42.4k | 21 | ~2.3 min |
+| qa | 1 round | 130.2k | 67 | ~12.5 min |
+
+**What it found.** The analyst confirmed the defect by execution (binary in headless Edge plus a `react-dom/server` probe that records whether each `useBusinessConfig()` call sits inside the provider) and found it wider than R-93: D-1 `/barra` mounts no provider at all, so `loading` stays `true` and the bar screen has been blank in every mode since US-058; D-2 the table-checkout ticket view renders outside `AppLayout`, so its `Imprimir` also ignored ESC/POS; D-3/D-4 two specs described behaviour that did not happen, and `/barra` had no spec rule. GATE 1: Q-1..Q-4 accepted as recommended (`/barra` in scope with the provider only; checkout ticket inside the layout; new `frontend/vitest.config.mts` with only the `@` alias so tests can import pages; R-80 out). The test-author confirmed the right red reason with a throwaway alias config outside the repo, and flagged the T-4 CustomersPage case as vacuous (the hook only runs in `CustomerRow`, which does not render under SSR, so the log is empty and `every(Boolean)` always passes); the PO dropped it before RED. Implementation needed no re-dispatch. QA round 1: OK, 0 BLOCKER, 0 MINOR, 3 INFO; T-M1 (a)–(f) plus (e2) passed in the compiled binary, and QA added a fake TCP printer to see the success toast. QA emptied `PATH` for the binary so its browser auto-open could not reach Andrey's desktop.
+
+**Unplanned stops:** 1 (vacuous test, `PASSES⚠️` shown to the PO by rule; it led to a contract change before RED). Internal re-dispatches: 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | not recorded (finished before GATE 1) | 8 (1 RULE_CONFLICT, 2 AMBIGUOUS, 4 MISSING_CASE, 1 UNTESTABLE) | 4 as wording fixes, two of them merged into one (AC-8 coupling of print method and restaurant mode; AC-5 toasts; T-2/T-3 coverage overstated; T-4 cannot see the Sidebar) | 3 (spec at close: pipeline design; two "pending Q-n" ambiguities resolved by the gate) | n/a |
+| diff, round 1 | OK | not recorded (finished before QA) | 0 (`CLEAN`) | 0 | 0 | no (QA found no MINOR either) |
+
+Gemini's T-4 finding (Sidebar invisible to the test) sat next to the real gap the test-author then found (CustomersPage invisible too): the coverage claim of T-4 was the weak point, and neither the analyst nor the orchestrator caught the second half before red.
+
+**Operational friction.**
+- First run where the contract-stage execution (run-15 proposal 2, applied by hand) widened the scope before any code: `/barra` would otherwise have stayed blank.
+- The test-author needed a config file it is not allowed to create; a scratchpad config passed with `--config` solved it without breaking the file-ownership rule.
+- The contract and test edits after the PASSES⚠️ ran in parallel (different files), which kept the stop short.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Run-12..15 proposals still pending.
+2. test-author: every "every call is X" style assertion must also assert the log is non-empty, and a case that cannot record anything is reported as PASSES⚠️ (this run's test-author did it unprompted).
+
+### What to measure in run 17
+- Whether the new `vitest.config.mts` lets later US cover page-level behaviour in unit tests and shortens QA's browser time.
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

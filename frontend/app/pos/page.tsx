@@ -445,7 +445,8 @@ function CartItemRow({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function POSPage() {
+// Inner component: must render INSIDE AppLayout so useBusinessConfig sees the provider.
+function POSContent() {
   const { toast } = useToast();
   // Restaurant mode uses table orders instead of parked carts
   const { config: businessConfig } = useBusinessConfig();
@@ -785,7 +786,7 @@ export default function POSPage() {
   }
 
   return (
-    <AppLayout>
+    <>
       <Topbar
         title="Punto de Venta"
         subtitle={cart.length > 0 ? `${cart.length} artículo${cart.length !== 1 ? 's' : ''} en carrito` : 'Selecciona productos para agregar al carrito'}
@@ -1223,6 +1224,14 @@ export default function POSPage() {
         onConfirm={() => discardTarget && doDiscard(discardTarget.id)}
         onCancel={() => setDiscardTarget(null)}
       />
+    </>
+  );
+}
+
+export default function POSPage() {
+  return (
+    <AppLayout>
+      <POSContent />
     </AppLayout>
   );
 }

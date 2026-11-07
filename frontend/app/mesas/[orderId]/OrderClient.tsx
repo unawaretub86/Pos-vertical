@@ -28,7 +28,9 @@ function subscribePath(onChange: () => void) {
   return () => window.removeEventListener('popstate', onChange);
 }
 
-export default function OrderClient() {
+// Inner component: must render INSIDE AppLayout so useBusinessConfig sees the
+// provider, including the checkout ticket preview below.
+function OrderContent() {
   const params = useParams<{ orderId: string }>();
   const router = useRouter();
   const { toast } = useToast();
@@ -290,7 +292,7 @@ export default function OrderClient() {
   );
 
   return (
-    <AppLayout>
+    <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <Topbar
           title={order ? `Pedido #${order.id}` : 'Pedido'}
@@ -365,6 +367,14 @@ export default function OrderClient() {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+export default function OrderClient() {
+  return (
+    <AppLayout>
+      <OrderContent />
     </AppLayout>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
-import { useBusinessConfig } from "@/lib/business-config-context";
+import { BusinessConfigProvider, useBusinessConfig } from "@/lib/business-config-context";
 import { useRouter } from "next/navigation";
 import { FiVolume2, FiVolumeX, FiAlertCircle } from "react-icons/fi";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -30,7 +30,10 @@ type KDSResponse = {
   orders: KDSOrder[];
 };
 
-export default function BarraPage() {
+// Inner component: must render INSIDE BusinessConfigProvider so useBusinessConfig
+// sees it. Once the config loads (or GET /setup fails, leaving the defaults), the
+// effect below redirects to / unless restaurant mode is on.
+function BarraContent() {
   const router = useRouter();
   const { config, loading } = useBusinessConfig();
   const [data, setData] = useState<KDSResponse | null>(null);
@@ -224,5 +227,14 @@ export default function BarraPage() {
         )}
       </main>
     </div>
+  );
+}
+
+// Full-screen bar view: no AppLayout (no sidebar), so it mounts its own provider.
+export default function BarraPage() {
+  return (
+    <BusinessConfigProvider>
+      <BarraContent />
+    </BusinessConfigProvider>
   );
 }

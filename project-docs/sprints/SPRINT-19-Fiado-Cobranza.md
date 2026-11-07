@@ -11,6 +11,7 @@
 - R-61: the collection WhatsApp message goes out without the business name. -> **US-083**.
 - US-043 (SPRINT-09, pending): customer history in the POS at checkout. Backend already built; frontend missing. -> **moved here**.
 - R-92 (US-083 QA, confirmed 2026-11-06 on a binary built from `dev`): the customer detail page asks for `/api/customers/NaN/detail` in the compiled binary. -> **US-086**, prioritized by the PO ahead of US-043.
+- R-93 (US-083 QA): `/pos` and table checkout read the business config outside its provider, so ESC/POS auto-print never fires and `/pos` ignores restaurant mode. -> **US-087**, prioritized by the PO on 2026-11-06 right after US-086, ahead of US-043.
 
 **Out of scope (PO, 2026-11-05):** customer risk scoring (R-17), "quincena" collection mode (R-03), admin PIN to override the credit limit (R-11), tone-based WhatsApp templates, printed *abono* receipt over ESC/POS. Each is a full US and none is a quick win.
 
@@ -23,6 +24,7 @@
 | US-082 | Payment method on *abonos*; cash *abonos* count in the register close | [x] Complete in code (manual PO checks pending, see `gaps.md`) | 2026-11-05 |
 | US-083 | Business name in the collection WhatsApp message (R-61) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-086 | Dynamic pages read their id from the URL in the compiled binary (R-92) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
+| US-087 | Business config read inside its provider in `/pos`, table checkout and `/barra` (R-93) | [x] Complete (one manual PO check pending, see `gaps.md`) | 2026-11-06 |
 | US-043 | Customer debt and history in the POS at checkout, with credit-limit confirmation | ⬜ Pending | |
 | US-084 | Quick *abono* modal from the Customers list | ⬜ Pending | |
 | US-085 | Aging filter chips with amounts on the Customers tab | ⬜ Pending | |
@@ -38,9 +40,10 @@
 | **1** | US-082 | It is a money bug: the register close shows an unexplained surplus for every cash *abono*. US-084 builds on its `method` field. |
 | **2** | US-083 | Half a day, fixes a pre-existing defect that undermines every collection message. |
 | **3** | US-086 | PO priority (2026-11-06): in the shipped `.exe` the customer detail (*abonos*, `Cobrar`, history) does not load, and US-084 builds on that flow. |
-| **4** | US-043 | Backend endpoint already exists; frontend only. Prevents extending credit to someone already overdue. |
-| **5** | US-084 | Depends on US-082 (method selector) to be cash-correct. |
-| **6** | US-085 | Pure UI over data the list already returns. |
+| **4** | US-087 | PO priority (2026-11-06), right after US-086: with ESC/POS configured, no ticket prints by itself after a sale, and `/pos` ignores restaurant mode. |
+| **5** | US-043 | Backend endpoint already exists; frontend only. Prevents extending credit to someone already overdue. |
+| **6** | US-084 | Depends on US-082 (method selector) to be cash-correct. |
+| **7** | US-085 | Pure UI over data the list already returns. |
 
 ---
 
@@ -198,6 +201,70 @@ Gemini diff round 1: clean. No Go change (`git diff dev...HEAD -- web/ internal/
 - AC-10: IF the helper returns `null` on `/mesas/<x>`, THEN no `/api/orders/...` request SHALL be sent and the empty order SHALL show. Test: T-M1 (b2) `/mesas/_`.
 - AC-11: IF the helper returns `null` on `/catalogo/<x>`, THEN no `/api/public/catalog/...` request SHALL be sent and `Catálogo no encontrado o no disponible.` SHALL show. Test: T-M1 (b3), covering `/catalogo/_` and `/catalogo/%E0` with no exception.
 - Manual PO check: `gaps.md`, US-086 M-1.
+
+---
+
+## US-087 — Business config read inside its provider in `/pos`, table checkout and `/barra` (R-93)
+
+**As** whoever works the counter or the tables and Don Carlos (owner),
+**I want** the ticket to print by itself after a sale when direct printing is configured, and restaurant mode to apply in the POS and on the bar screen,
+**so that** I do not print each ticket by hand, parked carts do not mix with table orders, and the bar sees its orders.
+
+**Estimated effort:** 0.5 day. **Impact:** High (US-080 auto-print never fires in the shipped binary, and the bar screen is blank). **Origin:** R-93 (US-083 QA), PO priority on 2026-11-06 right after US-086, ahead of US-043.
+
+**Technical context (verified 2026-11-06 at `555ed60` by running a binary built from `dev` in headless Edge, with restaurant mode on and `print_method = escpos_network`):**
+- `useBusinessConfig()` returns `defaultConfig` (`print_method: 'browser'`, `restaurant_mode: false`, `loading: true`) when it is called outside `BusinessConfigProvider` (`frontend/lib/business-config-context.tsx:19`, `:21-25`). Only `AppLayout` mounts the provider (`frontend/components/AppLayout.tsx:47`).
+- `POSPage` calls the hook at `frontend/app/pos/page.tsx:451` and returns `<AppLayout>` itself (`:788`). A `/pos` sale sends no `POST /api/printer/print-ticket/{id}`, and `Dejar en espera` shows in restaurant mode (`showParked`, `:452`).
+- `OrderClient` calls the hook at `frontend/app/mesas/[orderId]/OrderClient.tsx:35` and returns `<AppLayout>` at `:293`. A table checkout sends no print-ticket request either. Its ticket view (`:172-179`) renders outside `AppLayout`, so even `Imprimir` opens the browser dialog instead of printing over ESC/POS.
+- `/barra` mounts no provider at all. `loading` stays `true` and the page returns `null` (`frontend/app/barra/page.tsx:35`, `:135`), so it has been blank in every mode since US-058.
+
+**Business rule:**
+- No rule changes. The spec already says that `/pos` hides parked carts in restaurant mode (`spec/domain/restaurante.md`) and that ESC/POS auto-prints after a sale (`spec/domain/impresion.md`); after the fix the code does what the spec says. The fix is the inner-component pattern already used by `SettingsContent` and `CustomerDetailContent`.
+
+**Acceptance Criteria:**
+- [x] With ESC/POS configured, a `/pos` sale and a table checkout each send the ticket to the printer once, by themselves, and the preview stays on screen.
+- [x] On the table-checkout ticket, `Imprimir` prints a second copy over ESC/POS, not through the browser dialog.
+- [x] With restaurant mode on, `/pos` shows no parked carts and no `Dejar en espera`.
+- [x] With restaurant mode on, `/barra` shows the bar screen with its orders; with it off, `/barra` redirects to `/`.
+- [x] In `Navegador` (browser) mode no ticket prints by itself and `Imprimir` opens the browser dialog, whatever the restaurant mode; with restaurant mode off, `/pos` shows parked carts as before, whatever the print method (split at GATE 1, see below). `pnpm lint` stays at 0 problems, and there is no Go change.
+
+**DoD:**
+- Tests that fail today because a page reads the config outside its provider (see the contract).
+- Browser check of the compiled binary by QA.
+- `spec/domain/restaurante.md` and `spec/domain/impresion.md` refreshed at close.
+- R-93 closed in `roadmap.md`.
+
+**Verified criteria (closed 2026-11-06):**
+
+Contract discrepancies:
+- D-1: `/barra` mounted no provider, so `loading` stayed `true` and the page was blank in every mode, as it had been since US-058 (`52b7f2b`). R-93 did not mention it.
+- D-2: the table-checkout ticket view rendered outside `AppLayout`, so its `Imprimir` called `window.print()` even in ESC/POS mode. In `/pos`, `Imprimir` already worked, because that modal sat inside the layout.
+- D-3: `spec/domain/restaurante.md` and `spec/domain/impresion.md` described behavior that did not happen, with stale line refs (also in R-80).
+- D-4: `spec/domain/restaurante.md` had no rule for `/barra`.
+
+GATE 1 (PO, 2026-11-06): Q-1..Q-4 accepted as recommended. `/barra` is in scope and gets the provider only, with no `AppLayout`. The table-checkout ticket renders inside `AppLayout`. A new `frontend/vitest.config.mts` holds only the `@` alias. R-80 stays out of scope. Gemini contract fixes approved by the PO: AC-8 split into AC-8a (by print method) and AC-8b (by restaurant mode), the `Imprimir` toasts stated in AC-5, test coverage made explicit, and AC-10 narrowed. A later PO decision dropped the `CustomersPage` case from AC-10 and T-4, because it could not fail (no `CustomerRow` renders under SSR).
+
+QA round 1: OK, 0 BLOCKER, 0 MINOR, 3 INFO:
+- the 320 px toast covers the ticket buttons (R-101);
+- `/barra` sends one KDS poll before its redirect (pre-existing, harmless);
+- prefetch 404s (R-98).
+
+RED `3c9232b`: T-1..T-3 fail and T-4 passes. HEAD `f2d5358`: `pnpm test` 115 passed, `pnpm lint` 0 problems, no Go diff. Gemini diff round 1: clean. Spec: `spec/domain/restaurante.md` (Restaurant mode, Screens, bar screen) and `spec/domain/impresion.md` (Frontend flow).
+
+Tests T-1..T-4 are in `frontend/lib/providerPlacement.test.tsx`; T-M1 is the QA check in headless Edge over the compiled binary.
+- AC-1: WHEN `/pos`, `/mesas/<orderId>` or `/barra` renders, every `useBusinessConfig()` call SHALL run inside a `BusinessConfigProvider`. Tests: `T-1 POSPage calls useBusinessConfig only inside the provider`, `T-2 OrderClient calls useBusinessConfig only inside the provider`, `T-3 BarraPage calls useBusinessConfig only inside the provider`. These check where the hook is called, not behavior.
+- AC-2: WHILE restaurant mode is on, `/pos` SHALL NOT show `Dejar en espera` or the parked-carts chips, even with items in the cart. Test: T-M1 (a), at 1280 px and 320 px, by direct URL and by in-app navigation.
+- AC-3: WHEN a `/pos` sale completes with an ESC/POS method, the frontend SHALL send `POST /api/printer/print-ticket/{saleId}` exactly once, after `GET /api/sales/{saleId}/ticket`, keep the preview, and show `Ticket enviado a la impresora` or an error toast with the server message. Test: T-M1 (b) (closed port → 502 `No se pudo imprimir: ...`), plus a success run against a fake printer (200, toast shown).
+- AC-4: WHEN a table checkout completes with an ESC/POS method, the same SHALL happen. Test: T-M1 (c), checkout $2.500 → print-ticket once, plus the success run.
+- AC-5: WHEN `Imprimir` is pressed on the table-checkout ticket with an ESC/POS method, the frontend SHALL send print-ticket (second copy), SHALL NOT call `window.print()`, SHALL show the same toasts as AC-3, and the view SHALL render inside the app layout. Test: T-M1 (c) (`window.print` 0 → 0, sidebar visible).
+- AC-6: WHEN `/barra` opens with restaurant mode on, it SHALL render `Pantalla de Barra (KDS)` full screen with no sidebar, and poll `GET /api/kds/orders` every 3 s. Test: T-M1 (d), polls at 3.57 s, 6.57 s and 9.57 s, `1 x Gaseosa` under `Mesa 1`.
+- AC-7: IF `/barra` opens with restaurant mode off, THEN it SHALL redirect to `/`. Test: T-M1 (e2).
+- AC-8a: WHILE `print_method` is `browser`, whatever the mode, no print-ticket request SHALL be sent after a sale or checkout, and `Imprimir` SHALL call `window.print()`. Test: T-M1 (e), restaurant on + browser.
+- AC-8b: WHILE restaurant mode is off, whatever the method, `/pos` SHALL show the parked carts. Test: T-M1 (e2), restaurant off + ESC/POS.
+- AC-9: IF `GET /api/setup` fails, THEN `/pos` and table checkout SHALL behave as browser with restaurant mode off, and `/barra` SHALL redirect to `/`. Test: T-M1 (f), with `/api/setup` blocked.
+- AC-10: `SettingsPage` and the customer detail page SHALL keep reading inside the provider. Tests: `T-4 CustomerDetailClient default export`, `T-4 SettingsPage`.
+- AC-11: No Go change; lint, tests and builds SHALL pass. Test: T-R1 (`git diff dev...HEAD -- internal/ cmd/ web/ go.mod go.sum` empty, `pnpm lint` exit 0, `pnpm test` 115 passed, `pnpm build`, `go build ./...`, `go test ./...` green).
+- Manual PO check: `gaps.md`, US-087 M-1 (it also unblocks US-080 P-4).
 
 ---
 

@@ -1,7 +1,7 @@
 # Domain — Ticket printing (tirilla)
 
 > **Type:** spec · **Current:** yes · **Rules over:** how the sale ticket (tirilla, printed receipt) reaches the printer, printer settings, ESC/POS content and encoding
-> **Updated:** 2026-11-05 (US-080: direct ESC/POS printing) · Verified against the code (`internal/service/printer.go`, `printer_windows.go`, `printer_other.go`, `internal/handler/printer.go`, `internal/handler/setup.go`, `internal/database/migrate.go`, `frontend/lib/printFlow.ts`, `frontend/lib/printerSettings.ts`).
+> **Updated:** 2026-11-06 (US-087: the method is read inside the business-config provider in `/pos` and table checkout) · 2026-11-05 (US-080: direct ESC/POS printing) · Verified against the code (`internal/service/printer.go`, `printer_windows.go`, `printer_other.go`, `internal/handler/printer.go`, `internal/handler/setup.go`, `internal/database/migrate.go`, `frontend/lib/printFlow.ts`, `frontend/lib/printerSettings.ts`).
 
 ## Print methods
 
@@ -67,9 +67,9 @@ Prints a short sample through the **saved** config: business name, `PRUEBA DE IM
 
 ## Frontend flow
 
-- WHEN a sale is created from `/pos` (`frontend/app/pos/page.tsx:770`) or from a table checkout (`/mesas/{orderId}`, `OrderClient.tsx:141`) and the method is not `browser`, the frontend calls `POST /printer/print-ticket/{id}` once, right after it loads the ticket for the preview. No print dialog opens. Success: toast `Ticket enviado a la impresora`. Failure: error toast with the server message. In both cases the preview stays on screen.
-- In ESC/POS modes the preview `Imprimir` button calls the same endpoint (a second copy); in `browser` mode it calls `window.print()` exactly as before. This button is the only reprint path today (no reprint from sales history, see roadmap).
-- The method is read from the business-config context (`frontend/lib/business-config-context.tsx`), refreshed after Settings is saved in the same browser. Another device keeps the old method until it reloads (roadmap).
+- WHEN a sale is created from `/pos` (`frontend/app/pos/page.tsx:771`) or from a table checkout (`/mesas/{orderId}`, `frontend/app/mesas/[orderId]/OrderClient.tsx:156`) and the method is not `browser`, the frontend calls `POST /printer/print-ticket/{id}` once, right after it loads the ticket for the preview. No print dialog opens. Success: toast `Ticket enviado a la impresora`. Failure: error toast with the server message. In both cases the preview stays on screen.
+- In ESC/POS modes the preview `Imprimir` button calls the same endpoint (a second copy), with the same toasts, in both the `/pos` modal and the table-checkout ticket view; in `browser` mode it calls `window.print()` exactly as before. The rule depends only on the method, not on restaurant mode. This button is the only reprint path today (no reprint from sales history, see roadmap).
+- The method is read from the business-config context (`frontend/lib/business-config-context.tsx`), refreshed after Settings is saved in the same browser. Another device keeps the old method until it reloads (roadmap R-80). The context has a real value only inside `BusinessConfigProvider`, mounted by `AppLayout`. Outside it, or while `GET /setup` is loading or after it fails, the method reads as `browser`, so nothing auto-prints. `/pos` and the table order page, including its ticket view, render inside `AppLayout` for this reason (US-087; test `frontend/lib/providerPlacement.test.tsx`). Until US-087 (2026-11-06) both read the method outside the provider: auto-print never fired, and the table-checkout `Imprimir` always opened the browser dialog.
 - If loading the ticket fails after the sale, there is no auto-print (the sale is still saved and a toast `Venta completada` shows).
 
 ## ESC/POS ticket content
