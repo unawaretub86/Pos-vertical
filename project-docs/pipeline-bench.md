@@ -10,13 +10,15 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 21 (US-081, LAN concurrency, level L). Before: 20 (US-085), 19 (US-088), 18 (US-084). No `us/*` worktree is open. `dev` is at the US-081 merge (verify with `git log`).
+**Last run:** 22 (US-090, DIAN off certification, level M). Before: 21 (US-081), 20 (US-085), 19 (US-088). No `us/*` worktree is open. `dev` is at the US-090 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN concurrency) is done in code and tests (real-device checks M-1..M-3 in `gaps.md`). SPRINT-18 is complete in code. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
 **SPRINT-19 (Fiado collection):** complete in code and tests; all 8 US (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085) merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1, US-084 M-1 and US-085 M-1 in `gaps.md`).
 
-**Next US:** none planned; the PO picks from the roadmap. Roadmap items R-102..R-109 and R-111..R-123 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**SPRINT-20 (Go-live for client #1):** US-090 merged to `dev` (manual check US-090 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08.
+
+**Next US:** US-091 (sprint order: US-091, US-092, US-094, US-093, US-089). Roadmap items R-102..R-109 and R-111..R-129 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -67,6 +69,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 19 | 2026-11-07 | US-088 (R-110) | L | ~348k (A 166k, last of 134k→141k→166k · T 76k · I 26k · Q 80k) | 161 | ~24.8 | 0 | 1 | 5 contract discrepancies (D-1..D-5) + 1 Gemini-verified contract addition (AC-7) + 2 QA MINOR | 5 new (R-111..R-115) + 1 closed (R-110) | 0 | +512 / −22, 8 files (excluding this benchmark entry) |
 | 20 | 2026-11-07 | US-085 | L | ~295k (A 144k, last of 72k→91k→144k · T 33k · I 47k · Q 70k) | 99 | ~17.9 | 0 | 1 | 6 contract discrepancies (D-1..D-6) + 2 Gemini-verified contract fixes (G-1, G-2) + 2 QA MINOR | 4 new (R-116..R-119) | 0 | +312 / −22, 8 files (excluding this benchmark entry) |
 | 21 | 2026-11-07 | US-081 | L | ~416k (A 173k, last of 99k→124k→173k · T 101k · I 64k · Q 78k) | 180 | ~31.4 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 2 contract discrepancies (D-1, D-2) + 1 root cause found by probe (deferred tx upgrade) + 3 Gemini-verified contract fixes (G-1..G-3) + 3 QA MINOR | 4 new (R-120..R-123) | 0 | +996 / −54, 17 files (excluding this benchmark entry) |
+| 22 | 2026-11-07 | US-090 | M | ~261k (A 124k, last value after contract 91k · I 72k · Q 65k) | ~119 | ~22 | 0 | 1 | 3 contract discrepancies fixed (D-1..D-3) + 4 sent to roadmap (D-4..D-7) + 1 Gemini-verified contract fix (AC-10 wording) + 4 QA MINOR | 6 new (R-124..R-129) | 0 | +402 / −20, 10 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -893,6 +896,37 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 22 — US-090 (certify every sale flow with DIAN turned off, level M)
+
+Already registered in SPRINT-20. Contract to close ran in one session (2026-11-07); the merge was done in the next session (2026-11-08) after the PO's GATE 2 "yes". Level M: no test-author, the implementer wrote tests and code. Metrics come from `changes/US-090/progress.md` and the `<usage>` blocks of the earlier session transcript. That session did not log the qa and close token lines, so the qa and analyst-close values below are matched by order and are approximate.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract; AC-10 fix; close) | ~124k (91.4k after contract) | ~53 | ~7+ min (contract 5.3 min, fix 1.8 min, close not logged) |
+| implementer | 1 | 72.5k | 29 | ~6.9 min |
+| qa | 1 round | ~64.7k | 37 | ~6.3 min |
+
+**What it found.** The backend already met AC-1..AC-8 when the analyst ran them in the contract, so production Go code was not changed. D-1: the Settings DIAN section called `/fiscal-config`, which does not exist (404); it now uses `/fiscal/config`. D-2: the section always rendered, against the spec; it now renders only when `enabled === true`. D-3: a false "nil if FE disabled" comment was corrected. D-4..D-7 (emission context, buyer-email rule, void deadlock after DIAN is turned off, DIAN cannot be fully enabled) went to the roadmap. QA ran mutations on a `git archive` copy, and every one made a test fail. The log-buffer assertion also catches `slog` output.
+
+**Unplanned stops:** 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~5 min | 13 | 1 (AC-10 contradicted the preamble wording) | 12 | n/a |
+| diff, round 1 | OK | ~2 min | 0 (`CLEAN`) | 0 | 0 | no; QA's 4 MINOR were test strength, a toast message, spec timing and a pre-existing swallowed error |
+
+**Operational friction.**
+- The session ended at GATE 2; the next session resumed from `progress.md` with no loss. That is the progress log working as intended.
+- `progress.md` left the qa and close metric lines as `n/a`, so they had to be recovered from the transcript.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Earlier pending proposals unchanged (runs 12..16, 18-2, 19-2, 20-2, 21-2).
+2. The orchestrator writes a `metrics` line to `progress.md` for every agent notification, not only some, so a run that crosses sessions keeps its numbers.
+
+### What to measure in run 23
+- Whether level M stays under ~250k tokens when the backend already passes (an audit-type US).
 
 ## Experiment M-1 — model comparison on US-078 (real FK enforcement)
 

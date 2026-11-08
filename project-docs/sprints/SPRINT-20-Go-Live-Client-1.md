@@ -27,7 +27,7 @@
 | US | Name | Status | Date |
 |----|------|--------|------|
 | US-089 | Start on Windows logon, and daily backups to a configurable folder with 30-day retention | [ ] | |
-| US-090 | Certify that every sale flow works with DIAN turned off | [ ] | |
+| US-090 | Certify that every sale flow works with DIAN turned off | [x] | 2026-11-07 |
 | US-091 | End-to-end certification of register close and *fiado* math, and F5 on every route of the binary | [ ] | |
 | US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [ ] | |
 | US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
@@ -76,9 +76,24 @@
 **Estimated effort:** 0.5 day (level M). **Impact:** High.
 
 **Acceptance criteria (draft):**
-- [ ] With fiscal config disabled, create, read, reprint and void a sale, and check out a table order, with no panic and no error in the log.
-- [ ] `void-with-credit-note` and the fiscal document endpoints answer a clear 4xx, not a 500.
-- [ ] No DIAN send or status control is visible in the UI when DIAN is off.
+- [x] With fiscal config disabled, create, read, reprint and void a sale, and check out a table order, with no panic and no error in the log.
+- [x] `void-with-credit-note` and the fiscal document endpoints answer a clear 4xx, not a 500.
+- [x] No DIAN send or status control is visible in the UI when DIAN is off.
+
+**Verified criteria (closed 2026-11-07):**
+
+Contract discrepancies: the Settings DIAN section called `/fiscal-config`, a route that does not exist (404), instead of `/fiscal/config` (D-1, fixed); the spec claimed a non-invoicing shop never sees DIAN, but the section always rendered (D-2, fixed); the `eledocRepo` "nil if FE disabled" comment was false (D-3, fixed); DIAN-on findings D-4, D-5, D-7 and the void deadlock D-6 went to the roadmap (R-124..R-127). GATE 1 (PO, 2026-11-07): Q-1..Q-4 accepted as recommended. The section renders only when `enabled === true`; the DIAN-off codes stay 400 / 400 / 404. No backend behavior changed: the backend already met AC-1..AC-8 when run in the contract. QA round 1: OK, 0 BLOCKER, 4 MINOR (R-127, R-128, R-129; spec delta applied at close). Gemini diff round 1: clean. Smoke test on the compiled binary: PASS. Spec: `spec/domain/facturacion-dian.md` § Activation and "With DIAN off". Manual check: `gaps.md` US-090 M-1 (logged-in render of `/settings`, not seen in a real browser).
+
+AC-1..AC-9 hold WHILE `fiscal_config.enabled = 0` at startup (`h.factelect == nil`, asserted first in every backend test). All backend tests are in `internal/handler/dian_off_test.go` and run through `h.Routes()`.
+
+- AC-1, AC-2, AC-6: WHEN a sale is posted (with a `buyer_email`), read, or its ticket requested, the system SHALL answer 201 / 200 / 200 with the stored totals and create no `electronic_documents` row, with no panic and nothing written to the standard logger. 1 × Arroz $50,000 cash → total 50000, ticket item `Arroz`, 0 documents. Test: `TestDianOff_T1_CreateReadTicket`.
+- AC-3, AC-6: WHEN a sale is reprinted to a network ESC/POS printer, the system SHALL send it and answer 200 `printed: true`; the bytes contain `$50.000`. Test: `TestDianOff_T2_ReprintToNetworkPrinter`.
+- AC-4, AC-6: WHEN an admin voids a sale with no electronic document, the system SHALL answer 200 `status voided` and return the stock (19 → 20); a second void → 400 `la venta ya fue anulada`. Test: `TestDianOff_T3_VoidRestoresStock`.
+- AC-5, AC-6: WHEN a table order is checked out (with a `buyer_email`), the system SHALL answer 201 with `order_id`, `sale_id` and `total` and create no document. Café × 2 + Torta × 1 → total 17000, sale 1, 0 documents, the sale then voids with 200. Test: `TestDianOff_T4_TableCheckout`.
+- AC-7: WHEN an admin calls `POST /sales/{id}/void-with-credit-note` with a motive, the system SHALL answer 400 `facturación electrónica no habilitada` and leave the sale `completed`; IF the motive is missing, THEN 400 `motive requerido`; a cashier gets 403. Test: `TestDianOff_T5_CreditNoteRefused`.
+- AC-8: WHEN an admin calls `GET /sales/{id}/factura` / `GET /sales/{id}/factura/pdf`, the system SHALL answer 400 / 404 with `facturación electrónica no habilitada`, never 5xx. Test: `TestDianOff_T6_FacturaEndpointsRefused`.
+- AC-9: WHEN an admin opens Settings, the frontend SHALL load the config from `/fiscal/config`, and IF `enabled` is not `true` (false, or the load failed), THEN it SHALL NOT render the "Facturación electrónica DIAN" section. Tests: `TestDianOff_T7_FiscalConfigRoute` (`/fiscal/config` → 200 `enabled false`, `/fiscal-config` → 404); `frontend/lib/fiscalSettings.test.ts` → "points at the backend route /fiscal/config", "hides the section when the config could not be loaded", "hides the section when DIAN is off".
+- AC-10: WHEN the saved config has `enabled: true`, the Settings section SHALL render and save through `PUT /fiscal/config`. Test: `frontend/lib/fiscalSettings.test.ts` → "shows the section when DIAN is on". That `page.tsx` uses the helpers is checked by review only (R-129).
 
 ## US-091 — End-to-end certification of register close and *fiado* math, and F5 on every route of the binary
 

@@ -23,7 +23,7 @@ type SaleService struct {
 	repo         repository.SaleRepository
 	productRepo  repository.ProductRepository
 	registerRepo repository.RegisterRepository
-	eledocRepo   repository.ElectronicDocRepository // nil if FE disabled
+	eledocRepo   repository.ElectronicDocRepository // always wired, also with FE disabled; Void's check is a no-op when the sale has no document
 }
 
 // WithElectronicDocs wires the electronic doc repository without changing the constructor.

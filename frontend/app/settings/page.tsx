@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { buildPrinterPayload, isTestPrintDisabled, type PrinterForm } from '@/lib/printerSettings';
+import { FISCAL_CONFIG_PATH, showFiscalSection } from '@/lib/fiscalSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -230,6 +231,9 @@ function SettingsContent() {
     numbering_range_id: 0,
     municipality_id: 149,
   });
+  // Config as loaded at mount (null if the load failed); it decides whether
+  // the DIAN section renders at all.
+  const [loadedFiscal, setLoadedFiscal] = useState<FiscalConfig | null>(null);
   const [savingFiscal, setSavingFiscal] = useState(false);
 
   const [logoPreview, setLogoPreview] = useState('');
@@ -246,13 +250,17 @@ function SettingsContent() {
   }, []);
 
   useEffect(() => {
-    api.get<FiscalConfig>('/fiscal-config')
-      .then(cfg => setFiscal({
-        enabled: cfg.enabled ?? false,
-        numbering_range_id: cfg.numbering_range_id ?? 0,
-        municipality_id: cfg.municipality_id ?? 149,
-      }))
-      .catch(() => {/* fiscal config may not exist yet */});
+    api.get<FiscalConfig>(FISCAL_CONFIG_PATH)
+      .then(cfg => {
+        const loaded = {
+          enabled: cfg.enabled ?? false,
+          numbering_range_id: cfg.numbering_range_id ?? 0,
+          municipality_id: cfg.municipality_id ?? 149,
+        };
+        setFiscal(loaded);
+        setLoadedFiscal(loaded);
+      })
+      .catch(() => setLoadedFiscal(null));
 
     api.get<BusinessConfig>('/setup')
       .then(cfg => {
@@ -312,7 +320,7 @@ function SettingsContent() {
     }
     setSavingFiscal(true);
     try {
-      await api.put('/fiscal-config', fiscal);
+      await api.put(FISCAL_CONFIG_PATH, fiscal);
       toast('Configuración DIAN guardada', 'success');
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Error al guardar config DIAN', 'error');
@@ -762,7 +770,8 @@ function SettingsContent() {
 
           {bizConfig.restaurant_mode && <TablesSection />}
 
-          {/* ── Sección: Facturación DIAN ─────────────────── */}
+          {/* ── Section: DIAN e-invoicing, only when it is on ── */}
+          {showFiscalSection(loadedFiscal) && (
           <form onSubmit={handleFiscalSave} style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '32px' }}>
             <div>
               <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: '10px' }}>
@@ -826,6 +835,7 @@ function SettingsContent() {
               </button>
             </div>
           </form>
+          )}
           </>
         )}
       </div>

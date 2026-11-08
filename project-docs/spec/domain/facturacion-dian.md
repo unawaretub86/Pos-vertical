@@ -1,7 +1,7 @@
 # Domain — DIAN electronic invoicing
 
 > **Type:** spec · **Current:** yes · **Rules over:** how invoicing relates to the sale
-> **Updated:** 2026-10-01 · Verified against `internal/factelect/` on 2026-09-21.
+> **Updated:** 2026-11-07 (US-090: behavior with DIAN off) · Verified against `internal/factelect/` on 2026-09-21 and against `internal/handler/` on 2026-11-07.
 
 This document covers **the product rule**. Implementation detail and provider research live in `project-docs/reference/facturacion-electronica.md` (formerly `fix-gaps.md`) and `project-docs/research/2026-05-dian-proveedores.md` (formerly `facElect-finds.md`), both from May 2026 and marked as implementation reference, not current state.
 
@@ -17,9 +17,15 @@ If the provider is down, Don Carlos keeps selling. That is the rule that is not 
 
 ## Activation
 
-It is **off by default**. `FiscalConfig.Enabled` controls everything: with the flag false, the service is not even constructed (`internal/handler/handler.go`, in `New`).
+It is **off by default**. `FiscalConfig.Enabled` controls everything: with the flag false, the service is not even constructed (`internal/handler/handler.go`, in `New`). The flag is read once at startup, so a change takes effect after a restart.
 
-A shopkeeper who does not invoice electronically never sees any of this. It is deliberate: most of the target market is not yet obliged to.
+A shopkeeper who does not invoice electronically never sees any of this: the Settings section "Facturación electrónica DIAN" renders only when the saved config has `enabled` true (`frontend/lib/fiscalSettings.ts`). It is deliberate: most of the target market is not yet obliged to.
+
+### With DIAN off
+
+Every sale flow works unchanged: create, read, ticket, reprint, void and table checkout, and no electronic document is created even if a buyer email is sent. The DIAN-only endpoints answer a 4xx with `facturación electrónica no habilitada`: `POST /sales/{id}/void-with-credit-note` → 400 (a missing motive is checked first → 400 `motive requerido`), `GET /sales/{id}/factura` → 400, `GET /sales/{id}/factura/pdf` → 404. Certified by `internal/handler/dian_off_test.go` (US-090).
+
+A sale that already has an `accepted` or `pending` document (DIAN was on before) cannot be voided while DIAN is off: `DELETE /sales/{id}/void` answers 409 `requires_credit_note` and the credit-note endpoint answers 400. This is a known limitation, tracked in the roadmap (R-126).
 
 ## Fiscal configuration
 
