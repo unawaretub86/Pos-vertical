@@ -10,15 +10,15 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 22 (US-090, DIAN off certification, level M). Before: 21 (US-081), 20 (US-085), 19 (US-088). No `us/*` worktree is open. `dev` is at the US-090 merge (verify with `git log`).
+**Last run:** 23 (US-091, register close and fiado certification plus F5 on every route, level L). Before: 22 (US-090), 21 (US-081), 20 (US-085). `us/US-096` (money QA layer 1) is open from another session. `dev` is at the US-091 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN concurrency) is done in code and tests (real-device checks M-1..M-3 in `gaps.md`). SPRINT-18 is complete in code. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
 **SPRINT-19 (Fiado collection):** complete in code and tests; all 8 US (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085) merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1, US-084 M-1 and US-085 M-1 in `gaps.md`).
 
-**SPRINT-20 (Go-live for client #1):** US-090 merged to `dev` (manual check US-090 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08.
+**SPRINT-20 (Go-live for client #1):** US-090 and US-091 merged to `dev` (manual checks US-090 M-1 and US-091 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08; US-095 (UI void, from R-111) added at US-091 GATE 1; US-096 (money QA layer 1, R-130) in progress in another session.
 
-**Next US:** US-091 (sprint order: US-091, US-092, US-094, US-093, US-089). Roadmap items R-102..R-109 and R-111..R-129 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** see the SPRINT-20 recommended order. Roadmap items R-102..R-109, R-112..R-129 and R-131..R-136 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -70,6 +70,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 20 | 2026-11-07 | US-085 | L | ~295k (A 144k, last of 72k→91k→144k · T 33k · I 47k · Q 70k) | 99 | ~17.9 | 0 | 1 | 6 contract discrepancies (D-1..D-6) + 2 Gemini-verified contract fixes (G-1, G-2) + 2 QA MINOR | 4 new (R-116..R-119) | 0 | +312 / −22, 8 files (excluding this benchmark entry) |
 | 21 | 2026-11-07 | US-081 | L | ~416k (A 173k, last of 99k→124k→173k · T 101k · I 64k · Q 78k) | 180 | ~31.4 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 2 contract discrepancies (D-1, D-2) + 1 root cause found by probe (deferred tx upgrade) + 3 Gemini-verified contract fixes (G-1..G-3) + 3 QA MINOR | 4 new (R-120..R-123) | 0 | +996 / −54, 17 files (excluding this benchmark entry) |
 | 22 | 2026-11-07 | US-090 | M | ~261k (A 124k, last value after contract 91k · I 72k · Q 65k) | ~119 | ~22 | 0 | 1 | 3 contract discrepancies fixed (D-1..D-3) + 4 sent to roadmap (D-4..D-7) + 1 Gemini-verified contract fix (AC-10 wording) + 4 QA MINOR | 6 new (R-124..R-129) | 0 | +402 / −20, 10 files (excluding this benchmark entry) |
+| 23 | 2026-11-08 | US-091 | L | ~399k (A 193k, last of 145k→170k→193k · T 88k · I 33k · Q 85k) | 149 | ~31.6 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 6 contract discrepancies (D-1..D-6) + 1 Gemini-verified contract fix (AC-6) + 3 QA MINOR | 3 new (R-134..R-136) + 1 moved to a US (R-111 → US-095) | 0 | +982 / −24, 12 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -896,6 +897,54 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 23 — US-091 (end-to-end certification of register close and fiado math, and F5 on every route of the binary, level L)
+
+Already registered in SPRINT-20. Contract to merge ran in one session (2026-11-08). The analyst was resumed with `SendMessage` twice (for the GATE 1 decisions and for the close) although `ListAgents` showed it as completed.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract; GATE 1 decisions; close) | 192.9k (144.7k → 169.9k → 192.9k) | 75 | ~13.6 min |
+| test-author | 1 | 87.8k | 26 | ~6.0 min |
+| implementer | 1 | 33.3k | 21 | ~3.7 min |
+| qa | 1 round | 84.8k | 27 | ~8.3 min |
+
+**What it found.** This was a certification US. The analyst ran the sprint's scripted shift through `h.Routes()`, and the draft totals ($157.000 close, $15.000 balance) were right. The backend already met every money AC, so no production Go code changed.
+
+Discrepancies:
+- **D-1:** the "no cash abono without an open register" rule already existed (US-082).
+- **D-2:** F5 already worked at the server. The draft's "same page" claim did not hold for the 4 redirecting public pages, and unknown paths return the home page with 200.
+- **D-3:** the dry run asks for a void, but there is no void action in the UI. This led to US-095.
+- **D-4:** transfer and card abonos show on no close figure (R-134).
+- **D-5:** an HTTP close on `:memory:` failed 174 of 200 runs, so the shift tests use a file DB.
+- **D-6:** `scripts/copy-frontend.go` deleted the tracked `web/out/.gitkeep`.
+
+Test-author: T-1..T-6 passed on the base and T-7 was RED, as the contract expected. The PO accepted this at the PASSES⚠️ stop. The implementer only touched the copy script (`.gitkeep`, an `Fprintf` argument bug, Rule 0 translation) and added a CI step that runs the real-export test.
+
+QA round 1: OK, 0 BLOCKER, 3 MINOR (R-135, R-136). QA ran 18 mutations on a `git archive` copy and the tests caught all 18. The shift tests passed 20 of 20 repeated runs, and the smoke test on the binary passed.
+
+**Unplanned stops:** 1 (PASSES⚠️ review, pipeline-mandated), plus 1 merge conflict at GATE 2 (see below). Internal re-dispatches: 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~5 min | 10 | 1 (AC-6 did not state the admin abono amount or the resulting balance) | 9. Three came from input truncated at 20.7k of the 27.6k contract (same as run 18); the others were out of scope, already covered, or manual by design | n/a |
+| diff, round 1 | OK | ~3 min | 0 (`CLEAN`) | 0 | 0 | no; QA's 3 MINOR were test robustness and a pre-existing swallowed error |
+
+**Operational friction.**
+- **Parallel session collision.** While this run was at GATE 2, another session committed R-130..R-133 (money QA layers) to `dev` (`c7de6c2`) and opened `us/US-096`. US-091 had opened R-130..R-132 in its worktree, so `merge --squash` conflicted in `roadmap.md`. The orchestrator resolved it by renumbering the US-091 items to R-134..R-136 (roadmap, `caja.md`, `servidor.md`, SPRINT-20). The other session had already caught the US-095 collision and renamed its US to US-096.
+- **Cleanup ran after the failed merge.** The orchestrator chained the cleanup with `;` after `merge --squash`, so the worktree and branch were removed before the conflict was seen. The branch was recreated from its hash (`fac6ab1`) and nothing was lost.
+- The Gemini contract input truncation (run 18) again produced false "missing section" findings on a long contract.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Earlier pending proposals unchanged (runs 12..16, 18-2, 19-2, 20-2, 21-2, 22-2).
+2. Raise or remove the Gemini contract input limit (run 18 proposal). This is the second run where truncation produced most of the false positives.
+3. For a certification US (backend already passes when the contract runs it), the PASSES⚠️ stop is expected. Let the contract mark those tests as "certifying", so the stop only fires for tests not marked that way.
+4. New roadmap R-numbers and US IDs are reserved at merge, not when an analyst writes them in a worktree: at GATE 2, the orchestrator greps `dev` for the IDs the US opened and renumbers before merging. Parallel sessions make this collision likely.
+5. In `.claude/commands/us.md` GATE 2, run the cleanup only after the merge commit succeeds (`&&`, not separate lines).
+
+### What to measure in run 24
+- Whether the new CI export step (`pnpm build` + copy + `go test -tags export`) stays around 30 s in GitHub Actions.
 
 ## Run 22 — US-090 (certify every sale flow with DIAN turned off, level M)
 

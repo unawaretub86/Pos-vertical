@@ -31,5 +31,15 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Real export serves every route (US-091 T-6, T-7)
+        working-directory: .
+        run: |
+          go run scripts/copy-frontend.go
+          go test -tags export ./web/
+          git diff --exit-code -- web/out/.gitkeep
       - run: pnpm test
       - run: pnpm lint

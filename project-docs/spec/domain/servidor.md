@@ -1,7 +1,7 @@
 # Domain — Server and LAN access
 
 > **Type:** spec · **Current:** yes · **Rules over:** server bind, access from other devices, serving the embedded frontend
-> **Updated:** 2026-11-07 (US-081: concurrent devices, `_txlock=immediate`, busy writes → 503, client retry) · 2026-11-06 (US-086: dynamic pages read their segment from the browser path) · 2026-10-01 (US-056: `/mesas/*` route, CORS `PATCH`) · Verified against the code (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
+> **Updated:** 2026-11-08 (US-091: route certification, F5 tests, `copy-frontend.go` keeps `.gitkeep`, CI export step) · 2026-11-07 (US-081: concurrent devices, `_txlock=immediate`, busy writes → 503, client retry) · 2026-11-06 (US-086: dynamic pages read their segment from the browser path) · 2026-10-01 (US-056: `/mesas/*` route, CORS `PATCH`) · Verified against the code (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
 
 ## LAN access
 
@@ -21,6 +21,16 @@
 ## Embedded frontend
 
 Resolution order: exact file -> `<path>.html` (no redirect) -> `customers/_.html`, `catalogo/_.html` or `mesas/_.html` for `/customers/*`, `/catalogo/*` and `/mesas/*` (`dynamicRoutes`, `web/static.go:19`; a bare `/mesas` still serves `mesas.html`) -> 404 if it starts with `/_next/` or has an extension -> `index.html`.
+
+### Route certification (US-091)
+
+- The export has 21 pages (`page.tsx` under `frontend/app`): `/`, `/audit`, `/barra`, `/catalogo/[token]`, `/change-password`, `/customers`, `/customers/[id]`, `/inventory`, `/login`, `/mesas`, `/mesas/[orderId]`, `/onboarding`, `/portfolio`, `/pos`, `/purchases`, `/register`, `/reports`, `/settings`, `/setup`, `/suppliers`, `/users`. A GET for each, with a concrete segment for the dynamic ones (`/customers/42`, `/mesas/7`, `/catalogo/abc123`), with or without a trailing `/` and with a query string, answers 200 `text/html` with that route's own exported file. A reload (F5) therefore never gets a 404.
+- An unknown path (`/nope`) and a bare `/catalogo` get `index.html` (the home page) with 200, not a 404. A missing `/_next/...` asset or any path with an extension answers 404.
+- Four public pages redirect on load by design, so F5 on them does not always stay: `/login` → `/` when logged in, → `/onboarding` when setup is incomplete (`frontend/app/login/page.tsx:24-30`); `/change-password` → `/` without the force-change flag (`frontend/app/change-password/page.tsx:21-23`); `/onboarding` → `/login` once setup is complete (`frontend/app/onboarding/page.tsx:27-30`); `/setup` → `/login` when logged out (`frontend/app/setup/page.tsx:42-44`).
+- `dynamicRoutes` (`web/static.go:19`) is a hand-kept list. `TestFileServer_T18_EveryAppRouteResolves` (`web/static_routes_test.go`) walks `frontend/app` and fails, naming the route, if a dynamic prefix is missing from it or its page does not bake `'_'`. It models each dynamic route as `<prefix>/_.html`, so a nested dynamic route (`app/p/[q]/edit`) would need the test extended (roadmap R-135).
+- `TestFileServer_T19_RealExportEveryRoute` and `TestCopyFrontend_T20_KeepsGitkeep` (`web/static_export_test.go`, build tag `export`) run against the real embedded export. Locally: `cd frontend && pnpm run build && cd .. && go run scripts/copy-frontend.go && go test -tags export ./web/`. CI runs them in the `frontend` job right after `pnpm run build`, followed by `git diff --exit-code -- web/out/.gitkeep` (`.github/workflows/test.yml:34-43`).
+- `scripts/copy-frontend.go` replaces `web/out` with `frontend/out` and then recreates the tracked, empty `web/out/.gitkeep` (`scripts/copy-frontend.go:29-35`), so the `go:embed` directory exists in a fresh clone and the build never shows the file as deleted.
+- F5 in a real browser with an admin session and data is a manual check (`gaps.md`, US-091 M-1).
 
 ### Dynamic pages (US-086)
 

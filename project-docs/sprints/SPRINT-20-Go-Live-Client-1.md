@@ -28,12 +28,13 @@
 |----|------|--------|------|
 | US-089 | Start on Windows logon, and daily backups to a configurable folder with 30-day retention | [ ] | |
 | US-090 | Certify that every sale flow works with DIAN turned off | [x] | 2026-11-07 |
-| US-091 | End-to-end certification of register close and *fiado* math, and F5 on every route of the binary | [ ] | |
+| US-091 | End-to-end certification of register close and *fiado* math, and F5 on every route of the binary | [x] | 2026-11-08 |
 | US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [ ] | |
 | US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
 | US-094 | Product catalog import from CSV | [ ] | |
+| US-095 | Admin void button for a sale in the UI | [ ] | |
 
-**Total estimated effort: ~5.5 days**
+**Total estimated effort: ~6.5 days**
 
 ---
 
@@ -43,10 +44,11 @@
 |-------|----|--------|
 | **1** | US-090 | Small audit, level M. Confirms the base the other tests run on. |
 | **2** | US-091 | Certifies the money flows before real money goes through them. |
-| **3** | US-092 | Needed before loading the client's existing debts. |
-| **4** | US-094 | Needed before loading the client's catalog (if approved). |
-| **5** | US-093 | Run after the dry run, right before go-live. |
-| **6** | US-089 | Last code before install; tested on the real install path. |
+| **3** | US-095 | Lets the admin undo a wrong charge at the counter; the G-2 dry run voids a sale through it. Its money effect is certified by US-091. |
+| **4** | US-092 | Needed before loading the client's existing debts. |
+| **5** | US-094 | Needed before loading the client's catalog (if approved). |
+| **6** | US-093 | Run after the dry run, right before go-live. |
+| **7** | US-089 | Last code before install; tested on the real install path. |
 
 ---
 
@@ -104,10 +106,45 @@ AC-1..AC-9 hold WHILE `fiscal_config.enabled = 0` at startup (`h.factelect == ni
 **Estimated effort:** 1 day. **Impact:** High.
 
 **Acceptance criteria (draft):**
-- [ ] One test runs a full shift: opening $100.000; cash sale $30.000; credit sale $50.000; cash *abono* $20.000; transfer *abono* $10.000; card *abono* $5.000; cash in $15.000; cash out $8.000; void of a $12.000 cash sale made in the same shift. Expected close = 100.000 + 30.000 + 20.000 + 15.000 − 8.000 = **$157.000**; the customer balance = 50.000 − 20.000 − 10.000 − 5.000 = **$15.000**.
-- [ ] A void of a credit sale lowers the customer balance by its credit amount and returns the stock.
-- [ ] A cashier cannot register a cash *abono* with no open register.
-- [ ] In the compiled binary, pressing F5 on every frontend route (including dynamic ones) reloads the same page, never a 404.
+- [x] One test runs a full shift: opening $100.000; cash sale $30.000; credit sale $50.000; cash *abono* $20.000; transfer *abono* $10.000; card *abono* $5.000; cash in $15.000; cash out $8.000; void of a $12.000 cash sale made in the same shift. Expected close = 100.000 + 30.000 + 20.000 + 15.000 − 8.000 = **$157.000**; the customer balance = 50.000 − 20.000 − 10.000 − 5.000 = **$15.000**.
+- [x] A void of a credit sale lowers the customer balance by its credit amount and returns the stock.
+- [x] A cashier cannot register a cash *abono* with no open register.
+- [x] In the compiled binary, pressing F5 on every frontend route (including dynamic ones) reloads the same page, never a 404.
+
+**Verified criteria (closed 2026-11-08):**
+
+Contract findings, verified by running: the draft totals are right (close $157.000, balance $15.000; the $12.000 sale takes `expected` to $169.000 before its void). The cashier *abono* rule was already enforced since US-082 (D-1), and every route already served its own page on reload (D-2); four public pages redirect on load by design and an unknown path gets the home page with 200. There is no void action in the UI (D-3), transfer and card *abonos* reach no close figure (D-4), an HTTP close on a `:memory:` test DB fails 174 of 200 runs (D-5), and `scripts/copy-frontend.go` deleted the tracked `web/out/.gitkeep` (D-6). GATE 1 (PO, 2026-11-08): Q-1..Q-4 accepted as recommended, plus the AC-6 fix (admin *abono* amount and resulting balance, a verified Gemini finding). The UI void became US-095 (from R-111); non-cash *abonos* on the close went to R-134; the real-export tests run in CI; the shift tests use a file-backed DB. No production Go code changed; `scripts/copy-frontend.go` now recreates `.gitkeep` and CI runs the export tests after `pnpm run build` (`.github/workflows/test.yml:34-43`). QA round 1: OK, 0 BLOCKER, 3 MINOR (R-135, R-136), 18/18 mutations caught, binary smoke test PASS. Gemini diff round 1: clean. Spec: `spec/domain/caja.md` ("Rule: expected cash at close"), `spec/domain/fiado.md` ("Rule: balance"), `spec/domain/servidor.md` ("Route certification"). Manual check: `gaps.md` US-091 M-1.
+
+Shift data for AC-1..AC-4: opening $100.000; sale #1 cash $30.000; sale #2 credit $50.000 to customer 1; *abonos* $20.000 cash, $10.000 transfer, $5.000 card; `cash_in` $15.000; `cash_out` $8.000; sale #3 cash $12.000; admin voids sale #3; the cashier closes with $157.000. Backend tests are in `internal/handler/shift_certification_test.go`, through `h.Routes()` on a file-backed DB.
+
+- AC-1: WHEN the shift has run up to and including the void of sale #3, `GET /registers/1` SHALL return `cash_sales` 30000, `cash_abonos` 20000, `cash_in` 15000, `cash_out` 8000, `expected` 157000 and `by_payment_method` exactly cash 30000 × 1 and credit 50000 × 1. Test: `TestShiftCert_T1_FullShift`.
+- AC-2: WHEN the cashier closes register 1 with `actual_close` 157000, the system SHALL answer 200 and store `closed`, `expected_close` 157000, `actual_close` 157000, `difference` 0; a second close → 409. Test: `TestShiftCert_T2_CloseAndAfterClose`.
+- AC-3: WHEN the shift has run, the customer balance SHALL be 15000 in `GET /customers/{id}/balance` and in `GET /customers` (`total_portfolio` 15000), with the three *abonos* stored with methods cash, transfer, card and `register_id` 1. Test: `TestShiftCert_T1_FullShift`.
+- AC-4: WHEN an admin voids cash sale #3, the system SHALL answer 200, bring `expected` 169000 → 157000 and `cash_sales` 42000 → 30000, restore Panela's stock 9 → 10 and add no movement (6 before and after); IF a cashier sends the void, THEN 403 and nothing changes. Test: `TestShiftCert_T1_FullShift`.
+- AC-5: WHEN an admin voids a credit sale, the system SHALL lower the balance by its credit portion, restore the stock and change `expected` only by the cash portion: 50000 → 0; after *abonos* 15000 → −35000 (`total_portfolio` 0); mixed $30.000 cash + $20.000 credit 20000 → 0 with `expected` 130000 → 100000; on a closed register 14000 → −36000 with neither register changed. Tests: `TestShiftCert_T3_CreditVoidLowersBalance`, `TestShiftCert_T4_CreditVoidOnClosedRegister`.
+- AC-6: IF a cashier registers an *abono* after the HTTP close with no register open, THEN 403 `Debe haber una caja abierta para registrar un abono`, nothing stored, balance 15000; WHEN an admin registers $1.000 cash, 201 with `register_id` null, balance 15000 → 14000, register 1 `expected_close` 157000 and `difference` 0 unchanged. Test: `TestShiftCert_T2_CloseAndAfterClose`.
+- AC-7: WHEN the binary receives a GET for any of the 21 page routes (dynamic ones with a concrete segment, with or without a trailing `/` or a query string), the system SHALL answer 200 `text/html` with that route's exported file, never a 404. Tests: `TestFileServer_T18_EveryAppRouteResolves` (`web/static_routes_test.go`), `TestFileServer_T19_RealExportEveryRoute` (`web/static_export_test.go`, build tag `export`, run in CI).
+- AC-8: IF a `page.tsx` has a dynamic prefix missing from `dynamicRoutes` or a page that does not bake `'_'`, THEN `go test ./web/` SHALL fail naming the route. Test: `TestFileServer_T18_EveryAppRouteResolves`.
+- AC-9: WHILE an admin is logged in on `pos.exe`, F5 on the 16 authenticated routes and on `/catalogo/<token>` SHALL show the same page with its data. Manual: `gaps.md` US-091 M-1.
+- AC-10: WHEN `go run scripts/copy-frontend.go` replaces `web/out`, it SHALL leave an empty `web/out/.gitkeep`. Test: `TestCopyFrontend_T20_KeepsGitkeep` (`web/static_export_test.go`) plus `git diff --exit-code -- web/out/.gitkeep` in CI.
+
+## US-095 — Admin void button for a sale in the UI
+
+**Status:** added by the PO at US-091 GATE 1 (2026-11-08), from roadmap R-111. Not part of US-091.
+
+**As** Don Carlos (owner, admin),
+**I want** to void a wrong sale from the screen,
+**so that** a mistaken charge on day one can be undone at the counter without calling the API.
+
+**Estimated effort:** 1 day. **Impact:** High for go-live.
+
+**Today:** voids exist only in the admin API (`DELETE /sales/{id}/void`, `internal/handler/handler.go:169`); no frontend file calls it. The UI only lists voided sales (`Ver anuladas`, badge `Anulada`, `frontend/app/page.tsx:566`, `:621`). The money effect of a void (register `expected`, *fiado* balance, stock) is certified by US-091.
+
+**Acceptance criteria (draft; the contract refines them):**
+- [ ] An admin sees an `Anular` action on a completed sale and confirms it before anything is sent; a cashier does not see the action (the API already answers 403).
+- [ ] After a void, the sale shows as `Anulada`, and the register summary and the customer balance shown on screen reflect it without a manual reload.
+- [ ] A sale with an accepted or pending electronic document, an already voided sale, or a server error shows the server message and changes nothing.
+- [ ] The contract decides, with the PO, what the action does for a sale whose register is already closed (roadmap R-112).
 
 ## US-092 — Opening *fiado* balance per customer
 

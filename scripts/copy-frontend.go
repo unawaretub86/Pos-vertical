@@ -1,8 +1,8 @@
 //go:build ignore
 
-// Script de build: copia frontend/out → web/out
-// Uso: go run scripts/copy-frontend.go
-// Funciona en Windows, Linux y Mac.
+// Build script: copies frontend/out → web/out
+// Usage: go run scripts/copy-frontend.go
+// Works on Windows, Linux and Mac.
 package main
 
 import (
@@ -17,12 +17,20 @@ func main() {
 	dst := filepath.Join("web", "out")
 
 	if err := os.RemoveAll(dst); err != nil {
-		fmt.Fprintf(os.Stderr, "error limpiando %s: %v\n", dst, err)
+		fmt.Fprintf(os.Stderr, "error cleaning %s: %v\n", dst, err)
 		os.Exit(1)
 	}
 
 	if err := copyDir(src, dst); err != nil {
-		fmt.Fprintf(os.Stderr, "error copiando frontend: %v\n", dst, err)
+		fmt.Fprintf(os.Stderr, "error copying frontend to %s: %v\n", dst, err)
+		os.Exit(1)
+	}
+
+	// web/out/.gitkeep is tracked so the go:embed directory exists in a fresh
+	// clone; RemoveAll above deleted it, so recreate it empty (US-091 AC-10).
+	gitkeep := filepath.Join(dst, ".gitkeep")
+	if err := os.WriteFile(gitkeep, nil, 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing %s: %v\n", gitkeep, err)
 		os.Exit(1)
 	}
 
