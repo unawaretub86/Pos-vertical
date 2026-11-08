@@ -31,7 +31,7 @@
 | US-091 | End-to-end certification of register close and *fiado* math, and F5 on every route of the binary | [ ] | |
 | US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [ ] | |
 | US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
-| US-094 | Product catalog import from CSV | [ ] Pending PO yes | |
+| US-094 | Product catalog import from CSV | [ ] | |
 
 **Total estimated effort: ~5.5 days**
 
@@ -137,7 +137,7 @@ AC-1..AC-9 hold WHILE `fiscal_config.enabled = 0` at startup (`h.factelect == ni
 
 ## US-094 — Product catalog import from CSV
 
-**Status:** pending PO yes (added on 2026-11-07 after verifying that no import exists).
+**Status:** approved by the PO on 2026-11-08 (added on 2026-11-07 after verifying that no import exists). PO direction: the import must also serve a shop that is moving from another POS program, so the input format is decided in the contract. Candidates are a CSV with column mapping (most POS programs and spreadsheets can export one) or a SQL/SQLite dump of the other program. The analyst recommends one format with its trade-off at GATE 1.
 
 **As** Don Carlos (owner),
 **I want** to load my product list from a spreadsheet,
