@@ -10,6 +10,9 @@ import { getUser } from '@/lib/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { formatCOP } from '@/lib/format';
 import AbonoModal from '@/components/AbonoModal';
+import VoidSaleDialog from '@/components/VoidSaleDialog';
+import { useToast } from '@/components/Toast';
+import { canVoidSale, voidErrorMessage } from '@/lib/saleVoid';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,13 +21,14 @@ interface SalesSnap {
   total_count: number;
 }
 
+// The register id lives only in the nested `register` object (US-095 D-4).
 interface Register {
-  id: number;
   opening_amount: number;
   expected: number;
   cash_sales: number;
   cash_out: number;
   register: {
+    id: number;
     status: string;
     opened_at: string;
     opening_amount: number;
@@ -233,6 +237,8 @@ export default function DashboardPage() {
   const [loadingAll, setLoadingAll] = useState(false);
   const isMobile = useIsMobile(768);
   const [payTarget, setPayTarget] = useState<AgingReceivable | null>(null);
+  const [voidTarget, setVoidTarget] = useState<RecentSale | null>(null);
+  const { toast } = useToast();
 
   // Unauthenticated visits land here first (this is the app's root route) —
   // route to onboarding or login depending on first-run state instead of
@@ -244,12 +250,9 @@ export default function DashboardPage() {
       .catch(() => router.replace('/login'));
   }, [user, router]);
 
-  useEffect(() => {
-    if (!user) return;
-    if (user.role !== 'admin') {
-      router.replace('/pos');
-      return;
-    }
+  // Loads every dashboard figure; re-run after a void so the list and the
+  // totals show the server's values (US-095 AC-6, AC-8).
+  function loadDashboard() {
     api
       .get<DashboardData>('/dashboard')
       .then(setData)
@@ -259,7 +262,33 @@ export default function DashboardPage() {
       .get<TodayData>('/dashboard/today')
       .then(setTodayData)
       .catch(() => {});
+  }
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== 'admin') {
+      router.replace('/pos');
+      return;
+    }
+    loadDashboard();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function afterVoidAttempt() {
+    setVoidTarget(null);
+    // The cached `Ver anuladas` list is stale now; re-fetch on next opening.
+    setAllSales(null);
+    loadDashboard();
+  }
+
+  function handleVoided(saleId: number) {
+    afterVoidAttempt();
+    toast(`Venta #${saleId} anulada`, 'success');
+  }
+
+  function handleVoidFailed(_saleId: number, message: string) {
+    afterVoidAttempt();
+    toast(voidErrorMessage(message), 'error');
+  }
 
   function toggleVoided() {
     if (!showVoided && allSales === null) {
@@ -617,11 +646,23 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td>
-                        {sale.status === 'voided' ? (
-                          <span className="badge badge-error">Anulada</span>
-                        ) : (
-                          <span className="badge badge-ok">Completada</span>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {sale.status === 'voided' ? (
+                            <span className="badge badge-error">Anulada</span>
+                          ) : (
+                            <span className="badge badge-ok">Completada</span>
+                          )}
+                          {!showVoided && canVoidSale(user.role, sale.status) && (
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-ghost"
+                              style={{ color: 'var(--danger)' }}
+                              onClick={() => setVoidTarget(sale)}
+                            >
+                              Anular
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -666,6 +707,19 @@ export default function DashboardPage() {
           balance={payTarget.balance}
           onClose={() => setPayTarget(null)}
           onSaved={payment => handlePaymentSuccess(payTarget.customer_id, payment.amount)}
+        />
+      )}
+
+      {/* ── Void Sale Dialog ───────────────────────────────────────────── */}
+      {voidTarget && (
+        <VoidSaleDialog
+          key={voidTarget.id}
+          saleId={voidTarget.id}
+          customerName={voidTarget.customer_name || null}
+          openRegisterId={data?.register?.register?.id ?? null}
+          onCancel={() => setVoidTarget(null)}
+          onVoided={handleVoided}
+          onFailed={handleVoidFailed}
         />
       )}
     </AppLayout>

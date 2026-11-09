@@ -10,15 +10,15 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 25 (US-092, opening fiado balance per customer, level L). Before: 24 (US-096), 23 (US-091), 22 (US-090). No `us/*` worktree is open. `dev` is at the US-092 merge (verify with `git log`).
+**Last run:** 26 (US-095, admin void button in the UI, level L). Before: 25 (US-092), 24 (US-096), 23 (US-091). No `us/*` worktree is open. `dev` is at the US-095 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN concurrency) is done in code and tests (real-device checks M-1..M-3 in `gaps.md`). SPRINT-18 is complete in code. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
 **SPRINT-19 (Fiado collection):** complete in code and tests; all 8 US (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085) merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1, US-084 M-1 and US-085 M-1 in `gaps.md`).
 
-**SPRINT-20 (Go-live for client #1):** US-090, US-091, US-096 and US-092 merged to `dev` (manual checks US-090 M-1, US-091 M-1 and US-092 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08; US-095 (UI void, from R-111) added at US-091 GATE 1.
+**SPRINT-20 (Go-live for client #1):** US-090, US-091, US-096, US-092 and US-095 merged to `dev` (manual checks US-090 M-1, US-091 M-1, US-092 M-1 and US-095 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08.
 
-**Next US:** US-095 (sprint order: US-095, US-094, US-093, US-089). Roadmap items R-102..R-109, R-112..R-129, R-131..R-144 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12), and at GATE 2 grep `dev` for new R-numbers before merging (run 23).
+**Next US:** US-094 (sprint order: US-094, US-093, US-089). Roadmap items R-102..R-109, R-112..R-129, R-131..R-149 await PO prioritization. Run `/us <ID> [M|L]`. Step 0 now writes `changes/<ID>/owner` (one orchestrator per US, run 26); at GATE 2 grep `dev` for new R-numbers before merging (run 23).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -74,6 +74,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 23 | 2026-11-08 | US-091 | L | ~399k (A 193k, last of 145k→170k→193k · T 88k · I 33k · Q 85k) | 149 | ~31.6 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 6 contract discrepancies (D-1..D-6) + 1 Gemini-verified contract fix (AC-6) + 3 QA MINOR | 3 new (R-134..R-136) + 1 moved to a US (R-111 → US-095) | 0 | +982 / −24, 12 files (excluding this benchmark entry) |
 | 24 | 2026-11-08 | US-096 | L | ~535k (A 192k · T 202k · I 56k · Q 85k) | ~170 | ~45.0 | 1 (QA r1 AC-8 30s budget exceeded; PO raised to <= 40s) | 2 | 10 contract findings (D-1..D-10) + 3 Gemini-verified (G-8, G-11, G-4) + 4 QA MINOR | 4 new (R-137..R-140) + 1 closed (R-130) | 0 | +1,827 / −11, 14 files (excluding this benchmark entry) |
 | 25 | 2026-11-09 | US-092 | L | ~603k (A 201k, last of 136k→141k→201k; pre-rate-limit part not counted · T 140k · I 154k · Q 108k) | ~208 | ~63 (incl. a 10 min implementer stall) | 3 (rate limit on the analyst; implementer stalled 600 s; QA MINOR 4 needed a PO decision) | 1 | 4 contract discrepancies (D-1..D-4) + 5 QA MINOR | 4 new (R-141..R-144) | 0 | +2,086 / −51, 26 files (excluding this benchmark entry) |
+| 26 | 2026-11-09 | US-095 | L | ~446k incl. waste (A 133k contract · A' 41k GATE 1 adjust · T 68k · I n/a · Q 51k · duplicate A 153k) | ~110+ | ~15+ (implementer and close not reported) | 4 (implementer stall; rate limit mid-implementation; two sessions orchestrating the same US; takeover at GATE 2) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes + 1 test-author finding (R-148) + 3 QA MINOR | 5 new (R-145..R-149) + R-111 closed | 0 | +878 / −27, 11 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -900,6 +901,46 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 26 — US-095 (admin void button for a sale in the UI, level L)
+
+Already registered in SPRINT-20. **Two sessions orchestrated this US in the same worktree.**
+- **Session A** created the worktree (`dc4a569`) and the contract, presented GATE 1, and then waited for the PO.
+- **Session B** found the worktree, took the GATE 1 "yes" in its own conversation at 11:52, and ran test-author, implementer, QA and close. It hit an implementer stall and the 5-hour rate limit (it switched the implementer to Sonnet 5.5 after the limit), and stopped at GATE 2.
+- **At 15:30 session A received the PO's GATE 1 "yes"** and resumed its analyst, which re-applied the same decisions to `contract.md`, an ignored file. It changed no code.
+- **Session A then noticed the foreign lines in `progress.md`.** The PO chose to have A take over GATE 2 and merge B's work.
+
+Metrics are partial, because B reported no tokens for the implementer or the close.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst (A) | 2 (contract; duplicate GATE 1 adjust) | 132.8k → 153.2k | 57 | ~8.9 min |
+| analyst (B) | 2 (GATE 1 adjust; close) | 40.7k (close n/a) | 19+ | ~1.2+ min |
+| test-author (B) | 1 | 67.9k | 14 | ~2.3 min |
+| implementer (B) | 2+ (stalled; resumed; rate limit; resumed on Sonnet 5.5) | n/a | n/a | >10 min plus waiting |
+| qa (B) | 1 round | 51.0k | 20 | ~2.9 min |
+
+**What it found.** No production Go change was needed: the void endpoint already worked, and US-091 had certified its money effects. Things the analyst found by running the backend:
+- A void on an already-closed register leaves the stored close unchanged. Re-reading that register shows the recomputed `expected` drifting by the voided cash, and the cash handed back is recorded nowhere (R-112). The PO chose to allow the void and show a warning that tells the admin to record a `Salida`.
+- The 409/403 bodies carry codes (`sale_has_accepted_invoice`, `forbidden`) in `error`, so the frontend maps them to Spanish.
+
+The test-author found that `recent_sales` has no tie-break for same-second sales (R-148). QA round 1: OK, 0 BLOCKER, 3 MINOR (R-149). Gemini diff: CLEAN.
+
+**Unplanned stops:** 4 (implementer stall, rate limit, the duplicate orchestration, and the takeover at GATE 2). QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~5 min | 10 | 3 (AC-2 loading state, AC-7 error text source, AC-3 unknown-method label) | 7 (2 from the truncated input; the rest already covered or unreachable) | n/a |
+| diff, round 1 | OK | n/a | 0 (`CLEAN`) | 0 | 0 | no |
+
+**Operational friction.**
+- **Duplicate orchestration.** Both sessions read `ListAgents`, but neither checked who owned the worktree, and the PO's GATE 1 answers went to different conversations. One analyst invocation (153k tokens) was wasted, and the PO had to understand two parallel runs. Fixed in `.claude/commands/us.md` step 0: `changes/<ID>/owner`, re-checked before every agent launch, gate and checkpoint (`59dc404`, PO yes).
+- **The two GATE 1 interpretations differed on one detail.** For an unknown payment method, B's code shows the raw key, while A's contract edit said `Otro método`. The code was kept, because the backend only accepts cash, transfer, card and credit (`internal/service/sale.go:142`).
+- **The implementer stalled again** (B ran before the run-25 stdin rule was committed).
+
+### What to measure in run 27
+- Whether the `owner` check prevents a repeat, and whether any agent stalls now that the stdin rule is in every prompt.
 
 ## Run 25 — US-092 (opening fiado balance per customer, level L)
 

@@ -32,7 +32,7 @@
 | US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [x] | 2026-11-09 |
 | US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
 | US-094 | Product catalog import from CSV | [ ] | |
-| US-095 | Admin void button for a sale in the UI | [ ] | |
+| US-095 | Admin void button for a sale in the UI | [x] | 2026-11-09 |
 | US-096 | Money QA layer 1: property-based invariant tests over random sequences of money operations | [x] | 2026-11-08 |
 
 **Total estimated effort: ~8 days**
@@ -143,10 +143,27 @@ Shift data for AC-1..AC-4: opening $100.000; sale #1 cash $30.000; sale #2 credi
 **Today:** voids exist only in the admin API (`DELETE /sales/{id}/void`, `internal/handler/handler.go:169`); no frontend file calls it. The UI only lists voided sales (`Ver anuladas`, badge `Anulada`, `frontend/app/page.tsx:566`, `:621`). The money effect of a void (register `expected`, *fiado* balance, stock) is certified by US-091.
 
 **Acceptance criteria (draft; the contract refines them):**
-- [ ] An admin sees an `Anular` action on a completed sale and confirms it before anything is sent; a cashier does not see the action (the API already answers 403).
-- [ ] After a void, the sale shows as `Anulada`, and the register summary and the customer balance shown on screen reflect it without a manual reload.
-- [ ] A sale with an accepted or pending electronic document, an already voided sale, or a server error shows the server message and changes nothing.
-- [ ] The contract decides, with the PO, what the action does for a sale whose register is already closed (roadmap R-112).
+- [x] An admin sees an `Anular` action on a completed sale and confirms it before anything is sent; a cashier does not see the action (the API already answers 403).
+- [x] After a void, the sale shows as `Anulada`, and the register summary and the customer balance shown on screen reflect it without a manual reload.
+- [x] A sale with an accepted or pending electronic document, an already voided sale, or a server error shows the server message and changes nothing.
+- [x] The contract decides, with the PO, what the action does for a sale whose register is already closed (roadmap R-112).
+
+**Verified criteria (closed 2026-11-09):**
+
+GATE 1 (PO, 2026-11-09): Q-1..Q-5 accepted as recommended: the entry point is only the dashboard `Ventas recientes` default list; voids on a closed register stay allowed with a warning (R-112 stays open); no void reason; the 409 and 403 texts are mapped in the frontend; after a void the dashboard is re-read. No production Go code changed. Frontend tests are in `frontend/lib/saleVoid.test.ts` (F) and backend tests in `internal/handler/sale_void_ui_test.go` (H). QA round 1: OK, 0 BLOCKER, 3 MINOR (spec delta applied at close; R-149). Gemini: clean. Spec: `spec/domain/caja.md` ("Movements", "Voids after the close"), `spec/domain/facturacion-dian.md` ("With DIAN off"). Manual check: `gaps.md` US-095 M-1.
+
+- AC-1: WHILE the user is an admin, the dashboard `Ventas recientes` default view SHALL show `Anular` on every `completed` row, in the `Estado` cell; IF not admin or the row is `voided`, no button; `Ver anuladas` never shows it. Test: F `T-1`.
+- AC-2: WHEN the admin taps `Anular` on sale #N, the dialog SHALL open and request `GET /sales/{N}`, showing `Cargando venta...` with `Anular venta` disabled until it answers; no void request is sent until `Anular venta`; `Cancelar`, Escape or the backdrop close it. Manual: `gaps.md` US-095 M-1.
+- AC-3: WHEN the sale loads, the dialog SHALL show `¿Anular la venta #N?`, `Total`, one line per payment (`Efectivo`, `Transferencia`, `Tarjeta`, `Fiado`, the raw key if unknown, never `mixed`), `Cliente: <name>` and the stock and undo notice. Mixed $7.000 cash + $5.000 credit, Dora → `Total: $12.000`, `Efectivo $7.000`, `Fiado $5.000`, `Cliente: Dora`. Test: F `T-2` (five cases).
+- AC-4: IF the sale's register is not the open one, the dialog SHALL add `Esta venta es de una caja ya cerrada; su cierre no cambia.` and, with cash C > 0, the refund hint (register open or none). Void on closed register 1 (`expected_close` 107000): stored values unchanged, `GET /registers/1` `expected` 100000, register 2 `expected` 50000, Dora 5000 → 0. Tests: F `T-3` (five cases), H `TestSaleVoidUI_T8_MixedVoidOnClosedRegister`.
+- AC-5: WHEN the admin taps `Anular venta`, exactly one `DELETE /sales/{N}/void` with no body SHALL be sent; both buttons disabled and `Anulando...` while in flight. Test: F `T-5` (200 case); the disabled state by review.
+- AC-6: WHEN the void answers 200, the dialog SHALL close, toast `Venta #N anulada`, re-read `/dashboard` and `/dashboard/today` and drop the cached `Ver anuladas` list. Sale #3 voided: `Caja` $137.000 → $130.000, `Cartera` $55.000 → $50.000, `recent_sales` `[3,2,1]` → `[2,1]`. Test: H `TestSaleVoidUI_T7_DashboardReflectsVoid`.
+- AC-7: IF `GET /sales/{N}` fails, the dialog SHALL show the `api` error text (`No se pudo cargar la venta` when blank) and keep `Anular venta` disabled. Test: F `T-9` (text); the dialog by review.
+- AC-8: IF the void fails, the dialog SHALL close and an error toast SHALL show the mapped text (`sale_has_accepted_invoice` → DIAN text, `forbidden` → `Solo un administrador puede anular ventas.`, others as is, empty → `No se pudo anular la venta`), and the dashboard is re-read. Tests: F `T-4`, F `T-5` (409, 403, network cases).
+- AC-9: WHEN the 409 occurs, the system SHALL NOT call `POST /sales/{id}/void-with-credit-note`. Test: F `T-5` (409 case).
+- AC-10: WHILE the viewport is 320 px, the dialog SHALL fit with no horizontal scroll and use only CSS variables. Manual: `gaps.md` US-095 M-1.
+- AC-11: the backend SHALL stay as certified: 200 `voided`; 400 `la venta ya fue anulada`; 403 `forbidden`; 404; 409 `sale_has_accepted_invoice` with `requires_credit_note` true for an `accepted` or `pending` document (sale stays `completed`, stock unchanged). Test: H `TestSaleVoidUI_T6_ErrorBodies`.
+
 
 ## US-092 — Opening *fiado* balance per customer
 
