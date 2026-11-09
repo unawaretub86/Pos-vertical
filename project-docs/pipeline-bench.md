@@ -10,15 +10,15 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 24 (US-096, money QA layer 1: property-based invariant tests over random sequences, level L). Before: 23 (US-091), 22 (US-090), 21 (US-081). No `us/*` worktree is open. `dev` is at the US-096 merge (verify with `git log`).
+**Last run:** 25 (US-092, opening fiado balance per customer, level L). Before: 24 (US-096), 23 (US-091), 22 (US-090). No `us/*` worktree is open. `dev` is at the US-092 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN concurrency) is done in code and tests (real-device checks M-1..M-3 in `gaps.md`). SPRINT-18 is complete in code. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
 **SPRINT-19 (Fiado collection):** complete in code and tests; all 8 US (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085) merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1, US-084 M-1 and US-085 M-1 in `gaps.md`).
 
-**SPRINT-20 (Go-live for client #1):** US-090, US-091, and US-096 merged to `dev` (manual checks US-090 M-1 and US-091 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08; US-095 (UI void, from R-111) added at US-091 GATE 1.
+**SPRINT-20 (Go-live for client #1):** US-090, US-091, US-096 and US-092 merged to `dev` (manual checks US-090 M-1, US-091 M-1 and US-092 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08; US-095 (UI void, from R-111) added at US-091 GATE 1.
 
-**Next US:** US-095 or US-092 (sprint order: US-095, US-092, US-094, US-093, US-089). Roadmap items R-102..R-109, R-112..R-129, R-131..R-136, and R-137..R-140 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-095 (sprint order: US-095, US-094, US-093, US-089). Roadmap items R-102..R-109, R-112..R-129, R-131..R-144 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12), and at GATE 2 grep `dev` for new R-numbers before merging (run 23).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -72,6 +72,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 22 | 2026-11-07 | US-090 | M | ~261k (A 124k, last value after contract 91k · I 72k · Q 65k) | ~119 | ~22 | 0 | 1 | 3 contract discrepancies fixed (D-1..D-3) + 4 sent to roadmap (D-4..D-7) + 1 Gemini-verified contract fix (AC-10 wording) + 4 QA MINOR | 6 new (R-124..R-129) | 0 | +402 / −20, 10 files (excluding this benchmark entry) |
 | 23 | 2026-11-08 | US-091 | L | ~399k (A 193k, last of 145k→170k→193k · T 88k · I 33k · Q 85k) | 149 | ~31.6 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 6 contract discrepancies (D-1..D-6) + 1 Gemini-verified contract fix (AC-6) + 3 QA MINOR | 3 new (R-134..R-136) + 1 moved to a US (R-111 → US-095) | 0 | +982 / −24, 12 files (excluding this benchmark entry) |
 | 24 | 2026-11-08 | US-096 | L | ~535k (A 192k · T 202k · I 56k · Q 85k) | ~170 | ~45.0 | 1 (QA r1 AC-8 30s budget exceeded; PO raised to <= 40s) | 2 | 10 contract findings (D-1..D-10) + 3 Gemini-verified (G-8, G-11, G-4) + 4 QA MINOR | 4 new (R-137..R-140) + 1 closed (R-130) | 0 | +1,827 / −11, 14 files (excluding this benchmark entry) |
+| 25 | 2026-11-09 | US-092 | L | ~603k (A 201k, last of 136k→141k→201k; pre-rate-limit part not counted · T 140k · I 154k · Q 108k) | ~208 | ~63 (incl. a 10 min implementer stall) | 3 (rate limit on the analyst; implementer stalled 600 s; QA MINOR 4 needed a PO decision) | 1 | 4 contract discrepancies (D-1..D-4) + 5 QA MINOR | 4 new (R-141..R-144) | 0 | +2,086 / −51, 26 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -898,6 +899,58 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 25 — US-092 (opening fiado balance per customer, level L)
+
+Already registered in SPRINT-20. Started on 2026-11-08 and finished on 2026-11-09 in the same session, after an account rate limit (5-hour window) interrupted the analyst. Every interrupted agent was resumed with `SendMessage` and kept its transcript. US-096 merged to `dev` from another session while this run was in QA, so `dev` was merged into `us/US-092` before the close (clean; `go test ./internal/...` green) and the analyst was told the next free R-number.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract, cut by rate limit; contract resume; GATE 1 decisions; close) | 200.7k (136.3k → 141.2k → 200.7k; the pre-limit part was not reported) | 59+ | ~18.8+ min |
+| test-author | 1 | 140.4k | 42 | ~11.1 min |
+| implementer | 2 (stalled; resumed) | 154.1k | 65 | ~20.0 min (incl. a 600 s stall with no file changes) |
+| qa | 1 round | 107.9k | 42 | ~13.2 min |
+
+**What it found.** This US changes a business rule. The contract chose a separate table `customer_opening_balances` (migration 22) over the alternatives:
+- A fake credit sale would leak into about 8 sales queries.
+- A customer column would be wiped by the full-row customer update (`internal/repository/customer.go:92`).
+
+The analyst ran the queries it relied on and found three facts:
+- SQLite's two-argument `min(NULL, x)` returns NULL, so the oldest-debt expression needs a `COALESCE`.
+- Credit `created_at` is UTC text, so the debt date is stored in the same layout.
+- The UNIQUE violation surfaces as error 2067, which the existing helper detects.
+
+Discrepancies:
+- **D-1:** US-096's invariant wording ("credit − abonos") is reconciled at close to opening + credit − abonos.
+- **D-2:** stale line refs in the spec.
+- **D-3:** customer buttons show for cashiers (R-144).
+- **D-4:** customers may already exist, so a detail-page entry point was added.
+
+GATE 1: Q-1..Q-5 as recommended, and Q-6 tuteo.
+
+All 15 tests were RED for the right reasons. QA round 1: OK, 0 BLOCKER, 5 MINOR; 20 of 21 mutations caught (the note-trim mutant survived, R-142); API smoke test on the binary passed. After QA, the PO decided that a correction may leave a negative balance, documented in the spec, with a UI warning on the roadmap (R-141).
+
+**Unplanned stops:** 3: the rate limit, the implementer stall, and the PO decision on QA MINOR 4. Internal re-dispatches: 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | TIMEOUT (`agy` print timeout, partial empty answer) | 7 min | 0 | 0 | 0 | n/a. The input was again truncated (20.7k of 30.7k) |
+| diff, round 1 | OK | ~3 min | 0 (`CLEAN`) | 0 | 0 | no; QA's 5 MINOR covered a test gap, UX, check order and an undecided rule |
+
+**Operational friction.**
+- **The implementer stalled for 600 s with zero file changes** and was killed by the stream watchdog. After a `SendMessage` resume it finished normally. In the same run the test-author left a stray `python -` background process waiting on stdin, which the permission classifier did not let it kill. Commands that wait on stdin are the likely cause of both.
+- **QA could not smoke-test the UI**, because a plain `go build` embeds an empty `web/out`. US-091's export step exists, but QA only uses it when told to.
+- **A parallel session merged US-096 mid-run.** Merging `dev` into the US branch before the close avoided the run-23 R-number collision.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Earlier pending proposals unchanged (runs 12..16, 18-2, 19-2, 20-2, 21-2, 22-2, 23-2..23-5).
+2. Every agent prompt says: never run a command that reads stdin (`python -` without a heredoc, interactive tools), and bound long commands with a timeout.
+3. QA smoke builds the binary with the real export (`pnpm build` + `go run scripts/copy-frontend.go` in a scratch copy) whenever the US touches the frontend, so the UI is at least loaded once.
+4. Before step 5 (close), the orchestrator merges `dev` into the US branch if `dev` moved, and passes the next free R-number to the analyst. This was done by hand in this run.
+
+### What to measure in run 26
+- Whether proposal 2 removes the agent stalls.
 
 ## Run 24 — US-096 (money QA layer 1: property-based invariant tests over random sequences of money operations, level L)
 

@@ -15,6 +15,8 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import EmptyState from '@/components/EmptyState';
 import AbonoModal from '@/components/AbonoModal';
 import { customerBalanceLabel } from '@/lib/abono';
+import { getUser } from '@/lib/auth';
+import { parseAmountInput, isValidDebtDate, todayISODate, MAX_OPENING_BALANCE } from '@/lib/openingBalance';
 import { daysOverdue, bucketTotals, filterByBucket, toggleBucket, bucketLabel, AGING_BUCKETS, type AgingBucket } from '@/lib/aging';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -122,6 +124,12 @@ function CustomerModal({ initial, onClose, onSaved }: CustomerModalProps) {
     initial?.credit_limit != null ? initial.credit_limit.toLocaleString('es-CO') : ''
   );
   const [loading, setLoading] = useState(false);
+  // Opening balance (deuda anterior, US-092): optional, only when an admin
+  // creates a customer. Sent as a second request after POST /customers.
+  const showOpening = !initial && getUser()?.role === 'admin';
+  const today = todayISODate();
+  const [openingInput, setOpeningInput] = useState('');
+  const [openingDate, setOpeningDate] = useState(today);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -131,6 +139,11 @@ function CustomerModal({ initial, onClose, onSaved }: CustomerModalProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    const openingAmount = showOpening ? parseAmountInput(openingInput) : null;
+    if (openingAmount !== null && !isValidDebtDate(openingDate, today)) {
+      toast(openingDate > today ? 'La fecha de la deuda no puede ser futura' : 'Fecha de la deuda inválida', 'error');
+      return;
+    }
     setLoading(true);
     const digits = creditLimitInput.replace(/\./g, '').replace(/,/g, '');
     const credit_limit = digits === '' ? null : parseInt(digits, 10) || null;
@@ -139,8 +152,16 @@ function CustomerModal({ initial, onClose, onSaved }: CustomerModalProps) {
         await api.put(`/customers/${initial.id}`, { name, phone, address, notes, credit_limit });
         toast('Cliente actualizado', 'success');
       } else {
-        await api.post('/customers', { name, phone, address, notes, credit_limit });
+        const created = await api.post<Customer>('/customers', { name, phone, address, notes, credit_limit });
         toast('Cliente creado', 'success');
+        if (openingAmount !== null) {
+          try {
+            await api.post(`/customers/${created.id}/opening-balance`, { amount: openingAmount, debt_date: openingDate, note: '' });
+          } catch {
+            // The customer stays created; the admin records the debt from the detail.
+            toast('Cliente creado, pero la deuda anterior no se guardó. Regístrala desde el detalle del cliente.', 'error');
+          }
+        }
       }
       onSaved();
       onClose();
@@ -171,6 +192,9 @@ function CustomerModal({ initial, onClose, onSaved }: CustomerModalProps) {
     padding: '24px',
     width: '400px',
     maxWidth: '90vw',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    boxSizing: 'border-box',
   };
 
   return (
@@ -261,6 +285,43 @@ function CustomerModal({ initial, onClose, onSaved }: CustomerModalProps) {
               {notes.length}/500
             </div>
           </div>
+
+          {showOpening && (
+            <>
+              <div>
+                <label htmlFor="new-customer-opening" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px' }}>
+                  Deuda anterior (cuaderno)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>$</span>
+                  <input
+                    id="new-customer-opening"
+                    value={openingInput}
+                    onChange={e => {
+                      const n = parseAmountInput(e.target.value);
+                      setOpeningInput(n === null ? '' : Math.min(n, MAX_OPENING_BALANCE * 10).toLocaleString('es-CO'));
+                    }}
+                    placeholder="Opcional"
+                    inputMode="numeric"
+                    style={{ paddingLeft: '26px', width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="new-customer-opening-date" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px' }}>
+                  Fecha de la deuda
+                </label>
+                <input
+                  id="new-customer-opening-date"
+                  type="date"
+                  value={openingDate}
+                  max={today}
+                  onChange={e => setOpeningDate(e.target.value)}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            </>
+          )}
 
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
             <button type="button" onClick={onClose} className="btn btn-sm">

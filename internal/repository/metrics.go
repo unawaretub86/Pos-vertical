@@ -330,16 +330,22 @@ func (r *metricsRepo) LowStock(ctx context.Context, limit int) ([]LowStockItem, 
 	return items, nil
 }
 
-// customerBalanceExpr is the customer balance (spec/domain/fiado.md): credit
-// lines of completed sales minus customer payments. It must be used together
-// with customerBalanceFrom, which aggregates both sides per customer before
-// joining so that no payment is counted more than once. It is the same formula
-// as CustomerRepository.List.
-const customerBalanceExpr = `COALESCE(sp_sum.amount, 0) - COALESCE(cp_sum.amount, 0)`
+// customerBalanceExpr is the customer balance (spec/domain/fiado.md): the
+// opening balance (US-092) plus credit lines of completed sales minus customer
+// payments. It must be used together with customerBalanceFrom, which
+// aggregates both sides per customer before joining so that no payment is
+// counted more than once. It is the same formula as CustomerRepository.Balance.
+const customerBalanceExpr = `COALESCE(ob.amount, 0) + COALESCE(sp_sum.amount, 0) - COALESCE(cp_sum.amount, 0)`
+
+// customerOldestDebtExpr is the start of the customer's debt: the older of the
+// oldest completed credit sale and the opening balance debt_date. Both are UTC
+// text "YYYY-MM-DD HH:MM:SS". SQLite's scalar min() is NULL when either side is
+// NULL, hence the COALESCE fallbacks.
+const customerOldestDebtExpr = `COALESCE(min(sp_sum.oldest_at, ob.debt_date), sp_sum.oldest_at, ob.debt_date)`
 
 // customerBalanceFrom exposes c (customers), sp_sum (credit per customer, with
-// oldest_at = MIN(created_at) of its completed credit sales) and cp_sum
-// (payments per customer).
+// oldest_at = MIN(created_at) of its completed credit sales), cp_sum
+// (payments per customer) and ob (opening balance, at most one per customer).
 const customerBalanceFrom = `
 		FROM customers c
 		LEFT JOIN (
@@ -351,7 +357,8 @@ const customerBalanceFrom = `
 		) sp_sum ON sp_sum.customer_id = c.id
 		LEFT JOIN (
 			SELECT customer_id, SUM(amount) AS amount FROM customer_payments GROUP BY customer_id
-		) cp_sum ON cp_sum.customer_id = c.id`
+		) cp_sum ON cp_sum.customer_id = c.id
+		LEFT JOIN customer_opening_balances ob ON ob.customer_id = c.id`
 
 // Debtors returns customers with balance > 0 ordered by balance descending and
 // name ascending. The balance uses the same formula as CustomerRepository.List.
@@ -364,7 +371,7 @@ func (r *metricsRepo) Debtors(ctx context.Context, limit int) ([]Debtor, error) 
 		SELECT
 			c.id, c.name, c.phone,
 			`+customerBalanceExpr+` AS balance,
-			sp_sum.oldest_at AS oldest_debt_at`+
+			`+customerOldestDebtExpr+` AS oldest_debt_at`+
 		customerBalanceFrom+`
 		WHERE `+customerBalanceExpr+` > 0
 		ORDER BY balance DESC, c.name ASC
@@ -393,7 +400,7 @@ func (r *metricsRepo) Debtors(ctx context.Context, limit int) ([]Debtor, error) 
 }
 
 // AgingReceivables returns up to limit customers with balance > 0 ordered by
-// days since their oldest completed credit sale, descending. The balance is
+// days since the start of their debt (customerOldestDebtExpr), descending. The balance is
 // the same one returned by Debtors and CustomerRepository.List. Rows whose
 // days_overdue is NULL (unparseable created_at) are excluded explicitly. When
 // two or more customers tie on days_overdue, they are broken by the same
@@ -405,10 +412,10 @@ func (r *metricsRepo) AgingReceivables(ctx context.Context, limit int) ([]AgingR
 			c.id,
 			c.name,
 			`+customerBalanceExpr+` AS balance,
-			CAST(julianday('now') - julianday(sp_sum.oldest_at) AS INTEGER) AS days_overdue`+
+			CAST(julianday('now') - julianday(`+customerOldestDebtExpr+`) AS INTEGER) AS days_overdue`+
 		customerBalanceFrom+`
 		WHERE `+customerBalanceExpr+` > 0
-			AND julianday(sp_sum.oldest_at) IS NOT NULL
+			AND julianday(`+customerOldestDebtExpr+`) IS NOT NULL
 		ORDER BY days_overdue DESC, balance DESC, c.name ASC
 		LIMIT ?`,
 		limit,

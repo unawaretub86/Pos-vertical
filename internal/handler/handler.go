@@ -290,6 +290,10 @@ func (h *Handler) Routes() http.Handler {
 			r.Post("/customers", h.createCustomer)
 			r.Put("/customers/{id}", h.updateCustomer)
 			r.Delete("/customers/{id}", h.deleteCustomer)
+			// Opening fiado balance (deuda anterior, US-092): one per customer,
+			// corrected with PUT, never deleted.
+			r.Post("/customers/{id}/opening-balance", h.saveOpeningBalance)
+			r.Put("/customers/{id}/opening-balance", h.saveOpeningBalance)
 		})
 	})
 

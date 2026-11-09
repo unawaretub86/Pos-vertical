@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/repository"
 	"github.com/andreyo/pos/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -236,11 +237,17 @@ func (h *Handler) getCustomerDetail(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "error listando ventas a crédito")
 		return
 	}
+	openingBalance, err := h.customers.GetOpeningBalance(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "error obteniendo deuda anterior")
+		return
+	}
 	respond(w, http.StatusOK, map[string]any{
-		"customer":     customer,
-		"balance":      balance,
-		"payments":     payments,
-		"credit_sales": creditSales,
+		"customer":        customer,
+		"balance":         balance,
+		"payments":        payments,
+		"credit_sales":    creditSales,
+		"opening_balance": openingBalance,
 	})
 }
 
@@ -259,4 +266,49 @@ func (h *Handler) getCustomerPOSSummary(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	respond(w, http.StatusOK, summary)
+}
+
+// saveOpeningBalance handles POST and PUT /customers/{id}/opening-balance
+// (US-092, admin only). Checks run in the order role (RequireAdmin), id,
+// customer, body.
+func (h *Handler) saveOpeningBalance(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "id inválido")
+		return
+	}
+	claims := appmw.GetClaims(r)
+	if claims == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Amount   float64 `json:"amount"`
+		DebtDate string  `json:"debt_date"`
+		Note     string  `json:"note"`
+	}
+	if err := decode(r, &body); err != nil {
+		respondError(w, http.StatusBadRequest, "request inválido")
+		return
+	}
+
+	status := http.StatusCreated
+	save := h.customers.CreateOpeningBalance
+	if r.Method == http.MethodPut {
+		status = http.StatusOK
+		save = h.customers.UpdateOpeningBalance
+	}
+	ob, err := save(r.Context(), id, claims.UserID, body.Amount, body.DebtDate, body.Note)
+	switch {
+	case errors.Is(err, service.ErrOpeningCustomerNotFound), errors.Is(err, service.ErrNoOpeningBalance):
+		respondError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, service.ErrInvalidOpeningBalance):
+		respondError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, repository.ErrOpeningBalanceExists):
+		respondError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		respondError(w, http.StatusInternalServerError, "error registrando deuda anterior")
+	default:
+		respond(w, status, ob)
+	}
 }

@@ -1,9 +1,11 @@
 # Domain — Profitability (cost, margin, profit)
 
 > **Type:** spec · **Current:** yes · **Rules over:** gross profit, net profit, margin
-> **Updated:** 2026-10-01 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`).
+> **Updated:** 2026-11-09 (US-092: an opening *fiado* balance is not revenue or profit) · 2026-10-01 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`).
 
 "How much I sold" is not "how much I earned", and the difference between the two is what stops a shopkeeper from selling at a loss without knowing it. `find-pos.md:41` identified it as a gap local competitors do not cover.
+
+An opening *fiado* balance (*deuda anterior*, `fiado.md` "Rule: opening balance", US-092) is not a sale: it never counts as revenue, cost, gross or net profit, or in any sales report or dashboard sales figure.
 
 ---
 

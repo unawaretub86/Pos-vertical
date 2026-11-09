@@ -59,6 +59,18 @@ func (m *mockCustomerRepo) ListCreditSales(_ context.Context, _ int64) ([]*model
 func (m *mockCustomerRepo) GetPOSSummary(_ context.Context, _ int64) (*model.CustomerPosSummary, error) {
 	return nil, nil
 }
+func (m *mockCustomerRepo) IsActive(_ context.Context, _ int64) (bool, error) {
+	return m.customer != nil, m.getErr
+}
+func (m *mockCustomerRepo) GetOpeningBalance(_ context.Context, _ int64) (*model.CustomerOpeningBalance, error) {
+	return nil, nil
+}
+func (m *mockCustomerRepo) CreateOpeningBalance(_ context.Context, ob *model.CustomerOpeningBalance) (*model.CustomerOpeningBalance, error) {
+	return ob, nil
+}
+func (m *mockCustomerRepo) UpdateOpeningBalance(_ context.Context, ob *model.CustomerOpeningBalance, _ int64) (*model.CustomerOpeningBalance, error) {
+	return ob, nil
+}
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

@@ -10,6 +10,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/format';
+import { OPENING_BALANCE_ACTION_LABELS, describeOpeningBalanceAudit } from '@/lib/openingBalance';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ const ACTION_LABELS: Record<string, string> = {
   cash_out: 'Salida de caja',
   product_price_change: 'Cambio de precio',
   price_override: 'Precio modificado en venta',
+  ...OPENING_BALANCE_ACTION_LABELS,
 };
 
 function formatDateTime(iso: string): string {
@@ -63,6 +65,9 @@ function describeDetails(action: string, entity: string, entityID: number, detai
     }
     case 'price_override':
       return `Precio de venta #${entityID} modificado a ${formatCOP(Number(parsed.override_price ?? 0))} (catálogo: ${formatCOP(Number(parsed.original_price ?? 0))})`;
+    case 'opening_balance_create':
+    case 'opening_balance_update':
+      return describeOpeningBalanceAudit(action, entityID, details);
     default:
       return `${entity} #${entityID}`;
   }
@@ -158,6 +163,8 @@ export default function AuditPage() {
               <option value="cash_out">Salida de caja</option>
               <option value="product_price_change">Cambio de precio</option>
               <option value="price_override">Precio en venta</option>
+              <option value="opening_balance_create">Deuda anterior registrada</option>
+              <option value="opening_balance_update">Deuda anterior corregida</option>
             </select>
             <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={selectStyle} />
             <input type="date" value={to} onChange={e => setTo(e.target.value)} style={selectStyle} />

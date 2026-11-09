@@ -80,6 +80,16 @@ type CustomerRepository interface {
 	CreatePayment(ctx context.Context, p *model.CustomerPayment) (*model.CustomerPayment, error)
 	ListCreditSales(ctx context.Context, customerID int64) ([]*model.Sale, error)
 	GetPOSSummary(ctx context.Context, id int64) (*model.CustomerPosSummary, error)
+	// IsActive reports whether the customer exists with active = 1.
+	IsActive(ctx context.Context, id int64) (bool, error)
+	// GetOpeningBalance returns the customer's opening balance or ErrNotFound.
+	GetOpeningBalance(ctx context.Context, customerID int64) (*model.CustomerOpeningBalance, error)
+	// CreateOpeningBalance inserts the row and its audit_log row in one
+	// transaction; ErrOpeningBalanceExists when the customer already has one.
+	CreateOpeningBalance(ctx context.Context, ob *model.CustomerOpeningBalance) (*model.CustomerOpeningBalance, error)
+	// UpdateOpeningBalance replaces amount, date and note and audits the change
+	// as userID in one transaction; ErrNotFound when the customer has none.
+	UpdateOpeningBalance(ctx context.Context, ob *model.CustomerOpeningBalance, userID int64) (*model.CustomerOpeningBalance, error)
 }
 
 // SupplierRepository defines CRUD operations for suppliers.

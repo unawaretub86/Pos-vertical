@@ -5,6 +5,7 @@ package database
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -240,5 +241,97 @@ func TestMigration21_T1_AbonoMethodAndRegisterBackfill(t *testing.T) {
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM customer_payments`).Scan(&n); err != nil || n != 2 {
 		t.Errorf("row count after rejected insert = %d err=%v, want 2", n, err)
+	}
+}
+
+// ─── US-092 contract §4, T-13 (migration 22) ─────────────────────────────────
+
+func TestMigration22_T13_CustomerOpeningBalances(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v21.db")
+	raw, err := sql.Open("sqlite", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	old := &DB{DB: raw, path: p}
+	if _, err := raw.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range dbMigrations {
+		if m.version > 21 {
+			break
+		}
+		if err := old.runMigration(m); err != nil {
+			t.Fatalf("v%d: %v", m.version, err)
+		}
+	}
+	mustExec := func(q string) {
+		t.Helper()
+		if _, err := raw.Exec(q); err != nil {
+			t.Fatalf("seed: %v\n%s", err, q)
+		}
+	}
+	// Customer owing $179,000: fiado $200,000, abonos $20,000 + $1,000.
+	mustExec(`INSERT INTO customers (id, name, phone, address) VALUES (1, 'Dora', '', '')`)
+	mustExec(`INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method) VALUES (1, 1, 1, 200000, 200000, 'completed', 'credit')`)
+	mustExec(`INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 200000)`)
+	mustExec(`INSERT INTO customer_payments (id, customer_id, amount, method) VALUES (1, 1, 20000, 'cash')`)
+	mustExec(`INSERT INTO customer_payments (id, customer_id, amount, method) VALUES (2, 1, 1000, 'transfer')`)
+
+	var before float64
+	if err := raw.QueryRow(customerBalanceSQL, 1, 1).Scan(&before); err != nil {
+		t.Fatalf("balance before: %v", err)
+	}
+	if before != 179000 {
+		t.Fatalf("fixture balance before migration = %.0f, want 179000", before)
+	}
+	raw.Close() // flush before reopening through New, which runs migration 22
+
+	db, err := New(p)
+	if err != nil {
+		t.Fatalf("upgrade v21 -> v22 failed: %v", err)
+	}
+	defer db.Close()
+
+	var version int
+	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+		t.Fatalf("schema version: %v", err)
+	}
+	if version != 22 {
+		t.Errorf("schema version = %d, want 22", version)
+	}
+
+	var tables int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'customer_opening_balances'`).Scan(&tables); err != nil {
+		t.Fatalf("sqlite_master: %v", err)
+	}
+	if tables != 1 {
+		t.Fatalf("table customer_opening_balances count = %d, want 1", tables)
+	}
+
+	var after float64
+	if err := db.QueryRow(customerBalanceSQL, 1, 1).Scan(&after); err != nil {
+		t.Fatalf("balance after: %v", err)
+	}
+	if after != 179000 {
+		t.Errorf("balance after migration = %.0f, want 179000", after)
+	}
+	var openings int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM customer_opening_balances`).Scan(&openings); err != nil || openings != 0 {
+		t.Errorf("customer_opening_balances rows after migration = %d err=%v, want 0", openings, err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO customer_opening_balances (customer_id, amount, debt_date, note, created_by) VALUES (1, 150000, '2026-09-25 05:00:00', '', 1)`); err != nil {
+		t.Fatalf("first opening balance insert: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO customer_opening_balances (customer_id, amount, debt_date, note, created_by) VALUES (1, 999, '2026-09-20 05:00:00', '', 1)`)
+	if err == nil {
+		t.Fatal("second opening balance for customer 1 succeeded, want UNIQUE constraint failure")
+	}
+	if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		t.Errorf("second insert error = %v, want UNIQUE constraint failed", err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM customer_opening_balances`).Scan(&openings); err != nil || openings != 1 {
+		t.Errorf("customer_opening_balances rows after rejected insert = %d err=%v, want 1", openings, err)
 	}
 }

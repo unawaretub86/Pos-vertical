@@ -8,7 +8,7 @@
 
 **Draft items already covered by the code (not planned again):**
 - SP-01 SQLite hardening: WAL, `busy_timeout(5000)` and `foreign_keys(1)` are set on every pooled connection (`internal/database/database.go:23`); migrations run at startup on an empty file (`internal/database/database.go:33`). `synchronous=NORMAL` is deliberately not added: the default `FULL` is the safer choice for a shop PC that loses power.
-- SP-03 money formulas: balance = completed credit sales − *abonos* (`internal/repository/customer.go:120-128`), so a voided credit sale drops out of the balance; only cash *abonos* reach expected cash (`internal/repository/register.go:226`, US-082); voids no longer double-subtract (US-088). Remaining: one end-to-end certification test (US-091).
+- SP-03 money formulas: balance = completed credit sales − *abonos* (`internal/repository/customer.go:120-128` at planning time; since US-092 an opening balance is added, `fiado.md` "Rule: customer balance"), so a voided credit sale drops out of the balance; only cash *abonos* reach expected cash (`internal/repository/register.go:226`, US-082); voids no longer double-subtract (US-088). Remaining: one end-to-end certification test (US-091).
 - SP-04 single binary: `out/` is embedded (`web/static.go:14`) and served on the API port (`cmd/pos/main.go:72`). Remaining: F5 on every route in the binary (US-091).
 
 **Draft corrections:**
@@ -29,7 +29,7 @@
 | US-089 | Start on Windows logon, and daily backups to a configurable folder with 30-day retention | [ ] | |
 | US-090 | Certify that every sale flow works with DIAN turned off | [x] | 2026-11-07 |
 | US-091 | End-to-end certification of register close and *fiado* math, and F5 on every route of the binary | [x] | 2026-11-08 |
-| US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [ ] | |
+| US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [x] | 2026-11-09 |
 | US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
 | US-094 | Product catalog import from CSV | [ ] | |
 | US-095 | Admin void button for a sale in the UI | [ ] | |
@@ -157,9 +157,30 @@ Shift data for AC-1..AC-4: opening $100.000; sale #1 cash $30.000; sale #2 credi
 **Estimated effort:** 1 day. **Impact:** High for go-live. **Changes a business rule** (`spec/domain/fiado.md`, balance formula), so the contract asks the PO how it is stored and shown.
 
 **Acceptance criteria (draft):**
-- [ ] The admin can record an opening balance with a date for a customer; it adds to the balance and to the debt age, and *abonos* pay it down like any credit.
-- [ ] It does not count as a sale in any report, dashboard or register close.
-- [ ] It is recorded in the audit log and cannot be entered twice by accident.
+- [x] The admin can record an opening balance with a date for a customer; it adds to the balance and to the debt age, and *abonos* pay it down like any credit.
+- [x] It does not count as a sale in any report, dashboard or register close.
+- [x] It is recorded in the audit log and cannot be entered twice by accident.
+
+**Verified criteria (closed 2026-11-09):**
+
+GATE 1 (PO, 2026-11-09): Q-1..Q-5 accepted as recommended: a separate table `customer_opening_balances` (migration 22), one per customer, correction by an audited `PUT` with no delete, entry from the customer detail and from `Nuevo cliente`, master data for the US-093 reset, whole pesos from $1 to $100.000.000 with no future date. Q-6: tuteo (`Regístrala`). Contract discrepancies: US-096's invariant I-3 read credit − *abonos* (D-1, reworded to opening + credit − *abonos* in `fiado.md` and `caja.md`); stale `Balance` line refs (D-2, fixed); `Nuevo cliente` / `Editar` shown to cashiers (D-3, roadmap R-144). QA round 1: OK, 0 BLOCKER, 5 MINOR; 20 of 21 mutations caught; API smoke test passed; the UI was not smoke-tested (`gaps.md` US-092 M-1). Gemini diff round 1: clean. PO after QA: a correction may leave a negative balance (documented; UI warning R-141); malformed JSON for an unknown customer answers 400 before 404 (accepted, documented); the untested note trim (R-142) and the double toast (R-143) go to the roadmap; client vs server clock for "today" is documented only. Spec: `spec/domain/fiado.md` § Rule: customer balance, § Rule: debt age, § Rule: opening balance; `caja.md`, `rentabilidad.md`, `glosario.md`.
+
+Backend tests are in `internal/handler/customer_opening_test.go` (H), `internal/repository/customer_opening_test.go` (R) and `internal/database/migrate_test.go` (M); frontend tests in `frontend/lib/openingBalance.test.ts` (F).
+
+- AC-1, AC-8, AC-13: WHEN an admin posts `{amount, debt_date, note}` to `POST /customers/{id}/opening-balance` for an active customer with none, the system SHALL store it and answer 201; the balance, `/detail` `balance` and `opening_balance` SHALL carry it. $150.000 dated 45 days ago → 201, balance 150000, `credit_sales` `[]`. Test: H `TestCustomerOpening_T1_CreateAddsToBalanceAndDetail`.
+- AC-8: WHILE a customer has an opening balance, every balance reader SHALL return opening + completed credit − *abonos*. Dora: opening $150.000 + credit $40.000 + voided credit $25.000 − *abono* $30.000 → 160000 in `Balance`, `List`, `TotalPortfolioBalance`, `Debtors`, `AgingReceivables` and `GetPOSSummary`; Beto: $20.000 − $50.000 → −30000, out of the portfolio. Test: R `TestCustomerOpening_T2_EveryBalanceQueryCarriesOpening`.
+- AC-9: WHILE a customer has an opening balance, the debt age SHALL use the older of the oldest completed credit sale and the opening date. Opening only, 45 days → 45; plus a 60-day credit sale → 60; a 10-day sale plus a 45-day opening → 45; fully paid → `days_overdue` null. Test: R `TestCustomerOpening_T3_DebtAge`.
+- AC-2, AC-3: IF the amount is not whole, `≤ 0` or above 100,000,000, or the date is missing, malformed, non-existent or in the future, THEN the system SHALL answer 400 with the exact message and store nothing and audit nothing; amount 1, amount 100000000 and today are accepted. Test: H `TestCustomerOpening_T4_Validation`.
+- AC-4: IF the customer already has one, THEN `POST` SHALL answer 409 `este cliente ya tiene una deuda anterior registrada` and change nothing; 10 concurrent requests → one 201, nine 409, one row. Test: H `TestCustomerOpening_T5_OnePerCustomer`.
+- AC-5, AC-7: WHEN an admin sends `PUT`, the system SHALL replace amount, date and note, set `updated_at`, and audit `opening_balance_update` with from/to values; $150.000 → $120.000 and 45 → 50 days; a customer with none → 404. Test: H `TestCustomerOpening_T6_Correction`.
+- AC-6: IF the caller is a cashier → 403; non-numeric id → 400; unknown or inactive customer → 404 `cliente no encontrado`. Test: H `TestCustomerOpening_T7_RoleIDAndCustomerChecks`.
+- AC-7: WHEN an opening balance is created, the system SHALL write one `opening_balance_create` audit row in the same transaction; IF the audit insert fails, THEN 500 and no opening row. Test: H `TestCustomerOpening_T8_Audit`.
+- AC-10: WHEN *abonos* are posted against an opening balance, the existing rules SHALL apply. Opening $150.000: cash $100.000 → 50000; $60.000 → 400; delete → 409; transfer $50.000 → 0. Test: H `TestCustomerOpening_T9_AbonosPayItDown`.
+- AC-12: WHEN an opening balance is recorded or corrected, no sales report, dashboard, register or close figure SHALL change: `total_revenue` 50000, `by_payment_method` cash 10000 / credit 40000, `sold_today` 50000, `credit_new_today` 40000, `expected` 60000 before and after, `expected_close` 60000. A cash *abono* of $20.000 against it → `credit_collected_today` 20000 and the next register's `cash_abonos` 20000. Tests: H `TestCustomerOpening_T10_NotASale`, `TestCustomerOpening_T11_AbonoAgainstOpeningIsRealMoney`.
+- AC-11: The balance invariant SHALL read opening + completed credit − *abonos*: $50.000 credit − $35.000 *abonos* → 15000 (the US-091 number); plus a $100.000 opening → 115000. Test: R `TestCustomerOpening_T12_InvariantWithAndWithoutOpening`.
+- Migration 22: a v21 database with a $179.000 balance upgrades to version 22 and keeps the balance; a second row for the same customer fails `UNIQUE`. Test: M `TestMigration22_T13_CustomerOpeningBalances`.
+- AC-14, AC-15: amount and date helpers and the card label (`150.000` → 150000; tomorrow rejected; `$150.000 desde 25/09/2026`). Tests: F `T-14 parseAmountInput`, `T-14 isValidDebtDate`, `T-14 openingBalanceLabel`. The 320 px layout, role visibility and the `Nuevo cliente` second request were checked by review only (`gaps.md` US-092 M-1).
+- AC-16: the audit page describes `Cliente #7: $150.000 desde 25/09/2026` and `Cliente #7: de $150.000 (25/09/2026) a $120.000 (20/09/2026)`. Test: F `T-15 describeOpeningBalanceAudit`.
 
 ## US-093 — Reset tool: clear test transactions, keep master data
 

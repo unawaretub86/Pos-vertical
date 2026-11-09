@@ -96,6 +96,20 @@ type Customer struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// CustomerOpeningBalance is the debt a customer carried over from the paper
+// notebook at go-live (deuda anterior, US-092). DebtDate is the server-local
+// calendar date YYYY-MM-DD; it is stored as UTC text of 00:00 of that date.
+type CustomerOpeningBalance struct {
+	ID         int64      `json:"id"`
+	CustomerID int64      `json:"customer_id"`
+	Amount     float64    `json:"amount"`
+	DebtDate   string     `json:"debt_date"`
+	Note       string     `json:"note"`
+	CreatedBy  int64      `json:"created_by"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
+}
+
 // CustomerWithBalance extends Customer with on-the-fly credit balance data.
 type CustomerWithBalance struct {
 	Customer

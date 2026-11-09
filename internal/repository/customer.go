@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,7 +27,7 @@ func (r *customerRepo) List(ctx context.Context, search string) ([]*model.Custom
 		SELECT
 			c.id, c.name, c.phone, c.address, COALESCE(c.notes,''), c.credit_limit, c.created_at,
 			` + customerBalanceExpr + ` AS balance,
-			sp_sum.oldest_at AS oldest_debt_at` + customerBalanceFrom
+			` + customerOldestDebtExpr + ` AS oldest_debt_at` + customerBalanceFrom
 
 	query += ` WHERE c.active = 1`
 	args := []any{}
@@ -117,18 +118,20 @@ func (r *customerRepo) Delete(ctx context.Context, id int64) error {
 }
 
 // Balance calculates the on-the-fly balance:
-// SUM(credit sales total) - SUM(customer_payments amount)
+// opening balance (US-092) + SUM(credit sales total) - SUM(customer_payments
+// amount). Same formula as customerBalanceExpr.
 func (r *customerRepo) Balance(ctx context.Context, id int64) (float64, error) {
 	var balance float64
 	err := r.db.QueryRowContext(ctx, `
 		SELECT
-			COALESCE((
+			COALESCE((SELECT amount FROM customer_opening_balances WHERE customer_id = ?), 0)
+			+ COALESCE((
 				SELECT SUM(sp.amount) FROM sale_payments sp
 				JOIN sales s ON s.id = sp.sale_id
 				WHERE s.customer_id = ? AND sp.method = 'credit' AND s.status = 'completed'
 			), 0)
 			- COALESCE((SELECT SUM(amount) FROM customer_payments WHERE customer_id = ?), 0)
-	`, id, id).Scan(&balance)
+	`, id, id, id).Scan(&balance)
 	if err != nil {
 		return 0, fmt.Errorf("customer balance: %w", err)
 	}
@@ -244,7 +247,7 @@ func (r *customerRepo) GetPOSSummary(ctx context.Context, id int64) (*model.Cust
 	err = r.db.QueryRowContext(ctx, `
 		SELECT
 			`+customerBalanceExpr+` AS balance,
-			sp_sum.oldest_at AS oldest_debt_at
+			`+customerOldestDebtExpr+` AS oldest_debt_at
 		`+customerBalanceFrom+`
 		WHERE c.id = ?`, id).Scan(&balance, &oldestDebt)
 	if err != nil {
@@ -292,4 +295,154 @@ func (r *customerRepo) GetPOSSummary(ctx context.Context, id int64) (*model.Cust
 	}
 
 	return summary, nil
+}
+
+// IsActive reports whether the customer exists and was not deleted
+// (active = 1).
+func (r *customerRepo) IsActive(ctx context.Context, id int64) (bool, error) {
+	var n int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM customers WHERE id = ? AND active = 1`, id).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("customer active: %w", err)
+	}
+	return n > 0, nil
+}
+
+// openingDateLayout is the stored layout of customer_opening_balances.debt_date,
+// the same as MIN(sales.created_at) so both compare as text.
+const openingDateLayout = "2006-01-02 15:04:05"
+
+// openingDateToStored converts a server-local calendar date YYYY-MM-DD to the
+// stored UTC text of 00:00 local time of that date.
+func openingDateToStored(date string) (string, error) {
+	d, err := time.ParseInLocation("2006-01-02", date, time.Local)
+	if err != nil {
+		return "", fmt.Errorf("opening debt date: %w", err)
+	}
+	return d.UTC().Format(openingDateLayout), nil
+}
+
+// openingDateFromStored converts the stored UTC text back to the server-local
+// calendar date YYYY-MM-DD.
+func openingDateFromStored(stored string) (string, error) {
+	t, err := time.Parse(openingDateLayout, stored)
+	if err != nil {
+		return "", fmt.Errorf("opening debt date %q: %w", stored, err)
+	}
+	return t.Local().Format("2006-01-02"), nil
+}
+
+// GetOpeningBalance returns the customer's opening balance, or ErrNotFound when
+// there is none.
+func (r *customerRepo) GetOpeningBalance(ctx context.Context, customerID int64) (*model.CustomerOpeningBalance, error) {
+	ob := &model.CustomerOpeningBalance{}
+	var stored string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, customer_id, amount, debt_date, note, created_by, created_at, updated_at
+		FROM customer_opening_balances WHERE customer_id = ?`, customerID).
+		Scan(&ob.ID, &ob.CustomerID, &ob.Amount, &stored, &ob.Note, &ob.CreatedBy, &ob.CreatedAt, &ob.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("opening balance get: %w", err)
+	}
+	if ob.DebtDate, err = openingDateFromStored(stored); err != nil {
+		return nil, err
+	}
+	return ob, nil
+}
+
+// CreateOpeningBalance inserts the opening balance and its audit_log row
+// (opening_balance_create, by ob.CreatedBy) in one transaction. The
+// UNIQUE(customer_id) constraint is the guard against a second one, also under
+// concurrent requests: it maps to ErrOpeningBalanceExists.
+func (r *customerRepo) CreateOpeningBalance(ctx context.Context, ob *model.CustomerOpeningBalance) (*model.CustomerOpeningBalance, error) {
+	stored, err := openingDateToStored(ob.DebtDate)
+	if err != nil {
+		return nil, err
+	}
+	details, err := json.Marshal(map[string]any{"amount": ob.Amount, "debt_date": ob.DebtDate})
+	if err != nil {
+		return nil, fmt.Errorf("opening balance details: %w", err)
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("opening balance begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO customer_opening_balances (customer_id, amount, debt_date, note, created_by) VALUES (?, ?, ?, ?, ?)`,
+		ob.CustomerID, ob.Amount, stored, ob.Note, ob.CreatedBy)
+	if isUniqueViolation(err) {
+		return nil, ErrOpeningBalanceExists
+	}
+	if err != nil {
+		return nil, fmt.Errorf("opening balance insert: %w", err)
+	}
+	if err := InsertAuditLog(ctx, tx, ob.CreatedBy, "opening_balance_create", "customer", ob.CustomerID, string(details)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("opening balance commit: %w", err)
+	}
+	return r.GetOpeningBalance(ctx, ob.CustomerID)
+}
+
+// UpdateOpeningBalance replaces amount, debt date and note of the customer's
+// opening balance and writes its audit_log row (opening_balance_update, by
+// userID, with the old and new amount and date) in one transaction. A
+// customer with none is ErrNotFound.
+func (r *customerRepo) UpdateOpeningBalance(ctx context.Context, ob *model.CustomerOpeningBalance, userID int64) (*model.CustomerOpeningBalance, error) {
+	stored, err := openingDateToStored(ob.DebtDate)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("opening balance begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	var fromAmount float64
+	var fromStored string
+	err = tx.QueryRowContext(ctx,
+		`SELECT amount, debt_date FROM customer_opening_balances WHERE customer_id = ?`, ob.CustomerID).
+		Scan(&fromAmount, &fromStored)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("opening balance read: %w", err)
+	}
+	fromDate, err := openingDateFromStored(fromStored)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`UPDATE customer_opening_balances SET amount = ?, debt_date = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE customer_id = ?`,
+		ob.Amount, stored, ob.Note, ob.CustomerID)
+	if err != nil {
+		return nil, fmt.Errorf("opening balance update: %w", err)
+	}
+	details, err := json.Marshal(map[string]any{
+		"from_amount": fromAmount,
+		"to_amount":   ob.Amount,
+		"from_date":   fromDate,
+		"to_date":     ob.DebtDate,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("opening balance details: %w", err)
+	}
+	if err := InsertAuditLog(ctx, tx, userID, "opening_balance_update", "customer", ob.CustomerID, string(details)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("opening balance commit: %w", err)
+	}
+	return r.GetOpeningBalance(ctx, ob.CustomerID)
 }

@@ -43,6 +43,7 @@ var dbMigrations = []migration{
 	{version: 19, up: migration19},
 	{version: 20, up: migration20},
 	{version: 21, up: migration21},
+	{version: 22, up: migration22},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -592,4 +593,21 @@ const migration21 = `
 ALTER TABLE customer_payments ADD COLUMN method TEXT NOT NULL DEFAULT 'cash' CHECK (method IN ('cash','transfer','card'));
 ALTER TABLE customer_payments ADD COLUMN register_id INTEGER NULL REFERENCES registers(id);
 CREATE INDEX IF NOT EXISTS idx_customer_payments_register ON customer_payments(register_id);
+`
+
+// migration22 adds the opening fiado balance (deuda anterior) carried over from
+// the paper notebook at go-live (US-092): at most one row per customer, added to
+// the customer balance. debt_date is UTC text "YYYY-MM-DD HH:MM:SS" for 00:00
+// server-local time of the picked date, the layout of MIN(sales.created_at).
+const migration22 = `
+CREATE TABLE IF NOT EXISTS customer_opening_balances (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	customer_id INTEGER NOT NULL UNIQUE REFERENCES customers(id),
+	amount      REAL NOT NULL CHECK (amount > 0),
+	debt_date   TEXT NOT NULL,
+	note        TEXT NOT NULL DEFAULT '',
+	created_by  INTEGER NOT NULL REFERENCES users(id),
+	created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+	updated_at  DATETIME
+);
 `

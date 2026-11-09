@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-09 (US-092: an opening *fiado* balance never reaches the register; I-3 reads opening + credit − *abonos*) · 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -53,13 +53,15 @@ Source: `internal/service/register.go:116` (`Summary`) and `:149` (`Close`).
 
 > **Historical note:** `archive/2026-05-plan-mvp.md:1135` (formerly `PLAN.md`) reports that `cash_in` was missing from this formula. **It is already included** (`internal/service/register.go:116`). It is an example of why that document is not a source of truth about current state.
 
+An opening *fiado* balance (*deuda anterior*, `fiado.md` "Rule: opening balance") is not a sale and never reaches a register: it changes no `cash_sales`, `by_payment_method`, `expected` or `expected_close`. A cash *abono* that pays it down enters the open register like any cash *abono* (US-092, `TestCustomerOpening_T10_NotASale`, `TestCustomerOpening_T11_AbonoAgainstOpeningIsRealMoney`).
+
 ## Money invariants (property-tested)
 
 A state-machine property test suite (`TestMoneyProperties_StateMachine` and `TestMoneyProperties_WholePesoZeroTax` in `internal/handler/money_props_test.go`, using `pgregory.net/rapid`) generates random sequences of money operations (open register, cash / transfer / card / mixed / credit sales, *abonos*, cash in / out, expenses, voids, close) across 100 sequences (~30 steps each) through real HTTP routes and checks six invariants after every step against an independent model:
 
 - **I-1 (payments vs total):** `|Σ sale_payments.amount − sales.total| ≤ 0.5`, and every payment line is `> 0`.
 - **I-2 (register):** For every register, `GET /registers/{id}` returns `cash_sales`, `cash_abonos`, `cash_in`, `cash_out` and `expected` equal to the model within the ±$0,01 tolerance. When a register is closed, stored `expected_close` equals the model's expected at that moment, and `difference = actual_close − expected_close`. A later void adjusts only recomputed `expected`.
-- **I-3 (balance):** Customer balance in `GET /customers/{id}/balance`, `GET /customers` and `pos-summary` agree with each other and with model credit − *abonos*. `total_portfolio` equals the sum of positive model balances. Unvoided credit sales keep balance `≥ 0`.
+- **I-3 (balance):** Customer balance in `GET /customers/{id}/balance`, `GET /customers` and `pos-summary` agree with each other and with the model's opening + completed credit − *abonos* (`fiado.md`, "Rule: customer balance"). The generator never records an opening balance, so opening is 0 for every customer it creates (US-092). `total_portfolio` equals the sum of positive model balances. Unvoided credit sales keep balance `≥ 0`.
 - **I-4 (void):** An admin void drops register `expected` by the cash payments, drops customer balance by credit lines, restores stock for product items (service items unchanged), and adds no register movements. Repeated void answers 400 `la venta ya fue anulada`; a cashier gets 403.
 - **I-5 (rejected step changes nothing):** If a step is rejected (any 4xx or 500), row counts and sums of sales, payments, movements, registers, expenses, and product stock remain unchanged.
 - **I-6 (positive and whole amounts):** Every payment, movement, and expense amount is `> 0`, and `opening_amount ≥ 0`. In zero-tax unit product sequences, every stored money column is an integer (`x == math.Trunc(x)`).

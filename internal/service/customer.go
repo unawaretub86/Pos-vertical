@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
+	"time"
 
 	appmw "github.com/andreyo/pos/internal/middleware"
 	"github.com/andreyo/pos/internal/model"
@@ -164,4 +166,117 @@ func (s *CustomerService) ListCreditSales(ctx context.Context, customerID int64)
 
 func (s *CustomerService) GetPOSSummary(ctx context.Context, customerID int64) (*model.CustomerPosSummary, error) {
 	return s.repo.GetPOSSummary(ctx, customerID)
+}
+
+// Opening balance (deuda anterior, US-092) rules.
+const (
+	// maxOpeningBalance is the largest opening balance accepted (PO Q-5).
+	maxOpeningBalance = 100_000_000
+	// openingBalanceDateLayout is the calendar date the admin picks.
+	openingBalanceDateLayout = "2006-01-02"
+)
+
+// ErrInvalidOpeningBalance matches (errors.Is) every rejected opening balance
+// input: amount and debt date. The handler maps it to 400.
+var ErrInvalidOpeningBalance = errors.New("deuda anterior inválida")
+
+// openingBalanceInputError carries the user-facing message of a rejected
+// opening balance input and matches ErrInvalidOpeningBalance.
+type openingBalanceInputError struct{ msg string }
+
+func (e *openingBalanceInputError) Error() string        { return e.msg }
+func (e *openingBalanceInputError) Is(target error) bool { return target == ErrInvalidOpeningBalance }
+
+// ErrOpeningCustomerNotFound is returned when the customer of an opening
+// balance does not exist or was deleted (active = 0).
+var ErrOpeningCustomerNotFound = errors.New("cliente no encontrado")
+
+// ErrNoOpeningBalance is returned when correcting the opening balance of a
+// customer that has none.
+var ErrNoOpeningBalance = errors.New("el cliente no tiene deuda anterior")
+
+// validateOpeningBalance checks the amount (whole pesos from 1 to
+// maxOpeningBalance) and the debt date (YYYY-MM-DD, not after today in server
+// local time), and returns the trimmed date.
+func validateOpeningBalance(amount float64, debtDate string) (string, error) {
+	if amount != math.Trunc(amount) || amount < 1 || amount > maxOpeningBalance {
+		return "", &openingBalanceInputError{"el monto debe ser un valor entero entre $1 y $100.000.000"}
+	}
+	debtDate = strings.TrimSpace(debtDate)
+	d, err := time.ParseInLocation(openingBalanceDateLayout, debtDate, time.Local)
+	if err != nil {
+		return "", &openingBalanceInputError{"fecha de la deuda inválida"}
+	}
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	if d.After(today) {
+		return "", &openingBalanceInputError{"la fecha de la deuda no puede ser futura"}
+	}
+	return debtDate, nil
+}
+
+// requireActiveCustomer returns ErrOpeningCustomerNotFound unless the customer
+// exists with active = 1.
+func (s *CustomerService) requireActiveCustomer(ctx context.Context, customerID int64) error {
+	active, err := s.repo.IsActive(ctx, customerID)
+	if err != nil {
+		return fmt.Errorf("check customer: %w", err)
+	}
+	if !active {
+		return ErrOpeningCustomerNotFound
+	}
+	return nil
+}
+
+// GetOpeningBalance returns the customer's opening balance, or nil when there
+// is none.
+func (s *CustomerService) GetOpeningBalance(ctx context.Context, customerID int64) (*model.CustomerOpeningBalance, error) {
+	ob, err := s.repo.GetOpeningBalance(ctx, customerID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, nil
+	}
+	return ob, err
+}
+
+// CreateOpeningBalance records the customer's opening balance on behalf of
+// userID. The customer must be active; a second one for the same customer is
+// repository.ErrOpeningBalanceExists.
+func (s *CustomerService) CreateOpeningBalance(ctx context.Context, customerID, userID int64, amount float64, debtDate, note string) (*model.CustomerOpeningBalance, error) {
+	if err := s.requireActiveCustomer(ctx, customerID); err != nil {
+		return nil, err
+	}
+	debtDate, err := validateOpeningBalance(amount, debtDate)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.CreateOpeningBalance(ctx, &model.CustomerOpeningBalance{
+		CustomerID: customerID,
+		Amount:     amount,
+		DebtDate:   debtDate,
+		Note:       strings.TrimSpace(note),
+		CreatedBy:  userID,
+	})
+}
+
+// UpdateOpeningBalance corrects the customer's opening balance on behalf of
+// userID. The same amount and date rules as CreateOpeningBalance apply; a
+// customer with none is ErrNoOpeningBalance.
+func (s *CustomerService) UpdateOpeningBalance(ctx context.Context, customerID, userID int64, amount float64, debtDate, note string) (*model.CustomerOpeningBalance, error) {
+	if err := s.requireActiveCustomer(ctx, customerID); err != nil {
+		return nil, err
+	}
+	debtDate, err := validateOpeningBalance(amount, debtDate)
+	if err != nil {
+		return nil, err
+	}
+	ob, err := s.repo.UpdateOpeningBalance(ctx, &model.CustomerOpeningBalance{
+		CustomerID: customerID,
+		Amount:     amount,
+		DebtDate:   debtDate,
+		Note:       strings.TrimSpace(note),
+	}, userID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrNoOpeningBalance
+	}
+	return ob, err
 }

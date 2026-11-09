@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
@@ -12,6 +12,15 @@ import { buildCollectionWhatsAppUrl } from '@/lib/whatsapp';
 import { customerBalanceLabel, type AbonoMethod } from '@/lib/abono';
 import AbonoModal from '@/components/AbonoModal';
 import { resolveRouteParam, parseCustomerId } from '@/lib/routeParam';
+import { getUser } from '@/lib/auth';
+import {
+  parseAmountInput,
+  isValidDebtDate,
+  todayISODate,
+  formatDebtDate,
+  MAX_OPENING_BALANCE,
+  type OpeningBalance,
+} from '@/lib/openingBalance';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +59,7 @@ interface CustomerDetail {
   balance: number;
   payments: CustomerPayment[] | null;
   credit_sales: CreditSale[] | null;
+  opening_balance: OpeningBalance | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -121,6 +131,7 @@ function CustomerDetailContent() {
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showOpeningModal, setShowOpeningModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'sales' | 'payments'>('sales');
 
   const load = useCallback(async () => {
@@ -164,7 +175,9 @@ function CustomerDetailContent() {
     );
   }
 
-  const { customer, balance, payments, credit_sales } = detail;
+  const { customer, balance, payments, credit_sales, opening_balance } = detail;
+  // Only rendered after the detail loaded on the client, so localStorage is available.
+  const isAdmin = getUser()?.role === 'admin';
   const salesList = credit_sales ?? [];
   const balanceLabel = customerBalanceLabel(balance);
   const paymentsList = payments ?? [];
@@ -241,6 +254,48 @@ function CustomerDetailContent() {
                 </div>
               </div>
             </div>
+
+            {/* Opening balance (deuda anterior, US-092): visible to every role, editable by admins */}
+            {opening_balance ? (
+              <div style={{
+                background: 'var(--surface-1)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>
+                    Deuda anterior
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                    <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatCOP(opening_balance.amount)}</span>
+                    {' · desde '}{formatDebtDate(opening_balance.debt_date)}
+                  </div>
+                  {opening_balance.note && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', overflowWrap: 'anywhere' }}>
+                      {opening_balance.note}
+                    </div>
+                  )}
+                </div>
+                {isAdmin && (
+                  <button className="btn btn-sm" onClick={() => setShowOpeningModal(true)}>
+                    Corregir
+                  </button>
+                )}
+              </div>
+            ) : isAdmin && (
+              <div style={{ marginBottom: '16px' }}>
+                <button className="btn btn-sm" onClick={() => setShowOpeningModal(true)}>
+                  Registrar deuda anterior
+                </button>
+              </div>
+            )}
 
             {/* Notes + credit limit */}
             {(customer.notes || customer.credit_limit != null) && (
@@ -404,7 +459,182 @@ function CustomerDetailContent() {
           onSaved={load}
         />
       )}
+
+      {showOpeningModal && (
+        <OpeningBalanceModal
+          customerId={customer.id}
+          customerName={customer.name}
+          existing={opening_balance}
+          onClose={() => setShowOpeningModal(false)}
+          onSaved={load}
+        />
+      )}
     </>
+  );
+}
+
+// ─── Opening balance modal ────────────────────────────────────────────────────
+
+const openingLabelStyle: React.CSSProperties = {
+  fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)',
+  textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '6px',
+};
+
+// Records (POST) or corrects (PUT) the customer's opening balance. Server
+// errors (400/409) stay inside the modal; it closes only on success.
+function OpeningBalanceModal({ customerId, customerName, existing, onClose, onSaved }: {
+  customerId: number;
+  customerName: string;
+  existing: OpeningBalance | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const today = todayISODate();
+  const [amount, setAmount] = useState(existing ? existing.amount.toLocaleString('es-CO') : '');
+  const [debtDate, setDebtDate] = useState(existing ? existing.debt_date : today);
+  const [note, setNote] = useState(existing ? existing.note : '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  // Guards against a second submit before the disabled state re-renders.
+  const submittingRef = useRef(false);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const parsed = parseAmountInput(amount);
+
+  function handleAmountChange(val: string) {
+    const n = parseAmountInput(val);
+    // Cap what can be typed a digit above the limit, so the server message still shows.
+    setAmount(n === null ? '' : Math.min(n, MAX_OPENING_BALANCE * 10).toLocaleString('es-CO'));
+    setError('');
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (parsed === null || submittingRef.current) return;
+    if (!isValidDebtDate(debtDate, today)) {
+      setError(debtDate > today ? 'la fecha de la deuda no puede ser futura' : 'fecha de la deuda inválida');
+      return;
+    }
+    submittingRef.current = true;
+    setError('');
+    setLoading(true);
+    try {
+      const body = { amount: parsed, debt_date: debtDate, note };
+      if (existing) {
+        await api.put<OpeningBalance>(`/customers/${customerId}/opening-balance`, body);
+        toast('Deuda anterior corregida', 'success');
+      } else {
+        await api.post<OpeningBalance>(`/customers/${customerId}/opening-balance`, body);
+        toast('Deuda anterior registrada', 'success');
+      }
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    } finally {
+      submittingRef.current = false;
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        // Dims the page with the theme's own canvas color (no hard-coded color).
+        background: 'color-mix(in srgb, var(--canvas) 75%, transparent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '16px', zIndex: 1000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--surface-1)', border: '1px solid var(--border-emphasis)', borderRadius: '12px',
+          padding: '20px', width: '420px', maxWidth: '100%', maxHeight: '100%', overflowY: 'auto', boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ marginBottom: '16px', minWidth: 0 }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px' }}>
+            {existing ? 'Corregir deuda anterior' : 'Registrar deuda anterior'}
+          </h2>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0, overflowWrap: 'anywhere' }}>
+            {customerName}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label htmlFor="opening-amount" style={openingLabelStyle}>Monto *</label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>$</span>
+              <input
+                id="opening-amount"
+                inputMode="numeric"
+                value={amount}
+                onChange={e => handleAmountChange(e.target.value)}
+                placeholder="0"
+                style={{ paddingLeft: '26px', width: '100%', boxSizing: 'border-box', fontSize: '16px', fontWeight: 600 }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="opening-date" style={openingLabelStyle}>Fecha de la deuda *</label>
+            <input
+              id="opening-date"
+              type="date"
+              value={debtDate}
+              max={today}
+              onChange={e => { setDebtDate(e.target.value); setError(''); }}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="opening-note" style={openingLabelStyle}>Nota (opcional)</label>
+            <input
+              id="opening-note"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Ej: cuaderno pág. 12"
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {error && (
+            <div style={{ fontSize: '12px', color: 'var(--danger)', padding: '8px 12px', background: 'var(--danger-dim)', borderRadius: '6px' }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+            <button type="button" onClick={onClose} className="btn btn-sm">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading || parsed === null}
+              className="btn btn-sm btn-accent"
+              style={{ opacity: parsed === null ? 0.5 : 1 }}
+            >
+              {loading ? 'Guardando...' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
