@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-07
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-08
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -10,15 +10,15 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 23 (US-091, register close and fiado certification plus F5 on every route, level L). Before: 22 (US-090), 21 (US-081), 20 (US-085). `us/US-096` (money QA layer 1) is open from another session. `dev` is at the US-091 merge (verify with `git log`).
+**Last run:** 24 (US-096, money QA layer 1: property-based invariant tests over random sequences, level L). Before: 23 (US-091), 22 (US-090), 21 (US-081). No `us/*` worktree is open. `dev` is at the US-096 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN concurrency) is done in code and tests (real-device checks M-1..M-3 in `gaps.md`). SPRINT-18 is complete in code. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
 **SPRINT-19 (Fiado collection):** complete in code and tests; all 8 US (US-082, US-083, US-086, US-087, US-043, US-084, US-088, US-085) merged to `dev` (manual checks US-082 M-1..M-3, US-083 M-1, US-086 M-1, US-087 M-1, US-043 M-1, US-084 M-1 and US-085 M-1 in `gaps.md`).
 
-**SPRINT-20 (Go-live for client #1):** US-090 and US-091 merged to `dev` (manual checks US-090 M-1 and US-091 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08; US-095 (UI void, from R-111) added at US-091 GATE 1; US-096 (money QA layer 1, R-130) in progress in another session.
+**SPRINT-20 (Go-live for client #1):** US-090, US-091, and US-096 merged to `dev` (manual checks US-090 M-1 and US-091 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08; US-095 (UI void, from R-111) added at US-091 GATE 1.
 
-**Next US:** see the SPRINT-20 recommended order. Roadmap items R-102..R-109, R-112..R-129 and R-131..R-136 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
+**Next US:** US-095 or US-092 (sprint order: US-095, US-092, US-094, US-093, US-089). Roadmap items R-102..R-109, R-112..R-129, R-131..R-136, and R-137..R-140 await PO prioritization. Run `/us <ID> [M|L]`. Before starting, make sure no other Claude session is orchestrating the same US (see run 12).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -71,6 +71,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 21 | 2026-11-07 | US-081 | L | ~416k (A 173k, last of 99k→124k→173k · T 101k · I 64k · Q 78k) | 180 | ~31.4 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 2 contract discrepancies (D-1, D-2) + 1 root cause found by probe (deferred tx upgrade) + 3 Gemini-verified contract fixes (G-1..G-3) + 3 QA MINOR | 4 new (R-120..R-123) | 0 | +996 / −54, 17 files (excluding this benchmark entry) |
 | 22 | 2026-11-07 | US-090 | M | ~261k (A 124k, last value after contract 91k · I 72k · Q 65k) | ~119 | ~22 | 0 | 1 | 3 contract discrepancies fixed (D-1..D-3) + 4 sent to roadmap (D-4..D-7) + 1 Gemini-verified contract fix (AC-10 wording) + 4 QA MINOR | 6 new (R-124..R-129) | 0 | +402 / −20, 10 files (excluding this benchmark entry) |
 | 23 | 2026-11-08 | US-091 | L | ~399k (A 193k, last of 145k→170k→193k · T 88k · I 33k · Q 85k) | 149 | ~31.6 | 1 (PASSES⚠️ review, pipeline-mandated) | 1 | 6 contract discrepancies (D-1..D-6) + 1 Gemini-verified contract fix (AC-6) + 3 QA MINOR | 3 new (R-134..R-136) + 1 moved to a US (R-111 → US-095) | 0 | +982 / −24, 12 files (excluding this benchmark entry) |
+| 24 | 2026-11-08 | US-096 | L | ~535k (A 192k · T 202k · I 56k · Q 85k) | ~170 | ~45.0 | 1 (QA r1 AC-8 30s budget exceeded; PO raised to <= 40s) | 2 | 10 contract findings (D-1..D-10) + 3 Gemini-verified (G-8, G-11, G-4) + 4 QA MINOR | 4 new (R-137..R-140) + 1 closed (R-130) | 0 | +1,827 / −11, 14 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -897,6 +898,50 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 24 — US-096 (money QA layer 1: property-based invariant tests over random sequences of money operations, level L)
+
+Prioritized by the PO on 2026-11-08 (roadmap R-130). Contract to close ran in one session (2026-11-08). Renamed from US-095 at GATE 1 due to ID collision with the UI void button on unmerged `us/US-091`. Subagents were deployed for QA round 2 and analyst close.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract; GATE 1 updates; Q-8 add; close) | 192.4k (162.1k → 192.4k) | 75 | ~14.4 min |
+| test-author | 1 | 202.2k | 63 | ~45.4 min |
+| implementer | 1 | 56.3k | 12 | ~3.7 min |
+| qa | 2 rounds | ~85k | 30 | ~10.0 min |
+
+**What it found.** A high-impact property testing and fuzzing layer for money operations using `pgregory.net/rapid` v1.3.0.
+100 random sequences of ~30 operations drove `h.Routes()` checking 6 invariants after every step (payments vs total, register expected cash, customer balance consistency, exact void reversal of register/balance/stock, rejection preservation, and positive/whole amounts).
+
+Six server-side validation gaps were uncovered and fixed with 400 responses:
+- `opening_amount < 0` (AC-12)
+- movement `amount <= 0` (AC-13)
+- sale `discount < 0` (AC-14)
+- payments vs server-recalculated total discrepancy > 0.5 (AC-15)
+- sale `discount > subtotal` (AC-16, found by Gemini)
+- recalculated sale `total <= 0` (AC-17, Q-8)
+
+Test-author: T-0..T-12 implemented; 6 validation tests and `FuzzSaleAmounts` went RED against base, green after implementation. T-6 (whole-peso check on full domain) correctly RED under build tag `moneyexact` with shrunk counterexample ($1.001 at 19% tax -> 190.19 tax).
+QA: 3/3 mutations caught (m1 register cashAbonos, m2 customer completed filter, m3 stock restore). Seed reproducibility verified (identical counterexample with `-rapid.seed`). Binary smoke test passed all new 400 responses.
+
+**Unplanned stops:** 1 (QA round 1: T-1 + T-2 took 28.4 - 30.8 s, exceeding the 30 s AC-8 budget in 3 of 5 runs; PO approved Option 1 to raise budget to <= 40 s without weakening tests). QA round 2: PASS (17.5 s wall time).
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~3 min | 11 | 3 (G-8 sale discount > subtotal; G-11 close closed/no-open missing in AC-6; G-4 actor role) | 8 | n/a |
+| diff, round 1 | OK | ~3 min | 0 (`CLEAN`) | 0 | 0 | no |
+
+**Operational friction.**
+- **AC-8 time budget calibration:** A 30 s limit for 100 sequences of ~30 HTTP steps across two properties was too tight for CI spread on Windows (~28-31 s). Raising to <= 40 s avoided stripping assertions or reducing sequence counts.
+- **Out of scope finding (R-137):** Recalculated total NaN passes `recalcTotal <= 0` and is rejected by the SQLite driver with 400; sent to roadmap for clean float validation.
+
+### Proposed adjustments (not applied; need the PO's yes)
+1. Earlier pending proposals unchanged.
+2. For rapid state machine tests in CI, set wall-time budgets with a ~30% buffer over average single-run measurements to absorb Windows scheduling variance without triggering false blocker escalations.
+
+### What to measure in run 25
+- CI execution time on GitHub Actions with the new property test suite added to `internal/handler`.
 
 ## Run 23 — US-091 (end-to-end certification of register close and fiado math, and F5 on every route of the binary, level L)
 

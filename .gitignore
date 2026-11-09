@@ -27,3 +27,6 @@ changes/
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# rapid writes failing-sequence files here (US-096)
+internal/handler/testdata/rapid/

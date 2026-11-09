@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -21,6 +21,7 @@ valid types (register_movements.type): sale · cash_in · cash_out · opening
 - `sale` — a sale recorded against that register.
 - `cash_in` — money comes in that is not a sale. E.g.: the owner hands change to the cashier.
 - `cash_out` — money goes out that is not a refund. E.g.: paying a delivery, an expense. A void does **not** write a `cash_out` (since US-088).
+- `POST /registers` rejects `opening_amount < 0` with 400 `el monto de apertura no puede ser negativo` (0 is allowed). `POST /registers/{id}/movements` rejects `amount ≤ 0` with 400 `el monto debe ser mayor a 0`. Before US-096 the server accepted both (−20000 `cash_in` lowered `expected`); only the UI blocked them.
 
 A **void** (*anulación*, `DELETE /sales/{id}/void` or `POST /sales/{id}/void-with-credit-note`, admin only, `internal/handler/handler.go:167-170`) inserts **no** register movement. The voided sale's own `sale` movement (`Venta #N` / `Crédito #N`) stays in the list with no paired line. Source: `SaleRepository.Void` (`internal/repository/sale.go:275`), which sets `status = 'voided'` (`:338`), restores stock and writes the `void` audit row (`:344`), and nothing else. There is no void action in the UI; voids are reachable only through the admin API.
 
@@ -48,8 +49,28 @@ Source: `internal/service/register.go:116` (`Summary`) and `:149` (`Close`).
 
 - **What `by_payment_method` shows.** It groups the payments of the register's **completed sales** by method, ordered by method (`internal/repository/register.go:177-199`). *Abonos* never appear in it, whatever their method, so transfer and card *abonos* reach no close figure (summary, close ticket or email): they lower the customer balance and are visible only in the customer's payment list. Roadmap R-134.
 - **Certified shift (US-091).** Opening $100.000; cash sale $30.000; credit sale $50.000; *abonos* $20.000 cash, $10.000 transfer, $5.000 card; `cash_in` $15.000; `cash_out` $8.000; cash sale $12.000. Before any void: `cash_sales` $42.000, `expected` $169.000. An admin voids the $12.000 sale (a cashier gets 403): `cash_sales` $30.000, `cash_abonos` $20.000, `cash_in` $15.000, `cash_out` $8.000, `expected` = 100.000 + 30.000 + 20.000 + 15.000 − 8.000 = **$157.000**; `by_payment_method` is exactly cash $30.000 × 1 and credit $50.000 × 1; the 6 movements are unchanged. Closing with $157.000 counted stores `expected_close` 157000, `actual_close` 157000, `difference` 0; a second close answers 409. Tests: `TestShiftCert_T1_FullShift`, `TestShiftCert_T2_CloseAndAfterClose` (`internal/handler/shift_certification_test.go`). These tests use a file-backed database under `t.TempDir()`: with `:memory:` the close's background email goroutine takes a second pooled connection, which is an empty database (roadmap R-115).
+- Closing an already closed register answers 409 `la caja ya está cerrada`; closing an unknown register id answers 500 `error cerrando caja` (not 404; roadmap item R-139 opened by US-096).
 
 > **Historical note:** `archive/2026-05-plan-mvp.md:1135` (formerly `PLAN.md`) reports that `cash_in` was missing from this formula. **It is already included** (`internal/service/register.go:116`). It is an example of why that document is not a source of truth about current state.
+
+## Money invariants (property-tested)
+
+A state-machine property test suite (`TestMoneyProperties_StateMachine` and `TestMoneyProperties_WholePesoZeroTax` in `internal/handler/money_props_test.go`, using `pgregory.net/rapid`) generates random sequences of money operations (open register, cash / transfer / card / mixed / credit sales, *abonos*, cash in / out, expenses, voids, close) across 100 sequences (~30 steps each) through real HTTP routes and checks six invariants after every step against an independent model:
+
+- **I-1 (payments vs total):** `|Σ sale_payments.amount − sales.total| ≤ 0.5`, and every payment line is `> 0`.
+- **I-2 (register):** For every register, `GET /registers/{id}` returns `cash_sales`, `cash_abonos`, `cash_in`, `cash_out` and `expected` equal to the model within the ±$0,01 tolerance. When a register is closed, stored `expected_close` equals the model's expected at that moment, and `difference = actual_close − expected_close`. A later void adjusts only recomputed `expected`.
+- **I-3 (balance):** Customer balance in `GET /customers/{id}/balance`, `GET /customers` and `pos-summary` agree with each other and with model credit − *abonos*. `total_portfolio` equals the sum of positive model balances. Unvoided credit sales keep balance `≥ 0`.
+- **I-4 (void):** An admin void drops register `expected` by the cash payments, drops customer balance by credit lines, restores stock for product items (service items unchanged), and adds no register movements. Repeated void answers 400 `la venta ya fue anulada`; a cashier gets 403.
+- **I-5 (rejected step changes nothing):** If a step is rejected (any 4xx or 500), row counts and sums of sales, payments, movements, registers, expenses, and product stock remain unchanged.
+- **I-6 (positive and whole amounts):** Every payment, movement, and expense amount is `> 0`, and `opening_amount ≥ 0`. In zero-tax unit product sequences, every stored money column is an integer (`x == math.Trunc(x)`).
+
+Amount fuzz targets (`FuzzSaleAmounts` and `FuzzAbonoAmount` in `internal/handler/money_fuzz_test.go`) verify that sale and *abono* inputs never trigger a panic or 5xx; valid inputs satisfy I-1 and I-6, while 4xx rejections change nothing (I-5).
+
+**Known limitation:** Amounts are not whole pesos in the full domain (taxed lines, kg quantities, *abonos* such as 0.4). This can be reproduced with:
+```bash
+go test -count=1 -tags moneyexact ./internal/handler/ -run 'TestMoneyProperties_WholePeso$'
+```
+(tracked in roadmap R-133).
 
 ## Rule: estimated cash of the day (dashboard)
 

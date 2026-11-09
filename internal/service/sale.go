@@ -85,6 +85,14 @@ func (s *SaleService) Create(ctx context.Context, sale *model.Sale) (*model.Sale
 	if math.Abs(recalcTotal-sale.Total) > 1 {
 		return nil, fmt.Errorf("total inconsistente: esperado %.0f, recibido %.0f", recalcTotal, sale.Total)
 	}
+	if recalcTotal <= 0 {
+		return nil, errors.New("el total de la venta debe ser mayor a cero")
+	}
+	// Check payments against the recalculated total too: the client total
+	// may differ by up to 1 from it (US-096, AC-15).
+	if paymentsSum := sumPayments(sale.Payments); math.Abs(paymentsSum-recalcTotal) > 0.5 {
+		return nil, fmt.Errorf("la suma de los pagos ($%.0f) no coincide con el total de la venta ($%.0f)", paymentsSum, recalcTotal)
+	}
 	sale.Total = recalcTotal
 
 	if sale.Status == "" {
@@ -144,6 +152,16 @@ func validateSale(sale *model.Sale) error {
 	if requiresCustomer && sale.CustomerID == nil {
 		return errors.New("el método de pago 'credito' requiere un cliente")
 	}
+	if sale.Discount < 0 {
+		return errors.New("el descuento no puede ser negativo")
+	}
+	var itemsSubtotal float64
+	for _, item := range sale.Items {
+		itemsSubtotal += item.Quantity*item.UnitPrice - item.Discount
+	}
+	if sale.Discount > itemsSubtotal {
+		return errors.New("el descuento no puede superar el subtotal de la venta")
+	}
 	if math.Abs(paymentsSum-sale.Total) > 0.5 {
 		return fmt.Errorf("la suma de los pagos ($%.0f) no coincide con el total de la venta ($%.0f)", paymentsSum, sale.Total)
 	}
@@ -165,4 +183,12 @@ func validateSale(sale *model.Sale) error {
 		}
 	}
 	return nil
+}
+
+func sumPayments(payments []model.Payment) float64 {
+	var sum float64
+	for _, p := range payments {
+		sum += p.Amount
+	}
+	return sum
 }

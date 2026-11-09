@@ -33,8 +33,9 @@
 | US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
 | US-094 | Product catalog import from CSV | [ ] | |
 | US-095 | Admin void button for a sale in the UI | [ ] | |
+| US-096 | Money QA layer 1: property-based invariant tests over random sequences of money operations | [x] | 2026-11-08 |
 
-**Total estimated effort: ~6.5 days**
+**Total estimated effort: ~8 days**
 
 ---
 
@@ -45,10 +46,11 @@
 | **1** | US-090 | Small audit, level M. Confirms the base the other tests run on. |
 | **2** | US-091 | Certifies the money flows before real money goes through them. |
 | **3** | US-095 | Lets the admin undo a wrong charge at the counter; the G-2 dry run voids a sale through it. Its money effect is certified by US-091. |
-| **4** | US-092 | Needed before loading the client's existing debts. |
-| **5** | US-094 | Needed before loading the client's catalog (if approved). |
-| **6** | US-093 | Run after the dry run, right before go-live. |
-| **7** | US-089 | Last code before install; tested on the real install path. |
+| **4** | US-096 | Generated money invariants over random sequences, after the fixed US-091 shift; its validation fixes land before opening balances and the dry run. |
+| **5** | US-092 | Needed before loading the client's existing debts. |
+| **6** | US-094 | Needed before loading the client's catalog (if approved). |
+| **7** | US-093 | Run after the dry run, right before go-live. |
+| **8** | US-089 | Last code before install; tested on the real install path. |
 
 ---
 
@@ -186,3 +188,45 @@ Shift data for AC-1..AC-4: opening $100.000; sale #1 cash $30.000; sale #2 credi
 - [ ] The admin uploads a CSV with name, barcode, category, unit (`unit`, `kg`, `lb`, `liter`), cost, price and stock; a downloadable template is provided.
 - [ ] Rows are validated first and errors are shown per row before anything is written; the import is all-or-nothing.
 - [ ] Missing categories are created; a duplicate barcode is reported, not silently overwritten.
+
+## US-096 — Money QA layer 1: property-based invariant tests over random sequences of money operations
+
+**Status:** prioritized by the PO on 2026-11-08 (roadmap R-130; layers 2 and 3 are R-131 and R-132). Contract approved at GATE 1 (PO, 2026-11-08). First drafted as US-095; renumbered because US-095 is the admin void button on the unmerged branch `us/US-091`.
+
+**As** Don Carlos (owner),
+**I want** the money rules checked against thousands of random shifts, not only one scripted day,
+**so that** a combination nobody thought of cannot make the register close or a *fiado* balance wrong.
+
+**Estimated effort:** 1.5 days. **Impact:** High. Complements US-091 (one fixed shift), which stays as the readable regression example.
+
+**Today (verified 2026-11-08):** no property or fuzz test exists. Payments may differ from the stored sale total by up to 0.5 through the UI and by up to 1.21 through the API (`internal/service/sale.go:84-88`, `:147`). Stored amounts are not whole pesos (taxed lines, kg quantities, *abonos* such as 0.4; roadmap R-133). The server accepts a negative opening amount, a negative `cash_in`, a zero `cash_out` and a negative sale discount, which the UI blocks (`internal/service/register.go:46-68`, `:217-231`, `internal/service/sale.go:118-168`). It also accepts a sale discount equal to the subtotal paid with $0,30 (total 0).
+
+**Acceptance criteria (draft; the contract refines them):**
+- [x] A state-machine property test drives random sequences of money operations through the HTTP routes and, after every step, checks: payments vs sale total; register expected cash against an independent model; customer balance agreeing across every query; exact void reversal of register, balance and stock; and that a rejected request changes nothing.
+- [x] Failures shrink to a minimal sequence and reproduce from their seed; the suite runs in CI in under 40 s (budget raised from 30 s by PO decision).
+- [x] Fuzz targets on the sale and *abono* amount input never get a 5xx and never store an inconsistent sale.
+- [x] The whole-peso invariant and the server-side validation gaps are handled as decided by the PO at GATE 1.
+- [x] A sale whose server-recalculated total is 0 or less is rejected (400 `el total de la venta debe ser mayor a cero`) and stores nothing; e.g. a discount equal to the subtotal paid with $0,30.
+
+**Verified criteria (closed 2026-11-08):**
+
+Contract findings and server-side validation gaps resolved: the suite drives random sequences through `h.Routes()` with real JWT tokens on a file-backed database under `t.TempDir()`. Six validation gaps were fixed with clear 400 responses: negative opening float (AC-12), non-positive register movements (AC-13), negative sale-level discounts (AC-14), payments exceeding server-recalculated total by > 0.5 (AC-15), sale discounts exceeding subtotal (AC-16), and non-positive recalculated sale totals (AC-17). The whole-peso invariant is verified in CI on zero-tax unit products (AC-7) and confirmed red on the full domain under build tag `moneyexact` (AC-11, R-133). In QA, T-1 + T-2 wall time ran in ~32.4 s; the PO approved raising AC-8 budget to <= 40 s to keep the 100-sequence coverage frozen. All 3 mutations caught. Seed corpus fuzz targets PASS. Four minor items opened on roadmap (R-137..R-140). Spec updated: `spec/domain/caja.md`, `spec/domain/fiado.md`.
+
+- AC-1 (rapid state machine, 100 sequences × ~30 steps): `TestMoneyProperties_StateMachine` (`internal/handler/money_props_test.go`).
+- AC-2 (I-1, payments vs total `|Σ payments − total| ≤ 0.5`): `TestMoneyProperties_StateMachine`, `TestMoneyModel_T0_ScriptedSequence`, `FuzzSaleAmounts`.
+- AC-3 (I-2, register expected cash vs oracle model within ±0.01): `TestMoneyProperties_StateMachine`, `TestMoneyModel_T0_ScriptedSequence`.
+- AC-4 (I-3, customer balance agreement across `GET /customers/{id}/balance`, `GET /customers`, `pos-summary`, `total_portfolio`): `TestMoneyProperties_StateMachine`, `TestMoneyModel_T0_ScriptedSequence`.
+- AC-5 (I-4, exact void reversal of cash in register, credit in balance, and product stock): `TestMoneyProperties_StateMachine`, `TestMoneyModel_T0_ScriptedSequence`.
+- AC-6 (I-5, rejected step changes nothing across all tables; asserts 400, 403, 409, 500): `TestMoneyProperties_StateMachine`, `TestMoneyModel_T3_Rejections`.
+- AC-7 (I-6, positive amounts, integer amounts on zero-tax unit products): `TestMoneyProperties_StateMachine`, `TestMoneyProperties_WholePesoZeroTax`.
+- AC-8 (reproducible seed, shrunk counterexample, wall time <= 40 s): `TestMoneyProperties_StateMachine`, `TestMoneyProperties_WholePesoZeroTax` (~32.4 s).
+- AC-9 (mutations caught: register cashAbonos m1, customer completed m2, sale stock restore m3): 3/3 mutations caught by `TestMoneyProperties_StateMachine`.
+- AC-10 (fuzz targets seed corpus: no panics, no 5xx, invariants hold on 201, clean rejection on 4xx): `FuzzSaleAmounts`, `FuzzAbonoAmount` (`internal/handler/money_fuzz_test.go`).
+- AC-11 (whole-peso full domain fails with counterexample under build tag): `TestMoneyProperties_WholePeso` (`internal/handler/money_wholepeso_test.go`, run with `go test -count=1 -tags moneyexact ./internal/handler/ -run 'TestMoneyProperties_WholePeso$'`).
+- AC-12 (reject opening amount < 0 with 400): `TestMoneyValidation_T7_NegativeOpeningAmount` (`internal/handler/money_validation_test.go`).
+- AC-13 (reject movement amount <= 0 with 400): `TestMoneyValidation_T8_MovementAmountMustBePositive`.
+- AC-14 (reject sale discount < 0 with 400): `TestMoneyValidation_T9_NegativeSaleDiscount`.
+- AC-15 (reject payments differing from recalculated total > 0.5 with 400): `TestMoneyValidation_T10_PaymentsVsRecalculatedTotal`.
+- AC-16 (reject sale discount > subtotal with 400): `TestMoneyValidation_T11_DiscountAboveSubtotal`.
+- AC-17 (reject recalculated total <= 0 with 400): `TestMoneyValidation_T12_TotalMustBePositive`.
+

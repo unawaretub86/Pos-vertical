@@ -15,6 +15,8 @@ var (
 	ErrRegisterAlreadyOpen = errors.New("ya hay una caja abierta")
 	ErrRegisterNotOpen     = errors.New("no hay una caja abierta")
 	ErrRegisterClosed      = errors.New("la caja ya está cerrada")
+	ErrNegativeOpening     = errors.New("el monto de apertura no puede ser negativo")
+	ErrInvalidMovement     = errors.New("el monto debe ser mayor a 0")
 )
 
 // RegisterSummary aggregates the register state for display.
@@ -44,6 +46,9 @@ func NewRegisterService(repo repository.RegisterRepository, userRepo repository.
 
 // Open creates a new register session. Fails if one is already open.
 func (s *RegisterService) Open(ctx context.Context, userID int64, openingAmount float64) (*model.Register, error) {
+	if openingAmount < 0 {
+		return nil, ErrNegativeOpening
+	}
 	_, err := s.repo.GetOpen(ctx)
 	if err == nil {
 		return nil, ErrRegisterAlreadyOpen
@@ -215,6 +220,9 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 
 // AddMovement adds a manual cash_in or cash_out movement.
 func (s *RegisterService) AddMovement(ctx context.Context, registerID int64, mvType string, amount float64, description string) (*model.RegisterMovement, error) {
+	if amount <= 0 {
+		return nil, ErrInvalidMovement
+	}
 	reg, err := s.repo.GetByID(ctx, registerID)
 	if err != nil {
 		return nil, err

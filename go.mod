@@ -7,6 +7,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	golang.org/x/crypto v0.49.0
 	modernc.org/sqlite v1.46.1
+	pgregory.net/rapid v1.3.0
 )
 
 require (
