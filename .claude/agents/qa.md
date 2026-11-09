@@ -41,6 +41,7 @@ The binary uses `data.db` in the current directory and port `localhost:8080` (ov
 - Run it **only from the worktree root** (`go run ./cmd/pos`, in the background). It creates a fresh `data.db` there, isolated from real data.
 - First, verify port 8080 is free. If it is taken (Andrey has the POS open), **do not kill it**: mark the smoke test as SKIPPED with the reason.
 - Check `GET http://localhost:8080/api/setup/status` → 200. If the US touches endpoints, test them with curl (protected ones require onboarding + login against that fresh `data.db`).
+- If the US touches `frontend/`, a plain `go build` embeds an empty `web/out` and every page answers 404. Build with the real export instead: `cd frontend && pnpm build`, then `go run scripts/copy-frontend.go`, then build the binary. Load each touched page by its URL and check it answers 200 with its own HTML. Afterwards restore `web/out` to only the tracked `.gitkeep` (`git checkout -- web/out/.gitkeep` after removing the copied files). Doing this in a `git archive` copy in the scratchpad is fine too.
 - When done, stop the process you launched and delete the worktree's `data.db`.
 
 ## Output

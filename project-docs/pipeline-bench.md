@@ -23,6 +23,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
 **Pipeline changes since run 9 (applied, with the PO's approval):**
+- After run 25 (PO yes, 2026-11-09): every subagent prompt forbids stdin-reading commands and asks for bounded long commands (`.claude/commands/us.md` conventions); QA smoke builds the binary with the real frontend export when the US touches `frontend/` (`.claude/agents/qa.md` §3).
 - Hooks in `.claude/settings.json` run `.claude/hooks/pos-guard.js`: pnpm only, no commit on `master`/`main`, applied migrations, `t.Skip`, CGO (blocks); `BETWEEN`, SQL concatenation, hard-coded colors, Spanish docs, missing spec (warn/ask). Documented in `CLAUDE.md`.
 - `scripts/gemini-review.sh` is called by `/us`: `contract` mode before GATE 1 and `diff` mode in every QA round, in parallel with `qa`. Advisory: the orchestrator verifies every finding. Timeout 420 s with one retry; the pipeline waits at most about 10 minutes.
 - After run 13 (PO: "use gemini as u want"): the `diff` prompt states that the spec delta is written at close and must not be reported, and asks for weakened/skipped tests as defect lines instead of prose; the script keeps only the finding lines (or `CLEAN`) and falls back to the raw answer if none match.
@@ -945,8 +946,8 @@ All 15 tests were RED for the right reasons. QA round 1: OK, 0 BLOCKER, 5 MINOR;
 
 ### Proposed adjustments (not applied; need the PO's yes)
 1. Earlier pending proposals unchanged (runs 12..16, 18-2, 19-2, 20-2, 21-2, 22-2, 23-2..23-5).
-2. Every agent prompt says: never run a command that reads stdin (`python -` without a heredoc, interactive tools), and bound long commands with a timeout.
-3. QA smoke builds the binary with the real export (`pnpm build` + `go run scripts/copy-frontend.go` in a scratch copy) whenever the US touches the frontend, so the UI is at least loaded once.
+2. **Applied 2026-11-09.** Every agent prompt says: never run a command that reads stdin (`python -` without a heredoc, interactive tools), and bound long commands with a timeout.
+3. **Applied 2026-11-09.** QA smoke builds the binary with the real export (`pnpm build` + `go run scripts/copy-frontend.go` in a scratch copy) whenever the US touches the frontend, so the UI is at least loaded once.
 4. Before step 5 (close), the orchestrator merges `dev` into the US branch if `dev` moved, and passes the next free R-number to the analyst. This was done by hand in this run.
 
 ### What to measure in run 26
