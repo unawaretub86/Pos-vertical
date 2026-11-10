@@ -106,7 +106,24 @@ export function formatImportError(e: { row: number; column: string; message: str
 /** "y 100 errores más" when the report lists fewer errors than it found. */
 export function moreErrorsText(errorCount: number, shown: number): string {
   const rest = errorCount - shown;
-  return rest > 0 ? `y ${rest} errores más` : '';
+  if (rest <= 0) return '';
+  return rest === 1 ? 'y 1 error más' : `y ${rest} errores más`;
+}
+
+/** "1 producto listo para importar" / "N productos listos para importar". */
+export function readyText(n: number): string {
+  return n === 1 ? '1 producto listo para importar' : `${n} productos listos para importar`;
+}
+
+/** Commit button label; plain "Importar" when there is nothing to import. */
+export function commitLabel(report: { valid: boolean; valid_rows: number } | null | undefined): string {
+  if (!report || !report.valid || report.valid_rows <= 0) return 'Importar';
+  return report.valid_rows === 1 ? 'Importar 1 producto' : `Importar ${report.valid_rows} productos`;
+}
+
+/** Success toast after a commit. */
+export function importedToast(n: number): string {
+  return n === 1 ? 'Se importó 1 producto' : `Se importaron ${n} productos`;
 }
 
 /** Only an admin may import a catalog (AC-24). */
@@ -123,7 +140,8 @@ export const PRODUCT_IMPORT_ACTION_LABELS: Record<string, string> = {
 export function describeProductImportAudit(details: string): string {
   let parsed: Record<string, unknown> = {};
   try { parsed = JSON.parse(details || '{}'); } catch { /* malformed details: describe with defaults */ }
-  return `${Number(parsed.products_created ?? 0)} productos importados de «${String(parsed.file_name ?? '')}»`;
+  const n = Number(parsed.products_created ?? 0);
+  return `${n} ${n === 1 ? 'producto importado' : 'productos importados'} de «${String(parsed.file_name ?? '')}»`;
 }
 
 /**

@@ -7,6 +7,9 @@ import {
   formatImportError,
   moreErrorsText,
   describeProductImportAudit,
+  readyText,
+  commitLabel,
+  importedToast,
   canImportProducts,
   PRODUCT_IMPORT_ACTION_LABELS,
 } from './productImport';
@@ -102,5 +105,55 @@ describe('F-6 canImportProducts', () => {
     expect(canImportProducts({ id: 1, username: 'admin', role: 'admin' })).toBe(true);
     expect(canImportProducts({ id: 2, username: 'caja1', role: 'cashier' })).toBe(false);
     expect(canImportProducts(null)).toBe(false);
+  });
+});
+
+// R-157 (US-097) singular/plural wording. Helper names readyText, commitLabel and
+// importedToast are chosen here: contract §4 leaves them to the implementer ("e.g.").
+// Assumed signatures: readyText(n: number), importedToast(n: number),
+// commitLabel(report: {valid, valid_rows} | null | undefined).
+describe('R-157 T-1 count wording helpers', () => {
+  it('readyText: 1 is singular, 3 is plural', () => {
+    expect(readyText(1)).toBe('1 producto listo para importar');
+    expect(readyText(3)).toBe('3 productos listos para importar');
+  });
+
+  it('commitLabel: 1 is singular, 3 is plural', () => {
+    expect(commitLabel({ valid: true, valid_rows: 1 })).toBe('Importar 1 producto');
+    expect(commitLabel({ valid: true, valid_rows: 3 })).toBe('Importar 3 productos');
+  });
+
+  it('commitLabel: plain Importar with no report, an invalid report or 0 valid rows', () => {
+    expect(commitLabel(null)).toBe('Importar');
+    expect(commitLabel(undefined)).toBe('Importar');
+    expect(commitLabel({ valid: false, valid_rows: 8 })).toBe('Importar');
+    expect(commitLabel({ valid: true, valid_rows: 0 })).toBe('Importar');
+  });
+
+  it('importedToast: 1 is singular, 3 is plural', () => {
+    expect(importedToast(1)).toBe('Se importó 1 producto');
+    expect(importedToast(3)).toBe('Se importaron 3 productos');
+  });
+});
+
+describe('R-157 T-2 moreErrorsText singular', () => {
+  it('one hidden error reads y 1 error más; 100 and 0 unchanged', () => {
+    expect(moreErrorsText(3, 2)).toBe('y 1 error más');
+    expect(moreErrorsText(300, 200)).toBe('y 100 errores más');
+    expect(moreErrorsText(2, 2)).toBe('');
+  });
+});
+
+describe('R-157 T-3 audit description singular', () => {
+  it('1 product reads singular; 3 and 0 plural', () => {
+    expect(describeProductImportAudit('{"products_created":1,"file_name":"inventario.csv"}')).toBe(
+      '1 producto importado de «inventario.csv»',
+    );
+    expect(describeProductImportAudit('{"products_created":3,"file_name":"inventario.csv"}')).toBe(
+      '3 productos importados de «inventario.csv»',
+    );
+    expect(describeProductImportAudit('{"products_created":0,"file_name":"inventario.csv"}')).toBe(
+      '0 productos importados de «inventario.csv»',
+    );
   });
 });

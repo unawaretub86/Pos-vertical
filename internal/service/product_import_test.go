@@ -531,3 +531,19 @@ func TestProductImport_T19_ErrorListCappedAt200(t *testing.T) {
 		t.Fatalf("first/last listed rows = %d/%d, want 2/201 (sorted by row)", r.Errors[0].Row, r.Errors[199].Row)
 	}
 }
+
+// ─── R-157 T-4 (AC-7) ─────────────────────────────────────────────────────
+
+func TestProductImport_R157_T4_RejectedCommitSingularMessage(t *testing.T) {
+	e := newImportEnv(t)
+	file := csvLines("\r\n", "Nombre;Precio de venta", "Pan;abc")
+	w := e.post(t, file, false)
+	expectHTTPError(t, w, http.StatusUnprocessableEntity, "el archivo tiene 1 error; no se importó nada")
+}
+
+func TestProductImport_R157_T4_RejectedCommitPluralMessageUnchanged(t *testing.T) {
+	e := newImportEnv(t)
+	file := csvLines("\r\n", "Nombre;Precio de venta", "Pan;abc", "Sal;xyz")
+	w := e.post(t, file, false)
+	expectHTTPError(t, w, http.StatusUnprocessableEntity, "el archivo tiene 2 errores; no se importó nada")
+}

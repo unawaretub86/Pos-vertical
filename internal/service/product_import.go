@@ -36,6 +36,9 @@ var ErrImportTooLarge = errors.New("el archivo supera 2 MB")
 type ImportRejectedError struct{ Count int }
 
 func (e *ImportRejectedError) Error() string {
+	if e.Count == 1 {
+		return "el archivo tiene 1 error; no se importó nada"
+	}
 	return fmt.Sprintf("el archivo tiene %d errores; no se importó nada", e.Count)
 }
 

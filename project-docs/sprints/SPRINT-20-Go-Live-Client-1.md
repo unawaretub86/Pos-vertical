@@ -34,6 +34,7 @@
 | US-094 | Product catalog import from CSV | [x] | 2026-11-09 |
 | US-095 | Admin void button for a sale in the UI | [x] | 2026-11-09 |
 | US-096 | Money QA layer 1: property-based invariant tests over random sequences of money operations | [x] | 2026-11-08 |
+| US-097 | Singular/plural wording in the catalog import UI (roadmap R-157) | [x] | 2026-11-09 |
 
 **Total estimated effort: ~8 days**
 
@@ -300,3 +301,28 @@ Contract findings and server-side validation gaps resolved: the suite drives ran
 - AC-16 (reject sale discount > subtotal with 400): `TestMoneyValidation_T11_DiscountAboveSubtotal`.
 - AC-17 (reject recalculated total <= 0 with 400): `TestMoneyValidation_T12_TotalMustBePositive`.
 
+
+## US-097 — Singular/plural wording in the catalog import UI
+
+**Status:** picked up from roadmap R-157 (US-094 QA MINOR 3). Level L. Contract approved at GATE 1 (PO, 2026-11-09): wording as recommended, backend singular message included.
+
+**As** Don Carlos (owner),
+**I want** the import screen to read `1 producto`, not `1 productos`,
+**so that** the first thing I see while loading my catalog does not look like a bug.
+
+**Acceptance criteria (verified 2026-11-09):**
+- [x] AC-1: WHEN a valid report has `valid_rows = 1`, the system SHALL show `1 producto listo para importar`; for any other count `<n> productos listos para importar`.
+- [x] AC-2: WHEN a valid report has `valid_rows = 1`, the commit button SHALL read `Importar 1 producto`; for `n >= 2`, `Importar <n> productos`.
+- [x] AC-3: WHILE no file is picked, or the report is invalid, or it has 0 valid rows, the commit button SHALL read plain `Importar` and be disabled (`Importando...` while committing).
+- [x] AC-4: WHEN a commit creates 1 product, the toast SHALL read `Se importó 1 producto`; for `n >= 2`, `Se importaron <n> productos`.
+- [x] AC-5: WHEN exactly 1 error is not shown, `moreErrorsText` SHALL return `y 1 error más`; for `k >= 2`, `y <k> errores más`; for `k <= 0`, `''`.
+- [x] AC-6: WHEN an audit row has `products_created = 1`, the description SHALL read `1 producto importado de «<file>»`; otherwise `<n> productos importados de «<file>»`.
+- [x] AC-7: WHEN a commit is rejected with exactly 1 row error, the 422 message SHALL read `el archivo tiene 1 error; no se importó nada`; for `n >= 2` unchanged.
+
+**Verified criteria:**
+- AC-1..AC-4: `frontend/lib/productImport.test.ts`, block `R-157 T-1 count wording helpers` (`readyText: 1 is singular, 3 is plural`, `commitLabel: 1 is singular, 3 is plural`, `commitLabel: plain Importar with no report, an invalid report or 0 valid rows`, `importedToast: 1 is singular, 3 is plural`). The modal has no component test; it only calls these helpers.
+- AC-5: `R-157 T-2 moreErrorsText singular` (`one hidden error reads y 1 error más; 100 and 0 unchanged`).
+- AC-6: `R-157 T-3 audit description singular` (`1 product reads singular; 3 and 0 plural`).
+- AC-7: `internal/service/product_import_test.go` `TestProductImport_R157_T4_RejectedCommitSingularMessage` (1 bad row → `el archivo tiene 1 error…`) and `TestProductImport_R157_T4_RejectedCommitPluralMessageUnchanged` (2 bad rows → `el archivo tiene 2 errores…`).
+
+**Results:** QA round 1 found no code issue (its BLOCKER was the spec delta, applied at close; 2 MINOR doc items fixed at close); Gemini diff review clean. `go test ./...` fails only the pre-existing `TestCustomerOpening_T10_NotASale` and `_T11_AbonoAgainstOpeningIsRealMoney` after 19:00 America/Bogota (roadmap R-158, root cause R-05).

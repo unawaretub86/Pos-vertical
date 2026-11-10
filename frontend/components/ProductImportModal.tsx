@@ -10,8 +10,11 @@ import {
   buildTemplateCSV,
   bytesToBase64,
   canCommit,
+  commitLabel,
+  importedToast,
   moreErrorsText,
   readHeaderLine,
+  readyText,
   type ImportReport,
   type ImportResult,
 } from '@/lib/productImport';
@@ -103,7 +106,7 @@ export default function ProductImportModal({ onClose, onImported }: ProductImpor
       const res = await api.post<ImportResult>('/products/import', {
         file_name: fileName, content_base64: content, mapping: sentMapping, dry_run: false,
       });
-      toast(`Se importaron ${res.products_created} productos`, 'success');
+      toast(importedToast(res.products_created), 'success');
       onImported();
       onClose();
     } catch (err: unknown) {
@@ -223,7 +226,7 @@ export default function ProductImportModal({ onClose, onImported }: ProductImpor
 
         {report && report.valid && (
           <div style={{ fontSize: '13px', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ color: 'var(--success)', fontWeight: 600 }}>{report.valid_rows} productos listos para importar</div>
+            <div style={{ color: 'var(--success)', fontWeight: 600 }}>{readyText(report.valid_rows)}</div>
             {report.new_categories.length > 0 && (
               <div style={{ color: 'var(--text-secondary)' }}>Categorías nuevas: {report.new_categories.join(', ')}</div>
             )}
@@ -233,7 +236,7 @@ export default function ProductImportModal({ onClose, onImported }: ProductImpor
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <button type="button" className="btn" onClick={onClose} disabled={busy !== null}>Cancelar</button>
           <button type="button" className="btn btn-accent" onClick={handleCommit} disabled={!commitEnabled}>
-            {busy === 'importing' ? 'Importando...' : `Importar ${report?.valid ? report.valid_rows : 0} productos`}
+            {busy === 'importing' ? 'Importando...' : commitLabel(report)}
           </button>
         </div>
       </div>

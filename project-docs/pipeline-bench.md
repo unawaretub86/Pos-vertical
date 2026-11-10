@@ -76,6 +76,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 25 | 2026-11-09 | US-092 | L | ~603k (A 201k, last of 136k→141k→201k; pre-rate-limit part not counted · T 140k · I 154k · Q 108k) | ~208 | ~63 (incl. a 10 min implementer stall) | 3 (rate limit on the analyst; implementer stalled 600 s; QA MINOR 4 needed a PO decision) | 1 | 4 contract discrepancies (D-1..D-4) + 5 QA MINOR | 4 new (R-141..R-144) | 0 | +2,086 / −51, 26 files (excluding this benchmark entry) |
 | 26 | 2026-11-09 | US-095 | L | ~446k incl. waste (A 133k contract · A' 41k GATE 1 adjust · T 68k · I n/a · Q 51k · duplicate A 153k) | ~110+ | ~15+ (implementer and close not reported) | 4 (implementer stall; rate limit mid-implementation; two sessions orchestrating the same US; takeover at GATE 2) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes + 1 test-author finding (R-148) + 3 QA MINOR | 5 new (R-145..R-149) + R-111 closed | 0 | +878 / −27, 11 files (excluding this benchmark entry) |
 | 27 | 2026-11-09 | US-094 | L | ~669k (A 170k, last of 140k→170k · T 97k · I 159k · Q 102k) | 162 | ~38.3 | 1 (API rate limit 429 interrupted close analyst; completed in Antigravity) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes (AC-10, AC-24, AC-22) + 5 QA MINOR | 8 new (R-150..R-157) | 0 | +3,225 / −13, 18 files (excluding this benchmark entry) |
+| 28 | 2026-11-09 | US-097 (R-157) | L (M requested; analyst recommended L at GATE 1) | ~175k (A 74.6k, last of 47.9k→49.7k→74.6k · T 34.7k · I 26.6k · Q 39.2k) | 71 | ~14.3 | 0 | 1 | 1 contract discrepancy (D-1: 6 frontend strings + 1 backend message, not the 4 in the roadmap) + 2 QA MINOR + 1 pre-existing real bug | 1 new (R-158); R-157 closed | 0 | +134 / −13, 9 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -902,6 +903,42 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 28 — US-097 (R-157, singular wording in the catalog import, level L)
+
+Created from dev `90501e3`. Same orchestrator session (`pos-vertical-83`); no other session touched the worktree. Level M was requested; the analyst recommended L at GATE 1 because the implementer cannot write the count-1 tests, and the PO approved it. Roadmap item registered as US-097 in SPRINT-20 during contract mode.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract 47.9k/16 tools/106 s; GATE 1 adjust 49.7k/2/14 s; close 74.6k/13/111 s) | 74.6k | 31 | ~3.9 min |
+| test-author | 1 | 34.7k | 9 | ~0.8 min |
+| implementer | 1 round | 26.6k | 16 | ~4.4 min |
+| qa | 1 round | 39.2k | 15 | ~5.2 min |
+
+**What it found.**
+- Contract D-1: the roadmap listed 4 plural strings; the real set was 6 frontend strings plus 1 backend message (`el archivo tiene 1 errores`), all fixed.
+- The test-author wrote 1 intentional PASSES regression guard (plural unchanged, AC-7).
+- QA round 1: no code issue; 2 MINOR (sprint ACs and a stale roadmap row) closed at close.
+- QA flagged the spec delta as BLOCKER, but by pipeline design the analyst applies it at close; the orchestrator treated it as pending-close.
+- Pre-existing real product bug found by QA running `go test` after 19:00 America/Bogota: roadmap R-158 (the dashboard/report "today" window uses local midnight while sales `created_at` is UTC text, so evening sales are omitted; same defect as R-05).
+
+**Unplanned stops:** 0. QA rounds: 1. Violations: 0. Roadmap: 1 new item (R-158), R-157 closed.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~4 min (arrived after GATE 1; started after the analyst finished) | 7 | 0 | 7 (all moot or already covered by AC-3 / §6) | n/a |
+| diff, round 1 | OK | ~5 min | 0 (`CLEAN`) | 0 | 0 | no |
+
+**Operational friction.**
+- The day-end rate limit did not recur.
+- QA's BLOCKER on the spec delta not yet applied. Proposal (not applied; needs the PO's yes): `qa.md` treats "spec delta not yet applied" as a NOTE, as it did in run 27.
+- The implementer reported the pre-existing handler failures honestly; the orchestrator reproduced them on clean dev before accepting.
+- The roadmap's R-157 text said 4 strings; the real set was 7.
+
+### What to measure in run 29
+- Whether QA classifies "spec delta pending" as NOTE.
+- Whether the pre-existing time-dependent test failure (R-158) bites CI after 19:00 Bogota.
 
 ## Run 27 — US-094 (product catalog import from CSV, level L)
 

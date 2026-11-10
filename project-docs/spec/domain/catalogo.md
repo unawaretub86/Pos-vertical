@@ -1,7 +1,7 @@
 # Domain — Product catalog (products, categories, catalog import)
 
 > **Type:** spec · **Current:** yes · **Rules over:** what a product is, barcode and category uniqueness, how stock is traced, how a catalog is imported from CSV
-> **Updated:** 2026-11-09 (US-094: catalog import from CSV) · Verified against the code on that date (`internal/model/model.go:71-87`, `internal/database/migrate.go:170-192`, `:302-303`, `internal/service/product.go`, `internal/service/product_import.go`, `internal/repository/product_import.go`, `internal/handler/product_import.go`, `frontend/lib/productImport.ts`, `frontend/components/ProductImportModal.tsx`).
+> **Updated:** 2026-11-09 (US-097: singular wording for count 1 in the catalog import UI; US-094: catalog import from CSV) · Verified against the code on that date (`internal/model/model.go:71-87`, `internal/database/migrate.go:170-192`, `:302-303`, `internal/service/product.go`, `internal/service/product_import.go`, `internal/repository/product_import.go`, `internal/handler/product_import.go`, `frontend/lib/productImport.ts`, `frontend/components/ProductImportModal.tsx`).
 
 The catalog is master data: the US-093 reset keeps products, categories and the stock loaded by an import.
 
@@ -94,7 +94,7 @@ Each error is `{row, field, column, message}`, where `column` is the file's head
 ### Dry run and commit (all-or-nothing)
 
 - **Dry run** (`dry_run: true`) → 200 with `{file_name, encoding, delimiter, headers, mapping, ignored_headers, total_rows, valid_rows, error_count, errors, new_categories, valid, preview}`, and nothing is written. `errors` is sorted by row, then by the field order of the mapping table, and capped at 200 (`error_count` is the full count). `preview` holds the first 5 valid rows.
-- **Commit** (`dry_run: false`) re-validates against the database as it is at that moment. Any error → 422 `el archivo tiene <n> errores; no se importó nada`, and nothing is written. A second commit of the same file is therefore rejected (duplicate barcodes or names).
+- **Commit** (`dry_run: false`) re-validates against the database as it is at that moment. Any error → 422 `el archivo tiene <n> errores; no se importó nada` (`el archivo tiene 1 error; no se importó nada` when exactly one row has an error), and nothing is written. A second commit of the same file is therefore rejected (duplicate barcodes or names).
 - **When the file is valid**, one transaction writes:
   - the new categories;
   - every row as an active `product` (`wholesale_price` NULL), in file order, so ids are consecutive;
@@ -114,8 +114,8 @@ Each error is `{row, field, column, message}`, where `column` is the file's head
 - The modal `Importar productos` shows the help text `Sube un archivo CSV. Desde Excel: Archivo › Guardar como › CSV UTF-8.`, a `Descargar plantilla` link and a file picker (`.csv`, `.txt`).
 - The file is read as bytes (so Windows-1252 survives), base64-encoded and dry-run with no mapping. The modal shows one select per field (required ones marked `*`), each with the file headers plus `(no importar)`, preset to the returned mapping. `Revisar de nuevo` dry-runs again with the chosen mapping.
 - When the backend recognized no required column it answers 400 with no report. The modal then reads the header row itself (`readHeaderLine`, `frontend/lib/productImport.ts`: same UTF-8 / Windows-1252 and delimiter rules as the backend) and offers an empty manual mapping. Known divergence: a BOM followed by a non-UTF-8 body keeps the BOM in the first header (roadmap R-156).
-- Errors show as a `Fila | Columna | Error` table with `y <k> errores más`, and the commit button stays disabled. A valid file shows `<n> productos listos para importar`, `Categorías nuevas: …` and `Importar <n> productos`. A success shows the toast `Se importaron <n> productos` and reloads products and categories; any error stays in the modal. Count-1 plurals read `1 productos` (roadmap R-157).
+- Errors show as a `Fila | Columna | Error` table with `y <k> errores más` (`y 1 error más` when one error is hidden), and the commit button stays disabled. A valid file shows `<n> productos listos para importar` (`1 producto listo para importar`), `Categorías nuevas: …` and `Importar <n> productos` (`Importar 1 producto`). Until a valid file with at least one row is picked, the commit button reads plain `Importar` and is disabled (`Importando...` while committing). A success shows the toast `Se importaron <n> productos` (`Se importó 1 producto`) and reloads products and categories; any error stays in the modal.
 - `plantilla-productos.csv` is built in the browser with a UTF-8 BOM, `;` and CRLF. Header: `Nombre;Código de barras;Categoría;Unidad;Costo;Precio de venta;Stock;Stock mínimo;IVA;Código interno`. Example rows: `Arroz Diana 500 g` and `Queso campesino`. Every header auto-maps.
-- In the Auditoría page, a `product_import` row reads `Importación de productos` with `<n> productos importados de «<file>»`, and the action filter offers it.
+- In the Auditoría page, a `product_import` row reads `Importación de productos` with `<n> productos importados de «<file>»` (`1 producto importado de «<file>»` for one), and the action filter offers it.
 
 Tests: `internal/service/product_import_test.go` (`TestProductImport_T3`, `_T4`, `_T6`..`_T9`, `_T17`..`_T19`), `internal/handler/product_import_test.go` (`TestProductImport_T1`, `_T2`, `_T5`, `_T10`..`_T16`, `_T20`..`_T22`), `frontend/lib/productImport.test.ts` (F-1..F-6). Manual browser checks: `gaps.md` US-094 M-1.
