@@ -75,6 +75,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 24 | 2026-11-08 | US-096 | L | ~535k (A 192k · T 202k · I 56k · Q 85k) | ~170 | ~45.0 | 1 (QA r1 AC-8 30s budget exceeded; PO raised to <= 40s) | 2 | 10 contract findings (D-1..D-10) + 3 Gemini-verified (G-8, G-11, G-4) + 4 QA MINOR | 4 new (R-137..R-140) + 1 closed (R-130) | 0 | +1,827 / −11, 14 files (excluding this benchmark entry) |
 | 25 | 2026-11-09 | US-092 | L | ~603k (A 201k, last of 136k→141k→201k; pre-rate-limit part not counted · T 140k · I 154k · Q 108k) | ~208 | ~63 (incl. a 10 min implementer stall) | 3 (rate limit on the analyst; implementer stalled 600 s; QA MINOR 4 needed a PO decision) | 1 | 4 contract discrepancies (D-1..D-4) + 5 QA MINOR | 4 new (R-141..R-144) | 0 | +2,086 / −51, 26 files (excluding this benchmark entry) |
 | 26 | 2026-11-09 | US-095 | L | ~446k incl. waste (A 133k contract · A' 41k GATE 1 adjust · T 68k · I n/a · Q 51k · duplicate A 153k) | ~110+ | ~15+ (implementer and close not reported) | 4 (implementer stall; rate limit mid-implementation; two sessions orchestrating the same US; takeover at GATE 2) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes + 1 test-author finding (R-148) + 3 QA MINOR | 5 new (R-145..R-149) + R-111 closed | 0 | +878 / −27, 11 files (excluding this benchmark entry) |
+| 27 | 2026-11-09 | US-094 | L | ~669k (A 170k, last of 140k→170k · T 97k · I 159k · Q 102k) | 162 | ~38.3 | 1 (API rate limit 429 interrupted close analyst; completed in Antigravity) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes (AC-10, AC-24, AC-22) + 5 QA MINOR | 8 new (R-150..R-157) | 0 | +3,225 / −13, 18 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -901,6 +902,40 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 27 — US-094 (product catalog import from CSV, level L)
+
+Created from dev `53aaf35`. Owner lock respected (`pos-vertical-83`). Staged through the standard 4-agent pipeline; the close analyst hit the Claude 5-hour rate limit while editing sprint documents and was completed in Antigravity.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract; GATE 1 adjust; close; close correction after a review found wrong test names in the sprint list) | 170.3k (140.4k → 170.3k → close; later invocations not reported) | 74+ | ~14.6+ min |
+| test-author | 1 | 97.4k | 20 | ~6.4 min |
+| implementer | 1 round | 159.2k | 44 | ~11.1 min |
+| qa | 1 round | 102.4k | 24 | ~5.8 min |
+
+**What it found.**
+- CSV import with automatic synonym recognition and manual column mapping (RFC 4180, `;`/`,`/tab, UTF-8/Windows-1252 auto-detect, UTF-16 and Excel `.xlsx` refusal with help messages).
+- 2 MB and 5,000-row bounds. Dry run with preview of up to 5 valid rows and 200 formatted errors.
+- Atomic execution in one transaction: categories created on the fly (case/accent-insensitive match), products inserted in file order, `stock_entries` row `Importación de catálogo` created for each item with initial stock > 0, and `audit_log` row recorded.
+- Front-end modal in `/inventory` gated on `admin` role (`canImportProducts`); downloadable Colombian-format CSV template.
+- QA round 1: OK, 0 BLOCKER, 5 MINOR (readHeaderLine untested, missing columns mapping reset, 1 productos plural, error swallowing, duplicate precedence), 1 NOTE (spec delta at close). Smoke test passed on real export.
+- The close done by another tool (Antigravity) after the rate-limit stop cited nonexistent test names in the sprint "Verified criteria" list and roadmap numbers (R-155..R-157) that did not exist; the orchestrator review caught both and a fourth analyst invocation fixed them.
+
+**Unplanned stops:** 1 (close analyst hit 5-hour rate limit; the close finished in Antigravity, then needed a correction invocation). QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~5 min | 10 | 3 (AC-10 negative message unreachable, AC-24 button visibility for cashier, AC-22 category UNIQUE race reported as barcode) | 7 (truncation x2, spec delta exists, template in AC-28, categories have no active flag, Q-3 pending gate, AC-7 two distinct cases) | n/a |
+| diff, round 1 | OK | ~10 min | 0 (`CLEAN`) | 0 | 0 | no |
+
+**Operational friction.**
+- The contract input truncation again generated false positives on a long contract (44 KB).
+- Close analyst interrupted mid-edit by API limit; Antigravity recovered the worktree and completed documentation.
+
+### What to measure in run 28
+- Verification of US-093 reset tool with master data preserved (including stock from catalog import).
 
 ## Run 26 — US-095 (admin void button for a sale in the UI, level L)
 

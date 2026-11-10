@@ -21,6 +21,7 @@ type Handler struct {
 	loginLimiter *appmw.LoginLimiter
 	categories   *service.CategoryService
 	products     *service.ProductService
+	prodImport   *service.ProductImportService
 	sales        *service.SaleService
 	registers    *service.RegisterService
 	customers    *service.CustomerService
@@ -83,6 +84,7 @@ func New(db *database.DB) *Handler {
 		db:           db,
 		categories:   service.NewCategoryService(catRepo),
 		products:     service.NewProductService(prodRepo),
+		prodImport:   service.NewProductImportService(repository.NewProductImportRepository(db.DB)),
 		sales:        salesSvc,
 		registers:    registerSvc,
 		customers:    service.NewCustomerService(custRepo, regRepo),
@@ -153,6 +155,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
 			r.Post("/products", h.createProduct)
+			r.Post("/products/import", h.importProducts)
 			r.Put("/products/{id}", h.updateProduct)
 			r.Delete("/products/{id}", h.deleteProduct)
 			r.Post("/stock-entries", h.createStockEntry)
@@ -315,6 +318,3 @@ func respondError(w http.ResponseWriter, status int, message string) {
 func decode(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
-
-
-

@@ -31,7 +31,7 @@
 | US-091 | End-to-end certification of register close and *fiado* math, and F5 on every route of the binary | [x] | 2026-11-08 |
 | US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [x] | 2026-11-09 |
 | US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
-| US-094 | Product catalog import from CSV | [ ] | |
+| US-094 | Product catalog import from CSV | [x] | 2026-11-09 |
 | US-095 | Admin void button for a sale in the UI | [x] | 2026-11-09 |
 | US-096 | Money QA layer 1: property-based invariant tests over random sequences of money operations | [x] | 2026-11-08 |
 
@@ -212,6 +212,8 @@ Backend tests are in `internal/handler/customer_opening_test.go` (H), `internal/
 - [ ] It refuses to run while the POS is running, and asks for confirmation.
 - [ ] Physical `DELETE` is allowed here only because the rows are test data; the contract states this exception to the logical-delete rule.
 
+**Input from US-094 (PO Q-5, 2026-11-09):** the stock loaded by the catalog import must survive the reset. The import writes one `stock_entries` row with note `Importación de catálogo` per product with stock > 0, plus one `product_import` audit row (`spec/domain/catalogo.md` § Catalog import). Products, categories and those stock entries are master data: the US-093 contract must restore stock without erasing them, for example by rebuilding stock from the `Importación de catálogo` and `Compra #N` entries.
+
 ## US-094 — Product catalog import from CSV
 
 **Status:** approved by the PO on 2026-11-08 (added on 2026-11-07 after verifying that no import exists). PO direction: the import must also serve a shop that is moving from another POS program, so the input format is decided in the contract. Candidates are a CSV with column mapping (most POS programs and spreadsheets can export one) or a SQL/SQLite dump of the other program. The analyst recommends one format with its trade-off at GATE 1.
@@ -223,9 +225,39 @@ Backend tests are in `internal/handler/customer_opening_test.go` (H), `internal/
 **Estimated effort:** 1.5 days. **Impact:** High for go-live if the catalog has more than about 50 products.
 
 **Acceptance criteria (draft):**
-- [ ] The admin uploads a CSV with name, barcode, category, unit (`unit`, `kg`, `lb`, `liter`), cost, price and stock; a downloadable template is provided.
-- [ ] Rows are validated first and errors are shown per row before anything is written; the import is all-or-nothing.
-- [ ] Missing categories are created; a duplicate barcode is reported, not silently overwritten.
+- [x] The admin uploads a CSV with name, barcode, category, unit (`unit`, `kg`, `lb`, `liter`), cost, price and stock; a downloadable template is provided.
+- [x] Rows are validated first and errors are shown per row before anything is written; the import is all-or-nothing.
+- [x] Missing categories are created; a duplicate barcode is reported, not silently overwritten.
+
+**Verified criteria (closed 2026-11-09):**
+
+The catalog import was implemented per contract (CSV with auto-recognition and manual mapping, 2 MB / 5,000-row limit, atomic transaction with `stock_entries` and `audit_log`, cashier gating). GATE 1 (PO, 2026-11-09): Q-1..Q-6 accepted as recommended (CSV with mapping; no update of existing products, roadmap R-154; duplicate names are an error; min stock, IVA 0/5/19 and internal code imported; one stock entry per product plus one audit row; limits 2 MB / 5,000 rows). QA round 1: OK, 0 BLOCKER, 5 MINOR (R-154, R-156 and R-157 on the roadmap with R-150..R-153 and R-155 from the contract discrepancies); Gemini diff clean; smoke test on the compiled binary passed. Manual browser checks: `gaps.md` US-094 M-1. Spec: `spec/domain/catalogo.md`.
+
+Tests: 23 Go test functions covering contract cases T-1..T-22 (`TestProductImport_T12_*` has two functions) and 6 Vitest `describe` groups F-1..F-6 (10 `it` cases). Handler tests (H) are in `internal/handler/product_import_test.go`, service tests (S) in `internal/service/product_import_test.go`, frontend tests (F) in `frontend/lib/productImport.test.ts`. A `SQLITE_BUSY` answer (503) is covered by no test; it reuses `mapBusy` (`internal/repository/order.go:53-59`).
+
+- AC-1: WHEN an admin posts to `POST /products/import`, the system SHALL process it; a cashier gets 403 `forbidden`, no token 401. Route in the admin products group (`internal/handler/handler.go:158`). Test: H `TestProductImport_T1_AdminOnly`.
+- AC-2: IF the body exceeds 3 MiB or the decoded file exceeds 2 MiB, THEN 413 `el archivo supera 2 MB`; malformed base64 or an empty file → 400 `archivo inválido`; nothing is written. Test: H `TestProductImport_T2_SizeAndMalformedLimits`.
+- AC-3, AC-4: UTF-8 BOM stripped; UTF-8 or Windows-1252 detected and reported in `encoding`; delimiter `;`, `,` or tab reported in `delimiter`; a UTF-16 BOM and an `.xlsx` (`PK`) answer 400 with their messages. Test: S `TestProductImport_T3_EncodingAndDelimiter`.
+- AC-5: WHEN rows are read, the system SHALL number them by physical line (blank lines skipped, multi-line cells counted), accept short rows, flag non-blank cells beyond the header, and reject more than 5,000 rows or no rows. Tests: S `TestProductImport_T17_RowWidth`, S `TestProductImport_T18_PhysicalLineNumbers`, H `TestProductImport_T16_RowLimits` (5,000 rows commit; 5,001 → 400; header only → 400).
+- AC-6: Without `mapping`, headers are auto-mapped by normalized synonyms, leftmost wins, the rest go to `ignored_headers`; the template header maps all 10 fields. Test: S `TestProductImport_T4_AutoMapping`.
+- AC-7, AC-8: An explicit `mapping` replaces the automatic one; unknown field, missing header and a header used twice answer 400; unmapped `name` or `sale_price` → 400 `faltan columnas obligatorias: nombre, precio de venta`. Test: H `TestProductImport_T5_ManualMapping`.
+- AC-9, AC-16, AC-18: Name required and at most 200 characters; duplicate normalized name in the file (`producto repetido en la fila <n>`) or equal to an active product (`ya existe un producto con este nombre`), while a deleted product's name does not block; internal code at most 64 characters. Test: H `TestProductImport_T11_NameAndCodeRules`.
+- AC-10: Money in whole pesos: `$`, `COP`, `.`/`,` thousands, `,00` decimals accepted; cents, negative (`-2.500` → `el valor no puede ser negativo`), invalid text, above $100.000.000 and a sale price of 0 or blank rejected; blank cost is 0. Test: S `TestProductImport_T6_MoneyParsing`.
+- AC-11: Quantities: comma or dot decimals, at most 3 decimals, at most 1.000.000, no negatives, whole for `unit`, blank is 0. Test: S `TestProductImport_T7_QuantityParsing`.
+- AC-12: Unit synonyms map to `unit`, `kg`, `lb`, `liter`; anything else rejected. Test: S `TestProductImport_T8_UnitParsing`.
+- AC-13: IVA 0, 5, 19 with optional `%`, blank is 0, anything else rejected. Test: S `TestProductImport_T9_TaxParsing`.
+- AC-14, AC-15: Barcode trimmed, `="…"` unwrapped, scientific notation and over 64 characters rejected; a barcode repeated in the file (`código de barras repetido en la fila 4`) or already in `products`, active or deleted (`… ya existe en el producto «Avena» (eliminado)`), is reported and nothing existing changes. Test: H `TestProductImport_T10_BarcodeRules`.
+- AC-17: Categories matched ignoring case and accents, lowest id wins among several matches, new ones listed in `new_categories` in order of first appearance and created once. Tests: H `TestProductImport_T12_CategoryMatching`, H `TestProductImport_T12_CategoryLowestIDWins`.
+- AC-19, AC-20: A dry run answers 200 with the report (errors capped at 200, `error_count` the full count, preview of 5) and writes nothing; a commit re-validates and answers 422 `el archivo tiene <n> errores; no se importó nada`. Tests: H `TestProductImport_T13_DryRunReportAndRejectedCommit`, S `TestProductImport_T19_ErrorListCappedAt200`, H `TestProductImport_T20_CommitRevalidates` (barcode taken between dry run and commit → 422).
+- AC-21, AC-23: A valid commit writes categories, products (consecutive ids in file order), one `Importación de catálogo` stock entry per product with stock > 0 and one `product_import` audit row, and answers 201; the products and categories are then returned by `GET /products`, `GET /products/barcode/{barcode}` and `GET /categories`. Test: H `TestProductImport_T15_CommitWritesEverything`.
+- AC-22: IF a write fails, THEN everything rolls back (`error importando productos`, 500); a barcode race answers 409 naming the barcode and a category race answers 409 naming the category, each without the other's text. Tests: H `TestProductImport_T14_RollbackOnFailure`, H `TestProductImport_T21_CategoryRace`, H `TestProductImport_T22_BarcodeRace`. The 503 on `SQLITE_BUSY` has no test.
+- AC-24: `Importar productos` button and modal are rendered only when `canImportProducts(getUser())` is true (`frontend/app/inventory/page.tsx:504`). Test: F `F-6 canImportProducts`; the rendering itself by review and the QA smoke on the binary.
+- AC-25: The file is read as bytes and base64-encoded, and the mapping payload omits `(no importar)`. Tests: F `F-2 bytesToBase64`, F `F-3 buildMappingPayload`; the modal flow by review.
+- AC-26: The error table text and the commit gate. Test: F `F-4 canCommit, formatImportError, moreErrorsText`.
+- AC-27: The commit sends `dry_run: false`, shows the toast and reloads; an error keeps the modal open. Review and QA smoke on the binary (no unit test); manual check `gaps.md` US-094 M-1.
+- AC-28: `Descargar plantilla` builds `plantilla-productos.csv` with BOM, `;`, CRLF, the 10-column header and two example rows. Test: F `F-1 buildTemplateCSV`.
+- AC-29: At 320 px the tables scroll horizontally and colors come from CSS variables. Review only; manual check `gaps.md` US-094 M-1.
+- AC-30: A `product_import` audit row reads `Importación de productos` and `<n> productos importados de «<file_name>»`. Test: F `F-5 audit description`.
 
 ## US-096 — Money QA layer 1: property-based invariant tests over random sequences of money operations
 

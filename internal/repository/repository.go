@@ -53,6 +53,17 @@ type ProductFilter struct {
 	ActiveOnly bool
 }
 
+// ProductImportRepository reads the state the catalog import validates
+// against and writes a validated import (US-094).
+type ProductImportRepository interface {
+	// Lookup returns every product (active or not) and every category.
+	Lookup(ctx context.Context) (*CatalogLookup, error)
+	// ImportCatalog runs build on the lookup read inside one transaction and
+	// writes the plan it returns in that same transaction; an error from
+	// build is returned unchanged and nothing is written.
+	ImportCatalog(ctx context.Context, userID int64, build func(*CatalogLookup) (*CatalogImportPlan, error)) (*CatalogImportResult, error)
+}
+
 // StockEntryRepository handles stock entry persistence.
 type StockEntryRepository interface {
 	Create(ctx context.Context, entry *model.StockEntry) (*model.StockEntry, error)

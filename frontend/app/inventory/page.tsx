@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
+import { getUser } from '@/lib/auth';
+import { canImportProducts } from '@/lib/productImport';
+import ProductImportModal from '@/components/ProductImportModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +84,12 @@ const IconBoxIn = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
     <polyline points="12 22 12 12"/><polyline points="7 9.5 12 12 17 9.5"/>
+  </svg>
+);
+
+const IconUpload = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
   </svg>
 );
 
@@ -489,6 +498,10 @@ export default function InventoryPage() {
   const [prodModal, setProdModal] = useState<{ open: boolean; product: Product | null }>({ open: false, product: null });
   const [stockEntryModal, setStockEntryModal] = useState<{ open: boolean; product: Product | null }>({ open: false, product: null });
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  // getUser() re-parses localStorage on every call; the page has no role
+  // check of its own, so a cashier typing /inventory must not see the import.
+  const canImport = useMemo(() => canImportProducts(getUser()), []);
 
   // Debounce ref
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -576,8 +589,9 @@ export default function InventoryPage() {
         subtitle={`${totalActive} productos activos${lowStock > 0 ? ` · ${lowStock} bajo mínimo` : ''}${noStock > 0 ? ` · ${noStock} sin stock` : ''}`}
         actions={
           tab === 'products'
-            ? <div style={{ display: 'flex', gap: '6px' }}>
+            ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button className="btn btn-sm" onClick={() => setStockEntryModal({ open: true, product: null })}><IconBoxIn /> Entrada de inventario</button>
+                {canImport && <button className="btn btn-sm" onClick={() => setImportOpen(true)}><IconUpload /> Importar productos</button>}
                 <button className="btn btn-accent btn-sm" onClick={() => setProdModal({ open: true, product: null })}><IconPlus /> Nuevo producto</button>
               </div>
             : <button className="btn btn-accent btn-sm" onClick={() => setCatModal({ open: true, cat: null })}><IconPlus /> Nueva categoría</button>
@@ -829,6 +843,12 @@ export default function InventoryPage() {
           categories={categories}
           onClose={() => setProdModal({ open: false, product: null })}
           onSaved={() => { loadProducts(); loadAllActive(); }}
+        />
+      )}
+      {canImport && importOpen && (
+        <ProductImportModal
+          onClose={() => setImportOpen(false)}
+          onImported={() => { loadProducts(); loadAllActive(); loadCategories(); }}
         />
       )}
       {stockEntryModal.open && (
