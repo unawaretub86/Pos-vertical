@@ -88,7 +88,7 @@ func (r *metricsRepo) Sold(ctx context.Context, from, to time.Time) (float64, in
 		SELECT COALESCE(SUM(total), 0), COUNT(*)
 		FROM sales
 		WHERE status = 'completed' AND created_at >= ? AND created_at < ?`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&total, &count)
 	if err != nil {
 		return 0, 0, fmt.Errorf("metrics sold: %w", err)
@@ -109,7 +109,7 @@ func (r *metricsRepo) Profit(ctx context.Context, from, to time.Time) (float64, 
 		JOIN products p ON p.id = si.product_id
 		JOIN sales s ON s.id = si.sale_id
 		WHERE s.status = 'completed' AND s.created_at >= ? AND s.created_at < ?`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&gross, &unconfigured)
 	if err != nil {
 		return 0, 0, 0, 0, fmt.Errorf("metrics profit: %w", err)
@@ -131,7 +131,7 @@ func (r *metricsRepo) CashFlow(ctx context.Context, from, to time.Time) (float64
 		FROM sale_payments sp
 		JOIN sales s ON s.id = sp.sale_id
 		WHERE s.status = 'completed' AND sp.method = 'cash' AND s.created_at >= ? AND s.created_at < ?`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&cashSales)
 	if err != nil {
 		return 0, 0, fmt.Errorf("metrics cash flow: %w", err)
@@ -141,7 +141,7 @@ func (r *metricsRepo) CashFlow(ctx context.Context, from, to time.Time) (float64
 		SELECT COALESCE(SUM(amount), 0)
 		FROM register_movements
 		WHERE type = 'cash_out' AND created_at >= ? AND created_at < ?`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&cashOut)
 	if err != nil {
 		return 0, 0, fmt.Errorf("metrics cash flow: %w", err)
@@ -158,7 +158,7 @@ func (r *metricsRepo) CreditFlow(ctx context.Context, from, to time.Time) (float
 		FROM sale_payments sp
 		JOIN sales s ON s.id = sp.sale_id
 		WHERE s.status = 'completed' AND sp.method = 'credit' AND s.created_at >= ? AND s.created_at < ?`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&newCredit)
 	if err != nil {
 		return 0, 0, fmt.Errorf("metrics credit flow: %w", err)
@@ -168,7 +168,7 @@ func (r *metricsRepo) CreditFlow(ctx context.Context, from, to time.Time) (float
 		SELECT COALESCE(SUM(amount), 0)
 		FROM customer_payments
 		WHERE created_at >= ? AND created_at < ?`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&collected)
 	if err != nil {
 		return 0, 0, fmt.Errorf("metrics credit flow: %w", err)
@@ -193,7 +193,7 @@ func (r *metricsRepo) TopByMargin(ctx context.Context, from, to time.Time, limit
 		GROUP BY p.id, p.name, p.cost
 		ORDER BY margin_pct DESC
 		LIMIT ?`,
-		from, to, limit,
+		dbTime(from), dbTime(to), limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("metrics top by margin: %w", err)
@@ -228,7 +228,7 @@ func (r *metricsRepo) TopSeller(ctx context.Context, from, to time.Time) (string
 		GROUP BY p.id, p.name
 		ORDER BY qty DESC
 		LIMIT 1`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&name, &qty)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", 0, nil
@@ -259,7 +259,7 @@ func (r *metricsRepo) TopSellers(ctx context.Context, from, to time.Time, limit 
 		GROUP BY p.id, p.name
 		ORDER BY qty DESC
 		LIMIT ?`,
-		from, to, limit,
+		dbTime(from), dbTime(to), limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("metrics top sellers: %w", err)
@@ -300,7 +300,7 @@ func (r *metricsRepo) LowStock(ctx context.Context, limit int) ([]LowStockItem, 
 			FROM sale_items si
 			JOIN sales s ON s.id = si.sale_id
 			WHERE s.status = 'completed'
-			  AND julianday('now', 'localtime') - julianday(s.created_at) <= 7
+			  AND julianday('now') - julianday(s.created_at) <= 7
 			GROUP BY si.product_id
 		) v ON v.product_id = p.id AND v.avg_daily > 0
 		WHERE p.active = 1 AND p.min_stock > 0 AND p.stock < p.min_stock

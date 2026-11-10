@@ -140,6 +140,7 @@ type AssistantService struct {
 	reports  repository.ReportRepository
 	expenses repository.ExpenseRepository
 	queries  repository.AssistantQueryRepository
+	now      func() time.Time // injectable clock; time.Now in production
 }
 
 // NewAssistantService constructs an AssistantService.
@@ -149,7 +150,7 @@ func NewAssistantService(
 	expenses repository.ExpenseRepository,
 	queries repository.AssistantQueryRepository,
 ) *AssistantService {
-	return &AssistantService{metrics: metrics, reports: reports, expenses: expenses, queries: queries}
+	return &AssistantService{metrics: metrics, reports: reports, expenses: expenses, queries: queries, now: time.Now}
 }
 
 // Ask parses query, resolves it against real data and logs the attempt.
@@ -158,7 +159,7 @@ func NewAssistantService(
 // (AC-17) is swallowed — it must never surface to the caller nor block the
 // computed answer, so it happens after result is already built.
 func (s *AssistantService) Ask(ctx context.Context, userID int64, query string) (*AskResult, error) {
-	q := assistant.Parse(query, time.Now())
+	q := assistant.Parse(query, s.now())
 
 	result, err := s.buildResult(ctx, q)
 	if err != nil {

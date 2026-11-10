@@ -195,11 +195,11 @@ func buildDateWhere(from, to *time.Time, tableAlias ...string) (string, []any) {
 	var args []any
 	if from != nil {
 		where += " AND " + col + " >= ?"
-		args = append(args, *from)
+		args = append(args, dbTimePtr(from))
 	}
 	if to != nil {
 		where += " AND " + col + " < ?"
-		args = append(args, *to)
+		args = append(args, dbTimePtr(to))
 	}
 	return where, args
 }

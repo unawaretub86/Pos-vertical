@@ -187,11 +187,11 @@ func (r *saleRepo) List(ctx context.Context, filter SaleFilter) ([]*model.Sale, 
 	}
 	if filter.From != nil {
 		query += " AND created_at >= ?"
-		args = append(args, *filter.From)
+		args = append(args, dbTimePtr(filter.From))
 	}
 	if filter.To != nil {
 		query += " AND created_at <= ?"
-		args = append(args, *filter.To)
+		args = append(args, dbTimePtr(filter.To))
 	}
 	query += " ORDER BY created_at DESC"
 	if filter.Limit > 0 {

@@ -26,7 +26,7 @@ func withClaims(r *http.Request, claims *model.Claims) *http.Request {
 
 func execSeed(t *testing.T, db *database.DB, q string, args ...any) {
 	t.Helper()
-	if _, err := db.DB.ExecContext(context.Background(), q, args...); err != nil {
+	if _, err := db.DB.ExecContext(context.Background(), q, utcArgs(args)...); err != nil {
 		t.Fatalf("seed exec: %v\nSQL: %s", err, q)
 	}
 }

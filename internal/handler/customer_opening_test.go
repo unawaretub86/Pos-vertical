@@ -49,6 +49,7 @@ type obEnv struct {
 	h       *Handler
 	admin   string
 	cashier string
+	clock   time.Time // injected handler clock (zero = real time)
 }
 
 func obSeedCustomers(t *testing.T, db *database.DB) {
@@ -560,9 +561,10 @@ func (e *obEnv) dataMap(t *testing.T, path string) map[string]json.RawMessage {
 	return m
 }
 
-func obTodayReportPath() string {
-	now := time.Now()
-	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+// obTodayReportPath is the "today" report window of the given clock:
+// [local midnight, next local midnight) in the clock's own zone, as RFC3339.
+func obTodayReportPath(now time.Time) string {
+	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	to := from.AddDate(0, 0, 1)
 	return "/reports/sales?from=" + url.QueryEscape(from.Format(time.RFC3339)) + "&to=" + url.QueryEscape(to.Format(time.RFC3339))
 }
@@ -570,7 +572,7 @@ func obTodayReportPath() string {
 func (e *obEnv) snapshot(t *testing.T) obSnapshot {
 	t.Helper()
 	return obSnapshot{
-		report:    e.dataMap(t, obTodayReportPath()),
+		report:    e.dataMap(t, obTodayReportPath(e.clock)),
 		today:     e.dataMap(t, "/dashboard/today"),
 		dashboard: e.dataMap(t, "/dashboard"),
 		register:  e.dataMap(t, "/registers/1"),
@@ -621,10 +623,36 @@ func (e *obEnv) tableCounts(t *testing.T) map[string]int {
 	return out
 }
 
-// runNotASale runs T-10 and returns the env with register 1 closed.
+// obBogota is the fixed UTC-5 zone used by the pinned-clock harness.
+var obBogota = time.FixedZone("COT", -5*3600)
+
+// obPinClock makes the run independent of the wall clock (US-098 T-12): every
+// created_at written through the API on the money tables is forced to pinUTC
+// (UTC text, as CURRENT_TIMESTAMP would write it) by AFTER INSERT triggers,
+// and the handler clock is set to clock.
+func (e *obEnv) obPinClock(t *testing.T, pinUTC string, clock time.Time) {
+	t.Helper()
+	for _, tbl := range []string{"sales", "sale_payments", "customer_payments", "register_movements", "expenses"} {
+		abonoExec(t, e.db, fmt.Sprintf(
+			`CREATE TRIGGER pin_%[1]s AFTER INSERT ON %[1]s BEGIN UPDATE %[1]s SET created_at = '%[2]s' WHERE id = NEW.id; END`,
+			tbl, pinUTC))
+	}
+	e.clock = clock
+	e.h.now = func() time.Time { return clock }
+}
+
+// runNotASale runs T-10 with the default pinned clock and returns the env
+// with register 1 closed: rows at 2026-11-10 01:18:41 UTC (20:18:41 Bogota),
+// handler clock 2026-11-09 20:30 Bogota.
 func runNotASale(t *testing.T) *obEnv {
 	t.Helper()
+	return runNotASaleAt(t, "2026-11-10 01:18:41", time.Date(2026, 11, 9, 20, 30, 0, 0, obBogota))
+}
+
+func runNotASaleAt(t *testing.T, pinUTC string, clock time.Time) *obEnv {
+	t.Helper()
 	e := newObFileEnv(t)
+	e.obPinClock(t, pinUTC, clock)
 	abonoExec(t, e.db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock) VALUES (4, 'Pan', 'P', 10000, 6000, 'unit', 1, 10)`)
 	abonoExec(t, e.db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock) VALUES (5, 'Queso', 'Q', 40000, 30000, 'unit', 1, 10)`)
 	shift := &shiftEnv{db: e.db, h: e.h, admin: e.admin, cashier: e.cashier}
@@ -704,6 +732,26 @@ func runNotASale(t *testing.T) *obEnv {
 
 func TestCustomerOpening_T10_NotASale(t *testing.T) {
 	runNotASale(t)
+}
+
+// T-12 (US-098 AC-13): the same flow is independent of the wall clock. Pins
+// are 20:18:41 (the evening case that broke after 19:00), 18:59:00 (control)
+// and 23:59:59 Bogota, each with the handler clock at the same Bogota day.
+func TestCustomerOpening_T12_PinnedClockAnyHour(t *testing.T) {
+	cases := []struct {
+		name  string
+		pin   string
+		clock time.Time
+	}{
+		{"20_18_41_bogota", "2026-11-10 01:18:41", time.Date(2026, 11, 9, 20, 30, 0, 0, obBogota)},
+		{"18_59_00_bogota_control", "2026-11-09 23:59:00", time.Date(2026, 11, 9, 19, 0, 0, 0, obBogota)},
+		{"23_59_59_bogota", "2026-11-10 04:59:59", time.Date(2026, 11, 9, 23, 59, 59, 0, obBogota)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runNotASaleAt(t, tc.pin, tc.clock)
+		})
+	}
 }
 
 func TestCustomerOpening_T11_AbonoAgainstOpeningIsRealMoney(t *testing.T) {

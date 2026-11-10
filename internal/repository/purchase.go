@@ -140,11 +140,11 @@ func (r *purchaseRepo) List(ctx context.Context, filter PurchaseFilter) ([]*mode
 	}
 	if filter.From != nil {
 		query += " AND p.created_at >= ?"
-		args = append(args, *filter.From)
+		args = append(args, dbTimePtr(filter.From))
 	}
 	if filter.To != nil {
 		query += " AND p.created_at <= ?"
-		args = append(args, *filter.To)
+		args = append(args, dbTimePtr(filter.To))
 	}
 	query += " ORDER BY p.created_at DESC"
 

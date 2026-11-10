@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-09 (US-095: void dialog in the dashboard, closed-register warning) · 2026-11-09 (US-092: an opening *fiado* balance never reaches the register; I-3 reads opening + credit − *abonos*) · 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-10 (US-098: the "day" of the estimated cash is the server-local day, see `tiempo.md`) · 2026-11-09 (US-095: void dialog in the dashboard, closed-register warning) · 2026-11-09 (US-092: an opening *fiado* balance never reaches the register; I-3 reads opening + credit − *abonos*) · 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -92,7 +92,7 @@ estimated cash = cash payments of completed sales in the range
 
 It does not include the opening float, `cash_in` or cash *abonos*: it is a daily flow indicator, not the register count. A void subtracts nothing here: the voided sale just stops counting as a completed cash payment (US-088). The assistant's cash answer uses the same query (`internal/service/assistant.go:608-615`). The register count is "expected cash at close". Counting cash *abonos* here was left out of US-082 by the PO (2026-11-05); roadmap R-86.
 
-Source: `MetricsRepository.CashFlow` (`internal/repository/metrics.go:127`, `cash` payments at `:133`, `cash_out` at `:143`); the subtraction is done in `internal/handler/dashboard.go:67`.
+Source: `MetricsRepository.CashFlow` (`internal/repository/metrics.go:127`, `cash` payments at `:133`, `cash_out` at `:143`); the subtraction is done in `internal/handler/dashboard.go:67`. "The day" is the server-local day `[00:00, 24:00)`, compared as UTC text, so an evening sale (19:00-24:00 Bogotá) counts today (`tiempo.md`). The register close itself does not use a day window: it sums by `register_id`.
 
 ## Rule: expenses
 

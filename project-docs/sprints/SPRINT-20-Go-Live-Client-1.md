@@ -35,6 +35,7 @@
 | US-095 | Admin void button for a sale in the UI | [x] | 2026-11-09 |
 | US-096 | Money QA layer 1: property-based invariant tests over random sequences of money operations | [x] | 2026-11-08 |
 | US-097 | Singular/plural wording in the catalog import UI (roadmap R-157) | [x] | 2026-11-09 |
+| US-098 | Day windows and stored timestamps agree on one zone: after-19:00 sales missing from "today" (roadmap R-158, R-05) | [x] | 2026-11-10 |
 
 **Total estimated effort: ~8 days**
 
@@ -52,6 +53,7 @@
 | **6** | US-094 | Needed before loading the client's catalog (if approved). |
 | **7** | US-093 | Run after the dry run, right before go-live. |
 | **8** | US-089 | Last code before install; tested on the real install path. |
+| **9** | US-098 | Fixes the 7 p.m.-midnight gap in "today" figures before the on-site dry run reads them; independent of the other US. |
 
 ---
 
@@ -326,3 +328,48 @@ Contract findings and server-side validation gaps resolved: the suite drives ran
 - AC-7: `internal/service/product_import_test.go` `TestProductImport_R157_T4_RejectedCommitSingularMessage` (1 bad row → `el archivo tiene 1 error…`) and `TestProductImport_R157_T4_RejectedCommitPluralMessageUnchanged` (2 bad rows → `el archivo tiene 2 errores…`).
 
 **Results:** QA round 1 found no code issue (its BLOCKER was the spec delta, applied at close; 2 MINOR doc items fixed at close); Gemini diff review clean. `go test ./...` fails only the pre-existing `TestCustomerOpening_T10_NotASale` and `_T11_AbonoAgainstOpeningIsRealMoney` after 19:00 America/Bogota (roadmap R-158, root cause R-05).
+
+
+## US-098 — Day windows and stored timestamps agree on one zone
+
+**Status:** picked up from roadmap R-158 and R-05 (same root cause), 2026-11-10. Level L. Done 2026-11-10 (pipeline ID R-158). Approved at GATE 1 (PO, 2026-11-10): Q-1..Q-6 as recommended.
+
+**As** Don Carlos (owner),
+**I want** the dashboard "today", the sales report and the assistant's "hoy/ayer" to include every sale made until midnight,
+**so that** the 7 p.m. to midnight rush is not missing from my numbers.
+
+**Problem (verified 2026-11-09 and 2026-11-10):** rows get `created_at` from `DEFAULT CURRENT_TIMESTAMP` (UTC text, no zone suffix) while windows are built as local-midnight `time.Time` values that the driver binds with their offset (`-05:00`) and SQLite compares as text, so from 19:00 America/Bogota the window omits the evening's sales. Even bounds converted with `.UTC()` mis-bucket a row at the exact boundary second (`+00:00` suffix).
+
+**Acceptance criteria (verified 2026-11-10):**
+- [x] AC-1: WHEN `GET /dashboard/today` is answered at 2026-11-09 20:30 Bogota, `sold_today` SHALL include a sale made at 20:18:41 (day total $87.000 over 4 sales, with sales at 00:00:00, 18:59, 20:18:41 and 23:59:59) and exclude one made at 00:00:00 on 2026-11-10.
+- [x] AC-2: WHEN `GET /dashboard` is answered at the same instant, `today` SHALL be $87.000 / 4 and `yesterday` $5.000 / 1.
+- [x] AC-3: WHEN `GET /reports/sales` is asked for `[2026-11-09 00:00, 2026-11-10 00:00)` Bogota, in `-05:00` or `Z` form, the system SHALL return $87.000 / 4, the row exactly at `from` included and the row exactly at `to` excluded.
+- [x] AC-4: WHEN two contiguous day windows are queried, no sale SHALL be counted twice or dropped ($87.000 + $3.000 = $90.000).
+- [x] AC-5: WHEN an abono, cash-out movement, expense, purchase or audit row is stored at 20:18:41 Bogota, it SHALL belong to that Bogota day in every range query.
+- [x] AC-6: WHEN the assistant answers "hoy", "ayer" and "este mes" at 2026-11-09 20:30 Bogota, the figures SHALL include that evening's sales ("este mes" = $72.000 / 4).
+- [x] AC-7: WHEN sales are grouped by day, a sale at 20:18:41 Bogota SHALL fall in its Bogota date.
+- [x] AC-8: WHILE the database holds rows written by the previous version, results SHALL be identical to new rows with no data migration, and new `created_at` text SHALL keep the `YYYY-MM-DD HH:MM:SS` format.
+- [x] AC-9: WHILE the server zone is UTC, "today" SHALL be the UTC day.
+- [x] AC-10: aging rows SHALL appear with the right `days_overdue`; a legacy unparseable date stays excluded (closes R-05's aging note).
+- [x] AC-11: the low-stock 7-day window SHALL compare UTC against UTC (a sale 7 days 1 hour old is not counted).
+- [x] AC-12: a range bound of any offset SHALL be compared as its UTC instant; the boundary row belongs to the window that starts there.
+- [x] AC-13: `TestCustomerOpening_T10_NotASale` and `_T11_AbonoAgainstOpeningIsRealMoney` SHALL pass at any wall-clock hour (pinned clock and pinned `created_at`).
+
+**Decisions (GATE 1, PO, 2026-11-10):** design A (range bounds bound as UTC text `YYYY-MM-DD HH:MM:SS` by `dbTime`, no data migration), no production or pilot data to preserve, "today" is the server's local zone, `LowStock` fixed here, injectable `Handler.now` and `AssistantService.now`, new `spec/domain/tiempo.md`. Spec: `spec/domain/tiempo.md` (new), pointers in `fiado.md`, `caja.md`, `rentabilidad.md`, row in `project-docs/README.md`.
+
+**Verified criteria:**
+- AC-1: `internal/handler/dashboard_test.go` `TestGetDashboardToday_T1_EveningSaleIsToday`.
+- AC-2: `TestGetDashboard_T2_TodayAndYesterdayAtEvening` (same file).
+- AC-3, AC-12 (route level): `TestGetSalesReport_T3_WindowBoundsAnyOffset` (same file); AC-12 (repository level): `internal/repository/report_test.go` `TestReportRepo_T13_BoundInstantBelongsToOneWindow`, `TestReportRepo_T22_BuildDateWhereIsHalfOpen`.
+- AC-4: `internal/repository/report_test.go` `TestReportRepo_T4_ContiguousDayWindows`.
+- AC-5: `internal/repository/metrics_test.go` `TestMetricsRepo_T5_EveningFlowsBelongToTheLocalDay` (abono, cash-out, expense); `internal/repository/list_filters_utc_test.go` `TestListFilters_T6_EveningRowsBelongToTheLocalDay` (purchase, audit, expense lists).
+- AC-6: `internal/service/assistant_test.go` `TestAssistant_T7_DayWindowsAtEvening` ("hoy" 87000, "ayer" 5000, "este mes" 72000 / 4).
+- AC-7: `internal/repository/report_test.go` `TestReportRepo_T8_GroupByDayLocalPeriod` (strict branch only on a UTC-5 host; roadmap R-159, R-163).
+- AC-8: `internal/handler/dashboard_test.go` `TestPostSales_T9_StoredTimestampFormatAndMigrationCount` (stored text format, 22 migrations; no migration added).
+- AC-9: `internal/repository/metrics_test.go` `TestMetricsRepo_T10_ServerZoneUTCWindow` (74000 / 4).
+- AC-10: `TestMetricsRepo_T11_AgingDaysOverdueAndLegacyText` (same file); existing `TestMetricsRepo_T30_AgingExcludesNullDaysOverdue`.
+- AC-11: `TestMetricsRepo_T11_LowStockSevenDayWindow` (same file).
+- AC-13: `internal/handler/customer_opening_test.go` `TestCustomerOpening_T12_PinnedClockAnyHour` (pins at 20:18:41, 18:59 and 23:59:59 Bogota), with `TestCustomerOpening_T10_NotASale` and `TestCustomerOpening_T11_AbonoAgainstOpeningIsRealMoney` now clock-independent.
+- Existing tests tightened by corrected UTC fixtures: `TestMetricsRepo_T2_SoldHalfOpenMidnight`, `TestAssistant_T9_PeriodLabelNamedInText`.
+
+**Results:** QA round 1 OK (0 BLOCKER, 3 MINOR, 1 NOTE: the spec delta, applied at close; MINOR 1 is roadmap R-159, the other two are style/defensive and not tracked); Gemini diff review clean. `go build ./...`, `go test ./...` and frontend `pnpm test` (240 tests), `pnpm lint` and `pnpm build` green; the real-binary smoke ran at 14:19 Bogota, before the 19:00 gap, so the evening behaviour is proven by the pinned-clock tests.

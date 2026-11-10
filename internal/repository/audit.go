@@ -69,11 +69,11 @@ func (r *auditRepo) List(ctx context.Context, filter AuditFilter) ([]*model.Audi
 	}
 	if filter.From != nil {
 		query += " AND a.created_at >= ?"
-		args = append(args, *filter.From)
+		args = append(args, dbTimePtr(filter.From))
 	}
 	if filter.To != nil {
 		query += " AND a.created_at <= ?"
-		args = append(args, *filter.To)
+		args = append(args, dbTimePtr(filter.To))
 	}
 	query += " ORDER BY a.created_at DESC"
 

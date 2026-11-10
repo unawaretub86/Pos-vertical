@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/andreyo/pos/internal/netutil"
 	"net/http"
+	"time"
 
 	"github.com/andreyo/pos/internal/database"
 	"github.com/andreyo/pos/internal/factelect"
@@ -42,6 +43,7 @@ type Handler struct {
 	kds          *service.KDSService
 	printer      *service.PrinterService
 	localIP      func() string // injectable for tests; netutil.LocalIPv4 in production
+	now          func() time.Time // injectable clock; time.Now in production
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -105,6 +107,7 @@ func New(db *database.DB) *Handler {
 		kds:          service.NewKDSService(kdsRepo),
 		printer:      service.NewPrinterService(),
 		localIP:      netutil.LocalIPv4,
+		now:          time.Now,
 		loginLimiter: appmw.NewLoginLimiter(),
 	}
 }

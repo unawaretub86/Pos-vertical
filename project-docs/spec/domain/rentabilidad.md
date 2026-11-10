@@ -1,7 +1,7 @@
 # Domain — Profitability (cost, margin, profit)
 
 > **Type:** spec · **Current:** yes · **Rules over:** gross profit, net profit, margin
-> **Updated:** 2026-11-09 (US-092: an opening *fiado* balance is not revenue or profit) · 2026-10-01 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`).
+> **Updated:** 2026-11-10 (US-098: pointer to `tiempo.md` for the "today" window) · 2026-11-09 (US-092: an opening *fiado* balance is not revenue or profit) · 2026-10-01 · Verified against the code on 2026-09-23 (US-059: metrics in `internal/repository/metrics.go`).
 
 "How much I sold" is not "how much I earned", and the difference between the two is what stops a shopkeeper from selling at a loss without knowing it. `find-pos.md:41` identified it as a gap local competitors do not cover.
 
@@ -28,6 +28,8 @@ That is why every profit or margin answer must be accompanied by the **count of 
 ```
 net profit = gross profit − expenses of the same range
 ```
+
+The "range" of the dashboard figures is the server-local day, half-open `[00:00, 24:00)`, compared as UTC text (`tiempo.md`).
 
 See [caja.md](caja.md) for the expense categories.
 

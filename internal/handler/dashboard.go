@@ -48,7 +48,7 @@ func (h *Handler) getDashboardToday(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) writeDashboardToday(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
-	now := time.Now()
+	now := h.now()
 	loc := now.Location()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	todayEnd := todayStart.Add(24 * time.Hour)
@@ -136,7 +136,7 @@ func (h *Handler) getDashboard(w http.ResponseWriter, r *http.Request) {
 	db := h.db.DB
 
 	// ── Date ranges ──────────────────────────────────────────────────────────
-	now := time.Now()
+	now := h.now()
 	loc := now.Location()
 
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)

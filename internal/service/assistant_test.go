@@ -3,9 +3,8 @@ package service
 // Tests for AssistantService — contrato US-061 §4, T-1, T-3..T-11, T-15..T-17,
 // T-24, T-25. Fixture pattern mirrors internal/handler/dashboard_test.go
 // (setupTestDB) and internal/repository/metrics_test.go (metricsToday0):
-// AssistantService.Ask calls time.Now() internally (not injectable, unlike
-// internal/assistant.Parse), so every period-dependent seed below anchors to
-// real wall-clock "today" instead of a frozen instant.
+// the legacy tests below anchor to real wall-clock "today" (the service clock
+// defaults to time.Now); US-098 T-7 injects a fixed clock through svc.now.
 
 import (
 	"context"
@@ -46,7 +45,15 @@ func newAssistantTestEnv(t *testing.T) *assistantTestEnv {
 
 func (e *assistantTestEnv) exec(t *testing.T, q string, args ...any) {
 	t.Helper()
-	if _, err := e.db.DB.ExecContext(context.Background(), q, args...); err != nil {
+	conv := make([]any, len(args))
+	for i, a := range args {
+		if tm, ok := a.(time.Time); ok {
+			conv[i] = tm.UTC().Format("2006-01-02 15:04:05") // UTC text, as CURRENT_TIMESTAMP stores it (US-098)
+		} else {
+			conv[i] = a
+		}
+	}
+	if _, err := e.db.DB.ExecContext(context.Background(), q, conv...); err != nil {
 		t.Fatalf("seed exec: %v\nSQL: %s", err, q)
 	}
 }
@@ -439,7 +446,7 @@ func TestAssistant_T17_BitacoraFailureNeverBlocksTheAnswer(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 	hoy0 := today0()
 	if _, err := db.DB.ExecContext(context.Background(),
-		`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 40000, 40000, 'completed', 'cash', ?)`, hoy0.Add(time.Hour),
+		`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 40000, 40000, 'completed', 'cash', ?)`, hoy0.Add(time.Hour).UTC().Format("2006-01-02 15:04:05"),
 	); err != nil {
 		t.Fatalf("seed exec: %v", err)
 	}
@@ -675,5 +682,62 @@ func TestAssistant_T13_UnresolvedChipsRoundTrip(t *testing.T) {
 		{"quien me debe el juebes", tableB[6].chips},
 	} {
 		assertChips(q.query, q.want)
+	}
+}
+
+// ─── US-098: day windows and stored UTC timestamps agree ────────────────────
+
+// T-7 (AC-6): clock 2026-11-09 20:30 Bogota. Stored text is UTC, so the
+// 20:18:41 sale (2026-11-10 01:18:41 UTC) belongs to "hoy".
+//
+// Seed (contract §3, literal UTC text, all completed cash sales):
+// S0 2026-11-09 04:59:59 $5.000, S5 2026-11-09 05:00:00 $7.000,
+// S1 2026-11-09 23:59:00 $10.000, S2 2026-11-10 01:18:41 $50.000,
+// S3 2026-11-10 04:59:59 $20.000, S4 2026-11-10 05:00:00 $3.000.
+func TestAssistant_T7_DayWindowsAtEvening(t *testing.T) {
+	bogota := time.FixedZone("COT", -5*3600)
+	env := newAssistantTestEnv(t)
+	env.svc.now = func() time.Time { return time.Date(2026, 11, 9, 20, 30, 0, 0, bogota) }
+	for _, s := range []struct {
+		id    int
+		total int
+		at    string
+	}{
+		{10, 5000, "2026-11-09 04:59:59"},
+		{15, 7000, "2026-11-09 05:00:00"},
+		{11, 10000, "2026-11-09 23:59:00"},
+		{12, 50000, "2026-11-10 01:18:41"},
+		{13, 20000, "2026-11-10 04:59:59"},
+		{14, 3000, "2026-11-10 05:00:00"},
+	} {
+		env.exec(t, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (?, 1, ?, ?, 'completed', 'cash', ?)`,
+			s.id, s.total, s.total, s.at)
+	}
+
+	ask := func(phrase string) salesData {
+		t.Helper()
+		result, err := env.svc.Ask(context.Background(), testUserID, phrase)
+		if err != nil {
+			t.Fatalf("Ask(%q): %v", phrase, err)
+		}
+		data, ok := result.Data.(salesData)
+		if !ok {
+			t.Fatalf("Ask(%q).Data = %#v, want salesData (text %q)", phrase, result.Data, result.Text)
+		}
+		return data
+	}
+
+	// hoy: S5 + S1 + S2 + S3 = 87.000 / 4 sales.
+	if d := ask("cuánto vendí hoy"); d.Total != 87000 || d.Count != 4 {
+		t.Errorf("hoy = %.0f / %d, want 87000 / 4", d.Total, d.Count)
+	}
+	// ayer: S0 = 5.000 / 1.
+	if d := ask("cuánto vendí ayer"); d.Total != 5000 || d.Count != 1 {
+		t.Errorf("ayer = %.0f / %d, want 5000 / 1", d.Total, d.Count)
+	}
+	// este mes: [Nov 1 00:00, now 20:30) = S0 + S5 + S1 + S2 = 72.000 / 4 (S3 and S4
+	// are later than the clock). Without S2 it would be 22.000 / 3.
+	if d := ask("cuánto vendí este mes"); d.Total != 72000 || d.Count != 4 {
+		t.Errorf("este mes = %.0f / %d, want 72000 / 4 (S0 + S5 + S1 + S2; S2 included)", d.Total, d.Count)
 	}
 }

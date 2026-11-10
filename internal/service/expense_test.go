@@ -114,8 +114,9 @@ func TestExpenseService_SumRange_AddsTodayExpenses(t *testing.T) {
 		t.Fatalf("create expense 2: %v", err)
 	}
 
-	// created_at is written via SQLite's CURRENT_TIMESTAMP, which is always UTC —
-	// the range must be computed in UTC to match, regardless of the test
+	// created_at is written via SQLite's CURRENT_TIMESTAMP, which is always UTC.
+	// Range bounds are converted to UTC text at the query boundary (US-098), so
+	// this UTC day window is just one valid window, independent of the test
 	// machine's local timezone.
 	grossProfit := 200000.0
 	now := time.Now().UTC()

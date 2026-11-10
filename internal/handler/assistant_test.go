@@ -82,8 +82,8 @@ func TestAskAssistant_T2_SalesTotalMatchesDashboard(t *testing.T) {
 			t.Fatalf("seed exec: %v", err)
 		}
 	}
-	exec(`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 28000, 28000, 'completed', 'cash', ?)`, hoy0.Add(time.Hour))
-	exec(`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 12000, 12000, 'completed', 'cash', ?)`, hoy0.Add(2*time.Hour))
+	exec(`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 28000, 28000, 'completed', 'cash', ?)`, utcStamp(hoy0.Add(time.Hour)))
+	exec(`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 12000, 12000, 'completed', 'cash', ?)`, utcStamp(hoy0.Add(2*time.Hour)))
 
 	token := tokenFor(t, 1, "admin")
 	w := askAskEndpoint(h, token, `{"query":"cuanto vendi hoy"}`)
@@ -135,7 +135,7 @@ func TestAskAssistant_T13_CashierReturns403WithoutLeakingFigures(t *testing.T) {
 	hoy0 := time.Now()
 	hoy0 = time.Date(hoy0.Year(), hoy0.Month(), hoy0.Day(), 0, 0, 0, 0, hoy0.Location())
 	if _, err := db.DB.ExecContext(context.Background(),
-		`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 40000, 40000, 'completed', 'cash', ?)`, hoy0.Add(time.Hour),
+		`INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 40000, 40000, 'completed', 'cash', ?)`, utcStamp(hoy0.Add(time.Hour)),
 	); err != nil {
 		t.Fatalf("seed exec: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestAskAssistant_T14_DebtorsTruncatesAtFiveWithRemainder(t *testing.T) {
 		id := int64(i + 1)
 		exec(`INSERT INTO customers (id, name, phone, address) VALUES (?, ?, '', '')`, id, "Cliente"+string(rune('A'+i)))
 		exec(`INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (?, 1, ?, ?, ?, 'completed', 'credit', ?)`,
-			id, id, bal, bal, time.Now().Add(-time.Duration(i+1)*time.Hour))
+			id, id, bal, bal, utcStamp(time.Now().Add(-time.Duration(i+1)*time.Hour)))
 		exec(`INSERT INTO sale_payments (sale_id, method, amount) VALUES (?, 'credit', ?)`, id, bal)
 	}
 

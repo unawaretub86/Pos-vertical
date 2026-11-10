@@ -67,11 +67,11 @@ func (r *expenseRepo) List(ctx context.Context, filter ExpenseFilter) ([]*model.
 	}
 	if filter.From != nil {
 		query += " AND e.created_at >= ?"
-		args = append(args, *filter.From)
+		args = append(args, dbTimePtr(filter.From))
 	}
 	if filter.To != nil {
 		query += " AND e.created_at <= ?"
-		args = append(args, *filter.To)
+		args = append(args, dbTimePtr(filter.To))
 	}
 	query += " ORDER BY e.created_at DESC"
 
@@ -96,7 +96,7 @@ func (r *expenseRepo) SumRange(ctx context.Context, from, to time.Time) (float64
 	var sum float64
 	err := r.db.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE created_at >= ? AND created_at < ?`,
-		from, to,
+		dbTime(from), dbTime(to),
 	).Scan(&sum)
 	return sum, err
 }

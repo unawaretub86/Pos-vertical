@@ -23,9 +23,24 @@ func openMetricsDB(t *testing.T) *database.DB {
 	return db
 }
 
+// utcStamp renders an instant the way SQLite CURRENT_TIMESTAMP stores it:
+// UTC text YYYY-MM-DD HH:MM:SS (US-098). Fixtures must never bind a zoned
+// time.Time into created_at, because the driver would store the local offset.
+func utcStamp(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05") }
+
+// metricsExec runs a seed statement. Every time.Time argument is converted to
+// its UTC text form first (US-098), so fixtures stay zone-independent.
 func metricsExec(t *testing.T, db *database.DB, q string, args ...any) {
 	t.Helper()
-	if _, err := db.DB.ExecContext(context.Background(), q, args...); err != nil {
+	conv := make([]any, len(args))
+	for i, a := range args {
+		if tm, ok := a.(time.Time); ok {
+			conv[i] = utcStamp(tm)
+		} else {
+			conv[i] = a
+		}
+	}
+	if _, err := db.DB.ExecContext(context.Background(), q, conv...); err != nil {
 		t.Fatalf("seed exec: %v\nSQL: %s", err, q)
 	}
 }
@@ -1144,5 +1159,210 @@ func TestMetricsRepo_US088_T7_CashFlowIgnoresVoid(t *testing.T) {
 	}
 	if cashOut != 5000 {
 		t.Errorf("cashOut = %.0f, want 5000 (only the manual cash_out; estimated cash 25,000)", cashOut)
+	}
+}
+
+// ─── US-098: day windows and stored UTC timestamps agree ────────────────────
+//
+// Reference data (contract §3), zone America/Bogota (UTC-5), stored text is
+// UTC. Every created_at below is a literal UTC string, never a time.Time.
+
+// bogotaZone is the fixed UTC-5 zone the day windows are built in.
+var bogotaZone = time.FixedZone("COT", -5*3600)
+
+// bogotaMidnight is 00:00 Bogota of the given day.
+func bogotaMidnight(y int, m time.Month, d int) time.Time {
+	return time.Date(y, m, d, 0, 0, 0, 0, bogotaZone)
+}
+
+// seedDayWindowSales seeds the S0..S5 completed cash sales of contract §3.
+//
+//	S0 Nov 8 23:59:59 Bogota  2026-11-09 04:59:59  $5.000
+//	S5 Nov 9 00:00:00 Bogota  2026-11-09 05:00:00  $7.000
+//	S1 Nov 9 18:59:00 Bogota  2026-11-09 23:59:00  $10.000
+//	S2 Nov 9 20:18:41 Bogota  2026-11-10 01:18:41  $50.000
+//	S3 Nov 9 23:59:59 Bogota  2026-11-10 04:59:59  $20.000
+//	S4 Nov 10 00:00:00 Bogota 2026-11-10 05:00:00  $3.000
+//
+// Day Nov 9 = S5+S1+S2+S3 = 87.000 / 4; Nov 10 = S4 = 3.000 / 1; Nov 8 = S0.
+func seedDayWindowSales(t *testing.T, db *database.DB) {
+	t.Helper()
+	rows := []struct {
+		id    int
+		total int
+		at    string
+	}{
+		{10, 5000, "2026-11-09 04:59:59"},  // S0
+		{15, 7000, "2026-11-09 05:00:00"},  // S5
+		{11, 10000, "2026-11-09 23:59:00"}, // S1
+		{12, 50000, "2026-11-10 01:18:41"}, // S2
+		{13, 20000, "2026-11-10 04:59:59"}, // S3
+		{14, 3000, "2026-11-10 05:00:00"},  // S4
+	}
+	for _, r := range rows {
+		metricsExec(t, db, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (?, 1, ?, ?, 'completed', 'cash', ?)`,
+			r.id, r.total, r.total, r.at)
+		metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (?, 'cash', ?)`, r.id, r.total)
+	}
+}
+
+// T-5 (AC-5): an abono, a cash_out and an expense stored at 01:18:41 UTC
+// (20:18:41 Bogota) belong to the Nov 9 Bogota day, not to Nov 10.
+func TestMetricsRepo_T5_EveningFlowsBelongToTheLocalDay(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	const at = "2026-11-10 01:18:41"
+
+	metricsExec(t, db, `INSERT INTO registers (id, user_id, opening_amount) VALUES (1, 1, 0)`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Ana', '', '')`)
+	metricsExec(t, db, `INSERT INTO customer_payments (customer_id, amount, created_at) VALUES (1, 20000, ?)`, at)
+	metricsExec(t, db, `INSERT INTO register_movements (register_id, type, amount, created_at) VALUES (1, 'cash_out', 3000, ?)`, at)
+	metricsExec(t, db, `INSERT INTO expenses (user_id, category, amount, created_at) VALUES (1, 'otro', 7000, ?)`, at)
+
+	repo := NewMetricsRepository(db.DB)
+	exp := NewExpenseRepository(db.DB)
+	nov9From, nov9To := bogotaMidnight(2026, 11, 9), bogotaMidnight(2026, 11, 10)
+	nov10From, nov10To := bogotaMidnight(2026, 11, 10), bogotaMidnight(2026, 11, 11)
+
+	_, collected, err := repo.CreditFlow(ctx, nov9From, nov9To)
+	if err != nil {
+		t.Fatalf("CreditFlow(nov9): %v", err)
+	}
+	if collected != 20000 {
+		t.Errorf("CreditFlow(nov9) collected = %.0f, want 20000", collected)
+	}
+	_, cashOut, err := repo.CashFlow(ctx, nov9From, nov9To)
+	if err != nil {
+		t.Fatalf("CashFlow(nov9): %v", err)
+	}
+	if cashOut != 3000 {
+		t.Errorf("CashFlow(nov9) cashOut = %.0f, want 3000", cashOut)
+	}
+	sum, err := exp.SumRange(ctx, nov9From, nov9To)
+	if err != nil {
+		t.Fatalf("SumRange(nov9): %v", err)
+	}
+	if sum != 7000 {
+		t.Errorf("SumRange(nov9) = %.0f, want 7000", sum)
+	}
+	_, profitExpenses, _, _, err := repo.Profit(ctx, nov9From, nov9To)
+	if err != nil {
+		t.Fatalf("Profit(nov9): %v", err)
+	}
+	if profitExpenses != 7000 {
+		t.Errorf("Profit(nov9) expenses = %.0f, want 7000", profitExpenses)
+	}
+
+	_, collected, err = repo.CreditFlow(ctx, nov10From, nov10To)
+	if err != nil {
+		t.Fatalf("CreditFlow(nov10): %v", err)
+	}
+	if collected != 0 {
+		t.Errorf("CreditFlow(nov10) collected = %.0f, want 0", collected)
+	}
+	_, cashOut, err = repo.CashFlow(ctx, nov10From, nov10To)
+	if err != nil {
+		t.Fatalf("CashFlow(nov10): %v", err)
+	}
+	if cashOut != 0 {
+		t.Errorf("CashFlow(nov10) cashOut = %.0f, want 0", cashOut)
+	}
+	sum, err = exp.SumRange(ctx, nov10From, nov10To)
+	if err != nil {
+		t.Fatalf("SumRange(nov10): %v", err)
+	}
+	if sum != 0 {
+		t.Errorf("SumRange(nov10) = %.0f, want 0", sum)
+	}
+}
+
+// T-10 (AC-9, AC-12): with the server zone at UTC and the clock at
+// 2026-11-10 12:00 UTC, "today" is [Nov 10 00:00Z, Nov 11 00:00Z).
+func TestMetricsRepo_T10_ServerZoneUTCWindow(t *testing.T) {
+	prev := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = prev })
+
+	db := openMetricsDB(t)
+	ctx := context.Background()
+	seedDayWindowSales(t, db)
+
+	clock := time.Date(2026, 11, 10, 12, 0, 0, 0, time.Local)
+	today0 := time.Date(clock.Year(), clock.Month(), clock.Day(), 0, 0, 0, 0, clock.Location())
+	repo := NewMetricsRepository(db.DB)
+
+	total, count, err := repo.Sold(ctx, today0, today0.Add(24*time.Hour))
+	if err != nil {
+		t.Fatalf("Sold(today UTC): %v", err)
+	}
+	if total != 73000 || count != 3 {
+		t.Errorf("Sold(today UTC) = %.0f / %d, want 73000 / 3 (S2 50000 + S3 20000 + S4 3000; S1 excluded)", total, count)
+	}
+
+	// Rows exactly at the UTC bounds: at "from" belongs to the window, at "to" does not.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (20, 1, 1000, 1000, 'completed', 'cash', '2026-11-10 00:00:00')`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (21, 1, 2000, 2000, 'completed', 'cash', '2026-11-11 00:00:00')`)
+	total, count, err = repo.Sold(ctx, today0, today0.Add(24*time.Hour))
+	if err != nil {
+		t.Fatalf("Sold(today UTC, boundary rows): %v", err)
+	}
+	if total != 74000 || count != 4 {
+		t.Errorf("Sold(today UTC) with boundary rows = %.0f / %d, want 74000 / 4 (row at 00:00:00 in, row at next 00:00:00 out)", total, count)
+	}
+}
+
+// T-11a (AC-10): aging keeps working on zone-less UTC text and keeps the
+// explicit exclusion of the legacy unparseable Go format.
+func TestMetricsRepo_T11_AgingDaysOverdueAndLegacyText(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (1, 'Ana', '', '')`)
+	metricsExec(t, db, `INSERT INTO customers (id, name, phone, address) VALUES (2, 'Beto', '', '')`)
+	// Ana: credit $20.000 three days and one hour ago -> 3 days overdue.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 1, 20000, 20000, 'completed', 'credit', datetime('now','-3 days','-1 hour'))`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 20000)`)
+	// Beto: only date is the legacy unparseable Go format -> excluded.
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 2, 30000, 30000, 'completed', 'credit', '2026-11-09 20:18:41 -0500 -05')`)
+	metricsExec(t, db, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (2, 'credit', 30000)`)
+
+	items, err := NewMetricsRepository(db.DB).AgingReceivables(ctx, 5)
+	if err != nil {
+		t.Fatalf("AgingReceivables(5): %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("AgingReceivables(5) len = %d, want 1 (legacy text of the second customer excluded): %+v", len(items), items)
+	}
+	if items[0].CustomerID != 1 || items[0].Balance != 20000 || items[0].DaysOverdue != 3 {
+		t.Errorf("items[0] = %+v, want Ana (id 1) 20000 / 3 days", items[0])
+	}
+}
+
+// T-11b (AC-11): the 7-day low-stock average compares UTC text with UTC now:
+// a sale 6 days 23 hours old counts, one 7 days 1 hour old does not.
+func TestMetricsRepo_T11_LowStockSevenDayWindow(t *testing.T) {
+	db := openMetricsDB(t)
+	ctx := context.Background()
+
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (1, 'P1', 'P1', 1000, 500, 'unit', 1, 5, 10)`)
+	metricsExec(t, db, `INSERT INTO products (id, name, code, sale_price, cost, unit, active, stock, min_stock) VALUES (2, 'P2', 'P2', 1000, 500, 'unit', 1, 5, 10)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (1, 1, 0, 0, 'completed', 'cash', datetime('now','-6 days','-23 hours'))`)
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 7, 1000, 7000)`)
+	metricsExec(t, db, `INSERT INTO sales (id, user_id, subtotal, total, status, payment_method, created_at) VALUES (2, 1, 0, 0, 'completed', 'cash', datetime('now','-7 days','-1 hour'))`)
+	metricsExec(t, db, `INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, subtotal) VALUES (2, 2, 7, 1000, 7000)`)
+
+	items, err := NewMetricsRepository(db.DB).LowStock(ctx, 5)
+	if err != nil {
+		t.Fatalf("LowStock(5): %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("LowStock(5) len = %d, want 2: %+v", len(items), items)
+	}
+	// P1 (sold 7 in the window -> avg 1.0/day, 5 days remaining) comes first.
+	if items[0].ProductID != 1 || items[0].AvgDaily == nil || *items[0].AvgDaily != 1.0 {
+		t.Errorf("items[0] = %+v, want P1 with avg_daily 1.0 (sale 6d23h old counts)", items[0])
+	}
+	if items[1].ProductID != 2 || items[1].AvgDaily != nil {
+		t.Errorf("items[1] = %+v, want P2 with avg_daily nil (sale 7d1h old does not count)", items[1])
 	}
 }

@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-08
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-10
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -77,6 +77,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 26 | 2026-11-09 | US-095 | L | ~446k incl. waste (A 133k contract · A' 41k GATE 1 adjust · T 68k · I n/a · Q 51k · duplicate A 153k) | ~110+ | ~15+ (implementer and close not reported) | 4 (implementer stall; rate limit mid-implementation; two sessions orchestrating the same US; takeover at GATE 2) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes + 1 test-author finding (R-148) + 3 QA MINOR | 5 new (R-145..R-149) + R-111 closed | 0 | +878 / −27, 11 files (excluding this benchmark entry) |
 | 27 | 2026-11-09 | US-094 | L | ~669k (A 170k, last of 140k→170k · T 97k · I 159k · Q 102k) | 162 | ~38.3 | 1 (API rate limit 429 interrupted close analyst; completed in Antigravity) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes (AC-10, AC-24, AC-22) + 5 QA MINOR | 8 new (R-150..R-157) | 0 | +3,225 / −13, 18 files (excluding this benchmark entry) |
 | 28 | 2026-11-09 | US-097 (R-157) | L (M requested; analyst recommended L at GATE 1) | ~175k (A 74.6k, last of 47.9k→49.7k→74.6k · T 34.7k · I 26.6k · Q 39.2k) | 71 | ~14.3 | 0 | 1 | 1 contract discrepancy (D-1: 6 frontend strings + 1 backend message, not the 4 in the roadmap) + 2 QA MINOR + 1 pre-existing real bug | 1 new (R-158); R-157 closed | 0 | +134 / −13, 9 files (excluding this benchmark entry) |
+| 29 | 2026-11-10 | US-098 (R-158, closes R-05) | L | ~448k (A 171.7k · T 167.0k · I 43.2k · Q 66.5k) | 135 | ~24.5 | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 1 contract error caught by the test-author + 3 QA MINOR | 6 new (R-159..R-164); R-158 and R-05 closed | 0 | +929 / −55, 27 files (excluding this benchmark entry) |
 
 ### Trend
 
@@ -903,6 +904,41 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 29 — US-098 (R-158, UTC-text date bounds so evening sales count in "today", level L)
+
+Created from dev `6f1b1ee`. One orchestrator session (`pos-vertical-83`); no other session touched the worktree. Roadmap item R-158 (which also closes root cause R-05) registered as US-098 in SPRINT-20 during contract mode; the `changes/` folder kept the ID R-158.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 5 (contract 126.6k/35 tools/394 s; GATE 1 adjust 131.2k/3/15 s; contract sync with the test-author findings 140.2k/5/37 s; close 171.7k/15/125 s; plus one short GATE 1 record step counted inside the adjust) | 171.7k | 58 | ~9.5 min |
+| test-author | 1 | 167.0k | 56 | ~10.7 min |
+| implementer | 1 round | 43.2k | 9 | ~2.9 min |
+| qa | 1 round (+1 interrupted attempt) | 66.5k (tokens of the interrupted attempt unknown) | 12 | ~1.4 min |
+
+**What it found.**
+- Contract D-1..D-6: R-05's aging claim was wrong (aging was never broken); `LowStock` is a second instance of the same bug; the `.UTC()` boundary-second bug (a `+00:00` suffix mis-buckets a row at the exact boundary); four inclusive `<=` list filters; stale roadmap line references; no spec file defined the zone rule.
+- A contract error caught by the test-author: the AC-6 / T-7 "este mes" expectation was unreachable (72.000 / 4, not >= 87.000); fixed before RED.
+- The test-author flagged that T-8 (day grouping) depends on the OS zone.
+- QA round 1: 3 MINOR (T-8 under `TZ=UTC` on Windows is a test artifact; `dbTimePtr` has no nil check; comment alignment) and 1 NOTE (spec delta pending, as designed) became 1 roadmap item.
+- Roadmap: R-158 and R-05 closed; R-159..R-164 opened (6).
+
+**Unplanned stops:** 1. QA's first attempt died with API 403 `oauth_org_not_allowed` (subscription/billing) before writing `qa.md`; the same agent was resumed and the second attempt completed. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Duration | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|---|
+| contract | OK | ~9 min | 11 | 0 | 11 (4 caused by input truncation; the rest pre-existing or out of scope) | n/a |
+| diff, round 1 | OK | ~5 min | 0 (`CLEAN`) | 0 | 0 | no |
+
+**Operational friction.**
+- The orchestrator's `git commit -am` skipped the new untracked spec file `tiempo.md` in the close commit; caught immediately and committed separately. Lesson: stage untracked files before the close checkpoint.
+- The test-author fixed 74 fixture statements through central exec helpers (`metricsExec`, `execSeed`, `assistantTestEnv.exec`) instead of one by one.
+- The analyst's close list cited one test (`TestMetricsRepo_T30_AgingExcludesNullDaysOverdue`) it had not run; the orchestrator verified that every cited test name exists.
+
+### What to measure in run 30
+- Whether the evening-window fix holds on the first real evening after 19:00 (PO manual check US-098 M-1 in `gaps.md`).
+- CI behavior of T-8 on Linux (roadmap R-159).
 
 ## Run 28 — US-097 (R-157, singular wording in the catalog import, level L)
 
