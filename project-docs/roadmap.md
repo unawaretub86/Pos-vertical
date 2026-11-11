@@ -1,6 +1,6 @@
 # Roadmap — Pos-vertical
 
-> **Type:** current · **Rules over:** what gets built next · **Updated:** 2026-11-11 (US-089 closed: R-167 closed, R-168..R-172 opened) · 2026-11-10 (US-093 closed: R-165..R-167 opened, R-153 cross-referenced) · 2026-11-10 (US-098 closed: R-158 and R-05 closed, R-159..R-164 opened) · 2026-11-09 (US-097 closed: R-157 closed, R-158 opened) · 2026-11-09 (US-094 closed: R-150..R-157 opened) · 2026-11-09 (US-095 closed: R-111 closed, R-112 partly addressed, R-145..R-149 opened) · 2026-11-09 (US-092 closed: R-141..R-144 opened) · 2026-11-08 (US-096 closed: R-130 closed; R-137..R-140 opened) · 2026-11-08 (US-096 GATE 1: R-130 moved to US-096; R-130 and R-133 line refs corrected) · 2026-11-08 (US-091 closed: R-134..R-136) · 2026-11-08 (US-091 GATE 1: R-111 moved to SPRINT-20 US-095) · 2026-11-08 (money QA: R-130..R-133) · 2026-11-07 (US-090: R-124..R-129) · 2026-11-07 (US-081: R-120..R-123) · 2026-11-07 (US-085: R-116..R-119; R-103 note updated) · 2026-11-07 (US-088: R-110 closed; R-111..R-115) · 2026-11-07 (US-084: R-106..R-110) · **Language:** English only (`../CLAUDE.md` → Rule 0)
+> **Type:** current · **Rules over:** what gets built next · **Updated:** 2026-11-11 (go-live death list and launch roadmap added; R-173..R-175 opened) · 2026-11-11 (US-089 closed: R-167 closed, R-168..R-172 opened) · 2026-11-10 (US-093 closed: R-165..R-167 opened, R-153 cross-referenced) · 2026-11-10 (US-098 closed: R-158 and R-05 closed, R-159..R-164 opened) · 2026-11-09 (US-097 closed: R-157 closed, R-158 opened) · 2026-11-09 (US-094 closed: R-150..R-157 opened) · 2026-11-09 (US-095 closed: R-111 closed, R-112 partly addressed, R-145..R-149 opened) · 2026-11-09 (US-092 closed: R-141..R-144 opened) · 2026-11-08 (US-096 closed: R-130 closed; R-137..R-140 opened) · 2026-11-08 (US-096 GATE 1: R-130 moved to US-096; R-130 and R-133 line refs corrected) · 2026-11-08 (US-091 closed: R-134..R-136) · 2026-11-08 (US-091 GATE 1: R-111 moved to SPRINT-20 US-095) · 2026-11-08 (money QA: R-130..R-133) · 2026-11-07 (US-090: R-124..R-129) · 2026-11-07 (US-081: R-120..R-123) · 2026-11-07 (US-085: R-116..R-119; R-103 note updated) · 2026-11-07 (US-088: R-110 closed; R-111..R-115) · 2026-11-07 (US-084: R-106..R-110) · **Language:** English only (`../CLAUDE.md` → Rule 0)
 
 Single source of truth about what comes next. There used to be a Roadmap table at the end of every sprint document; they were copied between each other, diverged, and ended up claiming the same sprint number for different things. **Sprint documents no longer carry their own roadmap or reserve future numbers.**
 
@@ -23,6 +23,56 @@ Entries added before 2026-10-01 were translated from Spanish; quoted Spanish str
 
 ---
 
+## Go-live death list
+
+Ranked by what can hurt client #1 (money, data, trust) in the first weeks. It adds no new work of its own: every row points at an existing item. **Kill** = do before go-live. **Decide** = Andrey chooses before go-live, with a recommendation. **Freeze** = do not touch until a customer asks. Sources: SPRINT-20 closed in code on 2026-11-11 (US-089..US-098); human checks are in `gaps.md`.
+
+### Kill before go-live
+
+| # | Item | Why it can hurt client #1 | Source |
+|---|---|---|---|
+| K1 | Run the parked human checks on the client's PC, in this order: US-093 M-1 (reset tool, **never run on real data**), US-089 M-1..M-3 (autostart and backup folder, `schtasks` never run), US-098 M-1 (evening sales, after 19:00), then SPRINT-20 G-1..G-3 | Code and tests are green; none of these paths has been seen on a real machine. A failed reset or a missing autostart is found in front of the customer instead. | `gaps.md` |
+| K2 | R-168 — the pre-migration safety copy is overwritten by the daily backup of the same day | An upgrade on a client's `data.db` loses its only safety copy. Small (rename one file). | R-168 |
+| K3 | R-162 — log and warn when the Windows time zone is not UTC−5 | "Today" follows the server zone; a wrong PC zone silently shifts every day boundary and the close. Cheap, protects every report. | R-162 |
+| K4 | R-170 — `INSTALL.md` says "Ajustes", the app says "Configuración" | The trainer reads the install guide aloud; a wrong menu name costs minutes at go-live. Docs only. | R-170 |
+| K5 | Whole-peso money with one rounding rule (R-133, with R-106) | PO confirmed on 2026-11-11 that client #1 charges IVA. Line tax is never rounded (`internal/service/sale.go:71`): a $10.001 line at 19% gives $11.901,19 and leaves a $0,19 *fiado* residue that the list shows as `$0` in red. Data model change (migration, rounding point per line or per sale): needs a contract and a GATE 1 decision before code. | R-106, R-133 |
+
+### Decide before go-live
+
+D1 was resolved into K5 on 2026-11-11 (client #1 charges IVA).
+
+| # | Item | Recommendation | Source |
+|---|---|---|---|
+| D2 | A sales history page to void any sale, not only the last 8 (3 on a phone) | Do it if the shop sells more than ~8 sales per day to be corrected; otherwise the admin API is the workaround. | R-145 |
+| D3 | The black console window: closing it stops the POS | Cover it in the 45-minute training (G-3) and revisit after week 1. A hidden window needs a log file and a quit path (R-169), which is a full US. | R-169 |
+| D4 | Refund policy for a void on a closed register | The dialog already warns; recording the `Salida` by hand is enough for one shop. Revisit if it happens twice. | R-112 |
+| D5 | Non-cash *abonos* (payments on a *fiado* account, Nequi/Daviplata) on the close | Train the cashier on the `Efectivo` vs `Transferencia` choice (already in G-3); add the informative close line if the owner cannot reconcile in week 1. | R-134 |
+
+### Freeze (do not start without a customer asking)
+
+| Area | Items | Why frozen |
+|---|---|---|
+| DIAN e-invoicing | R-124..R-129, US-034 | Off by default (`internal/handler/handler.go:79`, `cfg.Enabled`) and certified off by US-090. Turning it on needs the provider secret, a restart and sandbox access (R-127, US-034). |
+| Restaurant module | R-01, R-12, R-58, R-63..R-66, R-32 | Client #1 is not a restaurant. |
+| Assistant | R-02, R-03, R-13, R-14, R-20, R-21, R-33, R-52..R-54 | Needs weeks of real `assistant_queries` before it is worth extending (R-13). |
+| LAN multi-register sync, cloud, mobile app | R-18, R-34, R-42, R-43 | Contradicts "offline, no monthly fee" until a customer asks. |
+| Niche catalog features, partnerships | R-30, R-31, R-40, R-41 | No sign they block the first sale. |
+| Single-vertical focus | Pilot on one vertical (see launch roadmap), not three | Shops, distributors and bike workshops need different flows. |
+
+## Business and product launch roadmap
+
+Stages, not dates; each stage has an exit gate that Andrey signs. Work items are the existing R-IDs plus R-173..R-175.
+
+| Stage | Goal | Work | Exit gate |
+|---|---|---|---|
+| 0 — Ready | The build is safe to hand over | K1..K5; decide D2..D5 | All SPRINT-20 human checks done and removed from `gaps.md`; `go test ./...`, `pnpm build`, `pnpm test`, `pnpm lint` green on `dev`; `dev` merged to `master`. |
+| 1 — Client #1 live | One real shop closes the register in the system | G-3 go-live and 45-minute training; load catalog (US-094) and opening *fiado* balances (US-092); run the US-093 reset after the dry run | 7 consecutive days with the register closed in the system and its close matching the paper count; zero SQLite or "locked" errors reported. |
+| 2 — Pilot of 3 to 5 shops | The same product works in shops that are not the author's first friend | R-173 (seed catalog for the anchor vertical); R-175 (pilot measurements); fix whatever stage 1 shows, picked from the R-ids above by evidence, not by guess | Median install-to-first-ticket under 30 minutes; cash sale under 10 s and *fiado* sale under 15 s in the rush hour; at least 80% of active debtors loaded in week 1. |
+| 3 — Sellable | A price and a package exist | R-174 (commercial offer); R-76..R-78 (reprint, logo, cash drawer) only if the hardware package is sold; R-172 (off-machine backup) | A written offer, an installer checklist and a backup the customer can restore without the author. |
+| 4 — Optional add-ons | Revenue that does not break the offline promise | DIAN via R-127 and US-034 on demand; R-17 (internal *fiado* scoring, the strongest unbuilt differentiator); R-42 (WhatsApp or email summary, paid); R-18 (LAN multi-register) | Each add-on starts only when a paying customer asks and is sold separately. |
+
+Anchor vertical (proposal, Andrey decides): neighborhood shops and minimarkets, because *fiado* (credit extended to customers) is the differentiator and client #1 is a shop. Distributors and bike workshops stay for after stage 2.
+
 ## Next
 
 | ID | Item | Origin | Note |
@@ -36,6 +86,9 @@ Entries added before 2026-10-01 were translated from Spanish; quoted Spanish str
 
 | ID | Item | Origin | Note |
 |---|---|---|---|
+| R-173 | Seed catalog for the anchor vertical (neighborhood shop) | Launch roadmap, stage 2 | Verified: no seed or template catalog file exists in the repo (glob `**/*{seed,semilla,plantilla}*` finds only an experiment patch). Build one CSV of frequent products for the US-094 import (`spec/domain/catalogo.md`) so the POS is not delivered empty. Other verticals only after stage 2. |
+| R-174 | Commercial offer: price, package and support terms | Launch roadmap, stage 3 | Not decided in any document (grep for pricing and licence finds only SPRINT-20 and this file). PO decision: one-time local licence, installation and training, optional hardware combo (thermal printer, scanner, cash drawer). Licence text follows `All rights reserved` for products. |
+| R-175 | Pilot measurements: install time, sale time, debtors loaded, days closed | Launch roadmap, stage 2 | Exit-gate numbers of stage 2 are measured by hand (stopwatch and a notebook) with the first shops. Build tooling only if the manual count is not enough. |
 | R-10 | G8 — reports by peak hour and by seller | `research/2026-09-08-investigacion-mercado.md:167` | `report.go` does not group by hour or by `user_id`. ~0.5 day: two `GROUP BY` queries. Unblocks R-20 and is a basis for commissions. |
 | R-11 | F7 + I4 — quick PIN per cashier and granular permissions | `research/2026-09-08-investigacion-mercado.md` (block F) | Shift change without a full logout. Relevant when the business grows past 1 employee. |
 | R-12 | Tip, split bill, transfer items between tables | SPRINT-13 | They complicate checkout, which in SPRINT-13 is only just stabilizing. Only if the customer asks for them. |
@@ -230,6 +283,7 @@ Changes of direction that cannot be deduced from any other document.
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-11-11 | A go-live death list (kill, decide, freeze) and a staged launch roadmap are added to this file; R-173..R-175 are opened. A Spanish draft strategy document (`pos_vertical_business_product_roadmap.md`, untracked) is not adopted as written | PO asked for a death list and a business and product roadmap. The draft was checked against the code and several claims are stale: it says DIAN, the first-use wizard and the reports are missing, but DIAN is gated off (`internal/handler/handler.go:79`), `/onboarding` and the forced password change exist (`spec/domain/servidor.md:32`, `:43`), and US-089..US-095 delivered install, backup and catalog import. Its useful ideas (one anchor vertical, seed catalogs, pilot KPIs, optional add-ons) are kept here. Rule 3: one roadmap. |
 | 2026-11-11 | US-089 closed in code and tests (autostart at Windows logon, daily backups to a configurable folder, 30 copies); R-167 closed, R-168..R-172 are opened | GATE 1 (Q-1..Q-10 as recommended): 30 s counted from the user's logon, `pos.exe --install-autostart` / `--uninstall-autostart` over `schtasks.exe` with the working directory set to the exe folder, bad folder rejected at save and handled by fallback at backup time, dashboard banner, 30 newest files, `reset-data` backup not copied to the backup folder, console window kept (R-169), pre-migration name untouched (R-168), tmp-verify-rename write. Backup settings live in their own admin-only endpoints, not in `/setup`. QA round 1 OK (0 BLOCKER, 5 MINOR), Gemini diff clean. The real Task Scheduler install and reboot were never run: `gaps.md` US-089 M-1..M-3. New spec `spec/domain/backup.md`. |
 | 2026-11-10 | US-093 closed in code and tests (go-live reset tool `cmd/reset-data`); R-165..R-167 are opened | GATE 1 (Q-1..Q-12 as recommended, plus Q-13): stock rebuilt as `SUM(stock_entries)` with an untraced report, ids of cleared tables restart at 1, partial audit clear plus one `data_reset` row, dry-run by default and typed `BORRAR <N>`, fiscal guard on any `accepted`/`draft`/`pending` document (`--discard-fiscal-documents` is the only override), no UI button (CLI only, Q-8). QA round 1 OK (0 BLOCKER, 5 MINOR, 2 of them skipped: the orphan backup after a late refusal is the documented order, and the 1 s backup-name advance is in the spec). The destructive path has not been run on real data: `gaps.md` US-093 M-1. New spec `spec/domain/reset.md`. |
 | 2026-11-10 | US-098 closed in code and tests; R-158 and R-05 closed; R-159..R-164 are opened | GATE 1 (Q-1..Q-6 as recommended): range bounds bound as UTC text, no data migration, "today" in the server zone, `LowStock` fixed, injectable clocks, new `spec/domain/tiempo.md`. QA round 1 OK (3 MINOR, 1 NOTE), Gemini diff clean. R-05's aging note was never a live defect (US-098 contract D-1). Open: R-159 (T8 under `TZ=UTC`), R-160 (reports `endOfDay`), R-161 (frontend zone sources), R-162 (OS-zone startup warning), R-163 (grouping by OS zone), R-164 (inclusive `<=` filters). |
