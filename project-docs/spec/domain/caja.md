@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-10 (US-098: the "day" of the estimated cash is the server-local day, see `tiempo.md`) · 2026-11-09 (US-095: void dialog in the dashboard, closed-register warning) · 2026-11-09 (US-092: an opening *fiado* balance never reaches the register; I-3 reads opening + credit − *abonos*) · 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-10 (US-098: the "day" of the estimated cash is the server-local day, see `tiempo.md`) · 2026-11-09 (US-095: void dialog in the dashboard, closed-register warning) · 2026-11-09 (US-092: an opening *fiado* balance never reaches the register; I-3 reads opening + credit − *abonos*) · 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -118,6 +118,10 @@ net profit = gross profit − expenses of the same range
 - Changing `owner_email` without retyping the password keeps the old password; the email then fails at SMTP and the "Probar" button shows the error.
 
 ---
+
+## Reset at go-live (US-093)
+
+The go-live reset tool (`reset.md`) deletes every register, register movement, expense, sale and abono of the dry run. Afterwards no register is open, the next register opened is `#1`, and sale numbers restart at `Venta #1`.
 
 ## What does NOT exist yet
 

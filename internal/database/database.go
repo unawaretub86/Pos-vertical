@@ -43,6 +43,12 @@ func New(path string) (*DB, error) {
 	return d, nil
 }
 
+// SchemaVersion returns the version of the last migration this binary knows.
+// Tools that must not migrate (cmd/reset-data) compare it with schema_migrations.
+func SchemaVersion() int {
+	return dbMigrations[len(dbMigrations)-1].version
+}
+
 // foreignKeyViolations returns how many rows currently violate a foreign key.
 func (d *DB) foreignKeyViolations() (int, error) {
 	rows, err := d.Query("PRAGMA foreign_key_check")

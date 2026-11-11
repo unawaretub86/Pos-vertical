@@ -1,7 +1,7 @@
 # Domain — DIAN electronic invoicing
 
 > **Type:** spec · **Current:** yes · **Rules over:** how invoicing relates to the sale
-> **Updated:** 2026-11-09 (US-095: void dialog text for the 409) · 2026-11-07 (US-090: behavior with DIAN off) · Verified against `internal/factelect/` on 2026-09-21 and against `internal/handler/` on 2026-11-07.
+> **Updated:** 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-09 (US-095: void dialog text for the 409) · 2026-11-07 (US-090: behavior with DIAN off) · Verified against `internal/factelect/` on 2026-09-21 and against `internal/handler/` on 2026-11-07.
 
 This document covers **the product rule**. Implementation detail and provider research live in `project-docs/reference/facturacion-electronica.md` (formerly `fix-gaps.md`) and `project-docs/research/2026-05-dian-proveedores.md` (formerly `facElect-finds.md`), both from May 2026 and marked as implementation reference, not current state.
 
@@ -40,6 +40,10 @@ Issued electronic documents are stored in their own repository (`internal/reposi
 The **credit note** exists to cancel an already-invoiced sale (`POST /sales/{id}/void-with-credit-note`): an issued invoice is not deleted, it is offset.
 
 ---
+
+## Go-live reset (US-093)
+
+The go-live reset (`reset.md`) never touches `fiscal_config`, the DIAN resolution or the provider numbering. It refuses to run while any electronic document is `accepted`, `draft` or `pending`, whatever `fiscal_config.ambiente` says (`electronic_documents` has no `ambiente` column); the only override is `--discard-fiscal-documents`, and `--force` does not override it. `rejected` and `cancelled` documents are cleared with the dry-run sales.
 
 ## Status and debt
 

@@ -30,7 +30,7 @@
 | US-090 | Certify that every sale flow works with DIAN turned off | [x] | 2026-11-07 |
 | US-091 | End-to-end certification of register close and *fiado* math, and F5 on every route of the binary | [x] | 2026-11-08 |
 | US-092 | Opening *fiado* balance per customer (moving debts from the paper notebook) | [x] | 2026-11-09 |
-| US-093 | Reset tool: clear test transactions, keep master data | [ ] | |
+| US-093 | Reset tool: clear test transactions, keep master data | [x] | 2026-11-10 |
 | US-094 | Product catalog import from CSV | [x] | 2026-11-09 |
 | US-095 | Admin void button for a sale in the UI | [x] | 2026-11-09 |
 | US-096 | Money QA layer 1: property-based invariant tests over random sequences of money operations | [x] | 2026-11-08 |
@@ -66,6 +66,8 @@
 **Estimated effort:** 1 day. **Impact:** High.
 
 **Today:** backups run at startup and every 24 h, written as `<db>.backup-YYYYMMDD` next to the database, keeping 7 (`internal/database/backup.go:12`, `:16-48`, started at `cmd/pos/main.go:61`). Nothing registers the binary to start on boot.
+
+**Input from US-093 (2026-11-10):** the go-live reset tool writes `<db>.pre-reset-YYYYMMDD-HHMMSS` next to `data.db` and never prunes it. The US-089 retention must keep matching only `<db>.backup-*` so it never deletes a `.pre-reset-*` file (roadmap R-167).
 
 **Acceptance criteria (draft; the contract refines them):**
 - [ ] A one-time install step registers `pos.exe` to start at user logon with Windows Task Scheduler (no third-party service manager), and a matching uninstall step removes it.
@@ -210,12 +212,42 @@ Backend tests are in `internal/handler/customer_opening_test.go` (H), `internal/
 
 **Estimated effort:** 0.5 day. **Impact:** Medium (one-off, but done by hand it risks the catalog).
 
-**Acceptance criteria (draft):**
-- [ ] A CLI utility next to `cmd/reset-password` takes a backup first, then clears transaction tables and restores stock to a value the PO decides in the contract.
-- [ ] It refuses to run while the POS is running, and asks for confirmation.
-- [ ] Physical `DELETE` is allowed here only because the rows are test data; the contract states this exception to the logical-delete rule.
+**Status:** closed 2026-11-10 in code and tests. The tool has **never been run against real data**; it was smoked only on a throwaway database. The PO manual check is `gaps.md` US-093 M-1.
 
-**Input from US-094 (PO Q-5, 2026-11-09):** the stock loaded by the catalog import must survive the reset. The import writes one `stock_entries` row with note `Importación de catálogo` per product with stock > 0, plus one `product_import` audit row (`spec/domain/catalogo.md` § Catalog import). Products, categories and those stock entries are master data: the US-093 contract must restore stock without erasing them, for example by rebuilding stock from the `Importación de catálogo` and `Compra #N` entries.
+**Acceptance criteria:**
+- [x] A CLI utility next to `cmd/reset-password` takes a backup first, then clears transaction tables and restores stock by rule B (`stock = SUM(stock_entries)`), decided at GATE 1.
+- [x] It refuses to run while the POS is running, and asks for a typed confirmation.
+- [x] Physical `DELETE` is allowed here only because the rows are test data; this is the stated exception to the logical-delete rule (`spec/domain/reset.md`).
+
+**Input from US-094 (PO Q-5, 2026-11-09):** the stock loaded by the catalog import must survive the reset. The import writes one `stock_entries` row with note `Importación de catálogo` per product with stock > 0, plus one `product_import` audit row (`spec/domain/catalogo.md` § Catalog import). Products, categories and those stock entries are master data: the reset keeps them and rebuilds stock from the entries.
+
+**Verified criteria (closed 2026-11-10):**
+
+GATE 1 (PO, 2026-11-10): Q-1..Q-12 accepted as recommended: stock rule B with an untraced-stock report; keep purchases and every `stock_entries` row; keep all users and settings; restart ids at 1 for the cleared tables; partial audit clear plus one `data_reset` row; dry-run by default and typed `BORRAR <N>`; second-run guard with `--force`; no UI button; Spanish tool output; `cmd/reset-data` + `internal/resetdata`; backup next to `data.db`, never pruned; test products, customers and users survive. Q-13 (three verified gaps found in review): the fiscal guard refuses on any `accepted`, `draft` or `pending` electronic document whatever `fiscal_config.ambiente` says (the table has no `ambiente` column), with `--discard-fiscal-documents` as the only override; refuse before the backup when no active admin exists; rule B covers inactive products. Contract discrepancies D-1..D-6: stock cannot be rebuilt purely from entries (manual form, R-153); the ticket number is the sale id, so the `sqlite_sequence` counters restart; the SQLite exclusive lock is not kept after COMMIT; the daily backup prunes `<db>.backup-*`; `electronic_documents` statuses; an active admin is needed for the audit row. A contract miscount (24 instead of 25 user tables) was fixed after the implementer's first run.
+
+Results: QA round 1 OK (0 BLOCKER, 5 MINOR); Gemini diff round 1 CLEAN (input about 90 KB, possibly truncated); `go build`, `go test ./...`, `pnpm build`, `pnpm test` (240) and `pnpm lint` green. Smoke on a throwaway database with the real binaries (port 18099): dry-run, refusal with the POS up, wrong and empty confirmation, apply, second run with and without `--force`, missing file. The destructive path was never run against real data.
+
+Backend tests are in `internal/resetdata/reset_test.go` (R), `guard_test.go` (G), `backup_test.go` (B), `confirm_test.go` (C), `exitcode_test.go` (E), `cmd/reset-data/main_test.go` (CLI) and `internal/database/schemaversion_test.go` (D). Fixture F: 4 sales, 2 registers, 1 abono, opening balance $150.000, 4 products, 4 stock entries.
+
+- AC-1: WHEN the tool runs without `--apply`, the system SHALL print the per-table counts and stock changes, change nothing and create no backup, exit 0. On F: sales 4, `customer_payments` 1, registers 2, `audit_log` 3 of 6, stock P1 106→110, P2 90→100, P4 20→0 (3 change, 1 untraced: 20 + 5 − 0 = 25). Tests: R `TestPlan_T1_CountsAndNoWrites`; CLI `TestRun_T1_DryRunDefault`.
+- AC-2, AC-15: WHEN `--apply` completes, the 11 transaction tables SHALL be empty and `audit_log` SHALL hold 3 kept rows plus one `data_reset` (4); users 2, products 4, customers 2, `stock_entries` 4, purchases 1, opening balances 1 and `business_config` (with `jwt_secret`), `fiscal_config` and password hashes SHALL be unchanged. Tests: R `TestApply_T2_AfterCountsAndKeptData`; CLI `TestRun_T2_ApplyWithConfirmFlag`.
+- AC-3: WHEN `--apply` completes, `products.stock` of every `product`-type product (inactive included) SHALL equal the sum of its entries: P1 110, P2 100, P4 0, service P3 stays 0; a product with `active = 0`, stock 12 and one entry of 8 → 8. Tests: R `TestApply_T3_StockRuleB`, `TestApply_T4_StockRuleVariants`.
+- AC-4: WHEN `--apply` completes, the `sqlite_sequence` rows of the cleared tables SHALL be deleted and no others: the next sale, register and order get id 1, the next `stock_entries` and `products` id is 5. Test: R `TestApply_T5_SequencesRestart`.
+- AC-5: WHEN `--apply` completes, every customer balance SHALL equal its opening balance: Dora $170.000 → $150.000, Beto $0. Test: R `TestApply_T6_BalancesEqualOpening`.
+- AC-6: WHEN `--apply` runs, the system SHALL write and verify `<db>.pre-reset-YYYYMMDD-HHMMSS` (integrity check ok, same counts, name not matching `*.backup-*`) before any delete; IF the copy fails, THEN delete nothing, exit 3. Tests: B `TestBackup_T7_CopyIsVerifiedAndNamedAside`, `TestBackup_T7_FailureMapsToExit3AndDeletesNothing`.
+- AC-7: IF a TCP connection to `127.0.0.1:<port>` succeeds, THEN refuse with exit 1 before the backup; IF `BEGIN EXCLUSIVE` is busy, THEN refuse and roll back. Tests: G `TestGuard_T8_PortProbe`, `TestGuard_T8_LockBusyRefuses`; CLI `TestRun_T8_PortInUseRefusedNoBackup`. The busy lock is tested in-process with a writer holder; the idle-connection case across processes was checked by hand on Windows during the contract, and a live `pos.exe` on port 18099 was refused in the QA smoke (smoke only).
+- AC-8: IF an electronic document is `accepted`, `draft` or `pending`, regardless of `ambiente`, THEN refuse with exit 1 before the backup; `--force` does not override it, `--discard-fiscal-documents` does and records the discarded counts; `rejected` and `cancelled` never block; dry-run prints the reason and exits 0. Tests: G `TestGuard_T9_AcceptedDocumentRefuses`, `TestGuard_T9_DiscardFlagClearsAndRecords`, `TestGuard_T9_RejectedAndCancelledClearWithoutFlag`, `TestGuard_T9b_InFlightDocumentsRefuse`; CLI `TestRun_T9_ApplyWithAcceptedDocRefusedNoBackup`, `TestRun_T9b_DryRunWithAcceptedDocExit0`.
+- AC-9: IF `audit_log` already has a `data_reset` row, THEN refuse with exit 1 unless `--force`. Tests: R `TestApply_T10_AuditRowAndSecondRun`; CLI `TestRun_T10_SecondRunNeedsForce`.
+- AC-10: WHEN `--apply` passes the guards, the system SHALL ask for exactly `BORRAR <N>` (F: `BORRAR 4`), before the backup; `borrar 4`, `BORRAR 5`, empty input → cancelled, nothing deleted; `--confirm` supplies it. Tests: C `TestConfirm_T11_TypedConfirmation`; CLI `TestRun_T11_WrongConfirmationExit1`, `TestRun_T11_ApplyWithTypedStdin`.
+- AC-11: WHILE applying, every delete, the stock rebuild, the sequence deletes and the `data_reset` insert SHALL run in one `BEGIN EXCLUSIVE` transaction with `foreign_key_check` before commit; IF a statement fails, a foreign key is violated or the counts differ from the backup's, THEN roll back, exit 4. Tests: R `TestApply_T12_FailingStepRollsBack`, `TestApply_T12_ForeignKeyViolationRollsBack` (a kept product with `category_id = 99`), `TestApply_T13_FingerprintMismatchAborts` (`Options.BeforeLock` + `Options.Fingerprint`).
+- AC-12: WHEN `--apply` completes, exactly one `data_reset` row (user = lowest-id active admin, entity `system`, entity_id 0, compact JSON with `"sales":4` and the backup name) SHALL be written in that transaction. Test: R `TestApply_T10_AuditRowAndSecondRun`.
+- AC-13: The tool SHALL exit 0 on success or dry-run, 1 on a refusal, 2 on a usage error (a missing `data.db` creates no file), 3 on a backup failure, 4 on a database error. Tests: E `TestExitCode_T14_Table`, `TestOpen_T14_MissingFileIsUsageErrorAndCreatesNothing`; CLI `TestRun_T14_MissingFileExit2`, `TestRun_T14_BadFlagExit2`.
+- AC-14: IF `schema_migrations` differs from `database.SchemaVersion()` (22 today), THEN refuse with exit 1; the tool never migrates. Tests: E `TestCheckSchemaVersion_T14`; CLI `TestRun_T14_SchemaVersionMismatchExit1`; D `TestSchemaVersion_T15_MatchesLastMigrationAndFreshDB`.
+- AC-16: IF no user is an active admin, THEN refuse with exit 1 before the backup; the `data_reset` user is the lowest-id **active** admin. Tests: G `TestGuard_T16_NoActiveAdminRefuses`, `TestGuard_T16_LowestActiveAdminIsUsed`; CLI `TestRun_T16_NoActiveAdminRefusedNoBackup`.
+
+Covered by smoke only (no automated test): a live `pos.exe` refused through the port probe (AC-7); the 1-second advance of the backup name on a quick `--force` re-run (the name can run seconds ahead of the clock, `reset.md`); the orphan `*.pre-reset-*` file left by the three refusals that need the backup first (lock busy, in-transaction guard recheck, fingerprint mismatch).
+
+Spec: `spec/domain/reset.md` (new), `catalogo.md`, `fiado.md`, `caja.md`, `facturacion-dian.md`, `project-docs/README.md`.
 
 ## US-094 — Product catalog import from CSV
 

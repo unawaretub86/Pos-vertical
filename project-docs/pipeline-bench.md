@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-10
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-10 (run 30)
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -10,7 +10,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 > Updated at the end of each work session with the pipeline.
 
-**Last run:** 26 (US-095, admin void button in the UI, level L). Before: 25 (US-092), 24 (US-096), 23 (US-091). No `us/*` worktree is open. `dev` is at the US-095 merge (verify with `git log`).
+**Last run:** 30 (US-093, reset-data tool, level L). Before: 29 (US-098), 28 (US-097), 27 (US-094), 26 (US-095). No `us/*` worktree is open. `dev` is at the US-095 merge (verify with `git log`).
 
 **SPRINT-18 (Production Stabilization):** US-075..US-080 are done in code and tests and merged to `dev` (US-080 still needs real-printer checks P-1..P-4 in `gaps.md`); US-081 (LAN concurrency) is done in code and tests (real-device checks M-1..M-3 in `gaps.md`). SPRINT-18 is complete in code. US-078 was merged outside `/us` (experiment follow-up, `bde4d9f`).
 
@@ -18,7 +18,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 
 **SPRINT-20 (Go-live for client #1):** US-090, US-091, US-096, US-092 and US-095 merged to `dev` (manual checks US-090 M-1, US-091 M-1, US-092 M-1 and US-095 M-1 in `gaps.md`). US-094 approved by the PO on 2026-11-08.
 
-**Next US:** US-094 (sprint order: US-094, US-093, US-089). Roadmap items R-102..R-109, R-112..R-129, R-131..R-149 await PO prioritization. Run `/us <ID> [M|L]`. Step 0 now writes `changes/<ID>/owner` (one orchestrator per US, run 26); at GATE 2 grep `dev` for new R-numbers before merging (run 23).
+**Next US:** US-089 (the last open one in SPRINT-20; US-094 and US-093 are done). Roadmap items R-102..R-109, R-112..R-129, R-131..R-149 await PO prioritization. Run `/us <ID> [M|L]`. Step 0 now writes `changes/<ID>/owner` (one orchestrator per US, run 26); at GATE 2 grep `dev` for new R-numbers before merging (run 23).
 
 **Pending from the PO (manual, parked 2026-10-20):** the list is in [gaps.md](gaps.md) → "Pending PO validations" (US-077, US-076, US-078, US-062, US-054, US-074, US-034).
 
@@ -78,6 +78,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 27 | 2026-11-09 | US-094 | L | ~669k (A 170k, last of 140k→170k · T 97k · I 159k · Q 102k) | 162 | ~38.3 | 1 (API rate limit 429 interrupted close analyst; completed in Antigravity) | 1 | 5 contract discrepancies (D-1..D-5) + 3 Gemini-verified contract fixes (AC-10, AC-24, AC-22) + 5 QA MINOR | 8 new (R-150..R-157) | 0 | +3,225 / −13, 18 files (excluding this benchmark entry) |
 | 28 | 2026-11-09 | US-097 (R-157) | L (M requested; analyst recommended L at GATE 1) | ~175k (A 74.6k, last of 47.9k→49.7k→74.6k · T 34.7k · I 26.6k · Q 39.2k) | 71 | ~14.3 | 0 | 1 | 1 contract discrepancy (D-1: 6 frontend strings + 1 backend message, not the 4 in the roadmap) + 2 QA MINOR + 1 pre-existing real bug | 1 new (R-158); R-157 closed | 0 | +134 / −13, 9 files (excluding this benchmark entry) |
 | 29 | 2026-11-10 | US-098 (R-158, closes R-05) | L | ~448k (A 171.7k · T 167.0k · I 43.2k · Q 66.5k) | 135 | ~24.5 | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 1 contract error caught by the test-author + 3 QA MINOR | 6 new (R-159..R-164); R-158 and R-05 closed | 0 | +929 / −55, 27 files (excluding this benchmark entry) |
+| 30 | 2026-11-10 | US-093 (reset-data tool) | L | ~490k (A 219.9k · T 97.2k · I 98.1k · Q 75.2k) | 186 (A 110 · T 21 · I 30 · Q 25) | ~39 excluding the analyst (T ~5.1 · I ~27 · Q ~7); analyst n/a (cumulative agent wall time 3.2 h includes waiting) | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 3 Gemini-verified gaps (Q-13) + 3 test-side errors found by the implementer + 5 QA MINOR | 3 new (R-165..R-167); R-153 cross-referenced | 0 | +2,149 / −0, 14 files, 0 docs (excluding the docs and this benchmark entry) |
 
 ### Trend
 
@@ -904,6 +905,41 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 30 — US-093 (reset-data tool, level L)
+
+Created from dev `8e133b5`. One orchestrator session (`pos-vertical-83`); no other session touched the worktree. Commits: first RED `ac1cbc5`, RED update `8875006`, implementation `171f836`. Registered in SPRINT-20 before the run; no roadmap item.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 5 (contract 124.4k/48 tools/528 s; GATE 1 adjust for Q-13 151.1k/25/97 s; sync with the test-author 156.9k/3/20 s; table-count fix 158.2k/3/12 s; close 219.9k/31 tools) | 219.9k | 110 | n/a (cumulative agent wall time 3.2 h includes waiting for the PO and other agents) |
+| test-author | 2 (RED 92.96k/16/267 s; fixes after the implementer's report 97.2k/5/36 s) | 97.2k | 21 | ~5.1 min |
+| implementer | 1 round (including a 3-test failure report) | 98.1k | 30 | ~27 min (1,640 s) |
+| qa | 1 round | 75.2k | 25 | ~7 min (418 s) |
+
+**What it found.**
+- Contract D-1..D-6: stock cannot be rebuilt purely from `stock_entries` (the manual product form writes stock with no entry, R-153); the ticket number is the sale id, so the `sqlite_sequence` counters must restart; the SQLite exclusive lock is not kept after COMMIT (verified by running two processes); the daily backup prunes `<db>.backup-*` so the reset backup needs another name; the `electronic_documents` statuses (`draft`, `pending`, `accepted`, `rejected`, `cancelled`); an active admin is needed for the audit row.
+- Gemini contract review raised 14: 3 verified (no active admin; fiscal guard keyed on the current `ambiente` while `electronic_documents` has no such column; inactive products) and became Q-13; 11 false positives, 6 of them caused by input truncation.
+- Implementer's first run reported 3 test-side errors: the contract said 24 user tables (it is 25), a `dump` helper with a spacing mistake, and the daily-backup glob. The tests had been written without any production code to compile against. The test-author fixed them as a second RED (`8875006`) and contract V-4 was corrected.
+- QA round 1: OK, 0 BLOCKER, 5 MINOR (an orphan backup after the three late refusals; a pointless `//nolint:errcheck`; a swallowed shop-name scan error; the undocumented 1 s advance of the backup name, now in `reset.md`; `TableCounts` concatenates names from `sqlite_master`). Three became roadmap rows (R-165 audit label, R-166 hygiene, R-167 backup and US-089).
+
+**Unplanned stops:** 1. The implementer reported 3 test-side errors (above) and the pipeline paused for a second RED. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract (two concurrent runs) | OK twice | 14 | 3 | 11 (6 caused by input truncation) | n/a |
+| diff, round 1 | OK, `CLEAN` | 0 on a ~90 KB diff (input may be truncated) | 0 | 0 | no |
+
+**Operational friction.**
+- Gemini was started twice by accident (a nested background `&`); the second run overwrote the first one's output file.
+- Writing tests first for a tool whose package does not exist at all means the tests do not compile; the exported names had to be fixed in the contract before the test-author could work (§5 "Exported API" was added during the run).
+
+**Diff.** `git diff dev...HEAD --stat` excluding docs: 14 files, +2,149 / −0 (production code in `internal/resetdata` 582 lines, `cmd/reset-data` 186, `internal/database/database.go` 6; the rest are tests).
+
+### What to measure in run 31
+- Whether fixing the exported API names in the contract up front removes the "tests do not compile" first-run failure for a new package.
+- The PO manual check US-093 M-1 in `gaps.md`: the destructive path has not been run on a real database.
 
 ## Run 29 — US-098 (R-158, UTC-text date bounds so evening sales count in "today", level L)
 

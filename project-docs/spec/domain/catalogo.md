@@ -1,9 +1,9 @@
 # Domain — Product catalog (products, categories, catalog import)
 
 > **Type:** spec · **Current:** yes · **Rules over:** what a product is, barcode and category uniqueness, how stock is traced, how a catalog is imported from CSV
-> **Updated:** 2026-11-09 (US-097: singular wording for count 1 in the catalog import UI; US-094: catalog import from CSV) · Verified against the code on that date (`internal/model/model.go:71-87`, `internal/database/migrate.go:170-192`, `:302-303`, `internal/service/product.go`, `internal/service/product_import.go`, `internal/repository/product_import.go`, `internal/handler/product_import.go`, `frontend/lib/productImport.ts`, `frontend/components/ProductImportModal.tsx`).
+> **Updated:** 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-09 (US-097: singular wording for count 1 in the catalog import UI; US-094: catalog import from CSV) · Verified against the code on that date (`internal/model/model.go:71-87`, `internal/database/migrate.go:170-192`, `:302-303`, `internal/service/product.go`, `internal/service/product_import.go`, `internal/repository/product_import.go`, `internal/handler/product_import.go`, `frontend/lib/productImport.ts`, `frontend/components/ProductImportModal.tsx`).
 
-The catalog is master data: the US-093 reset keeps products, categories and the stock loaded by an import.
+The catalog is master data: the US-093 reset keeps products, categories and the stock loaded by an import, and rebuilds `products.stock` from `stock_entries` (rule B, [reset.md](reset.md)). Stock that no entry explains (manual product form, R-153) is lost unless re-entered; the reset dry-run lists it.
 
 ---
 
@@ -37,6 +37,8 @@ Names are `UNIQUE` with binary collation: `Bebidas` and `bebidas`, or `Lácteos`
 | Catalog import | yes, `Importación de catálogo`, one per product with stock > 0 | one `product_import` per import |
 | Sale / void | no (stock guarded in the sale, restored on void, `caja.md`) | `void` on void |
 | Manual product create or edit | **no** (roadmap R-153) | no |
+
+The go-live reset (`reset.md`) sets every `product`-type product (inactive included) to `SUM(stock_entries)`, which is why untraced stock is reported before it is lost.
 
 ---
 
