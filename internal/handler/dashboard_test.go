@@ -281,7 +281,7 @@ func TestPostSales_T9_StoredTimestampFormatAndMigrationCount(t *testing.T) {
 	if err := e.db.DB.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM schema_migrations`).Scan(&migrations); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrations != 22 {
-		t.Errorf("schema_migrations rows = %d, want 22 (this US adds no migration)", migrations)
+	if migrations != 23 {
+		t.Errorf("schema_migrations rows = %d, want 23 (US-089 adds migration 23)", migrations)
 	}
 }

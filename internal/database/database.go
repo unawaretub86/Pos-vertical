@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -11,6 +12,9 @@ import (
 type DB struct {
 	*sql.DB
 	path string
+
+	now      func() time.Time       // injectable clock for backups; time.Now in production
+	canWrite func(dir string) error // injectable folder probe; CanWriteDir in production
 }
 
 func New(path string) (*DB, error) {
@@ -28,7 +32,7 @@ func New(path string) (*DB, error) {
 		db.Close()
 		return nil, err
 	}
-	d := &DB{DB: db, path: path}
+	d := &DB{DB: db, path: path, now: time.Now, canWrite: CanWriteDir}
 	if err := d.migrate(); err != nil {
 		db.Close()
 		return nil, err

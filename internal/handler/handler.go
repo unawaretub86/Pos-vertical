@@ -44,6 +44,7 @@ type Handler struct {
 	printer      *service.PrinterService
 	localIP      func() string // injectable for tests; netutil.LocalIPv4 in production
 	now          func() time.Time // injectable clock; time.Now in production
+	canWrite     func(dir string) error // injectable folder probe; database.CanWriteDir in production
 }
 
 // New constructs a Handler wiring up all repositories and services.
@@ -108,6 +109,7 @@ func New(db *database.DB) *Handler {
 		printer:      service.NewPrinterService(),
 		localIP:      netutil.LocalIPv4,
 		now:          time.Now,
+		canWrite:     database.CanWriteDir,
 		loginLimiter: appmw.NewLoginLimiter(),
 	}
 }
@@ -138,6 +140,8 @@ func (h *Handler) Routes() http.Handler {
 			r.Use(appmw.RequireAdmin)
 			r.Put("/setup", h.updateSetup)
 			r.Get("/setup/lan-info", h.getLanInfo)
+			r.Get("/backup/status", h.getBackupStatus)
+			r.Put("/backup/config", h.updateBackupConfig)
 			r.Post("/settings/email/test", h.testEmailConfig)
 		})
 

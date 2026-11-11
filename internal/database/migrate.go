@@ -44,6 +44,7 @@ var dbMigrations = []migration{
 	{version: 20, up: migration20},
 	{version: 21, up: migration21},
 	{version: 22, up: migration22},
+	{version: 23, up: migration23},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -74,8 +75,9 @@ func (db *DB) migrate() error {
 	}
 
 	// Checkpoint the WAL before backup so the copy includes all committed data.
-	// Skip backup for in-memory databases (used in tests).
-	if db.path != ":memory:" {
+	// Skip backup for in-memory databases (used in tests) and for a brand-new
+	// database (current == 0), which has nothing worth copying.
+	if db.path != ":memory:" && current > 0 {
 		_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
 		if err := db.backupBeforeMigration(); err != nil {
 			return fmt.Errorf("backup before migration: %w", err)
@@ -610,4 +612,17 @@ CREATE TABLE IF NOT EXISTS customer_opening_balances (
 	created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 	updated_at  DATETIME
 );
+`
+
+// migration23 adds the daily-backup settings and last-run report (US-089) to
+// business_config. Timestamps are UTC text "YYYY-MM-DD HH:MM:SS".
+const migration23 = `
+ALTER TABLE business_config ADD COLUMN backup_dir TEXT NOT NULL DEFAULT '';
+ALTER TABLE business_config ADD COLUMN backup_last_attempt_at TEXT;
+ALTER TABLE business_config ADD COLUMN backup_last_success_at TEXT;
+ALTER TABLE business_config ADD COLUMN backup_last_ok INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE business_config ADD COLUMN backup_fell_back INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE business_config ADD COLUMN backup_last_error TEXT NOT NULL DEFAULT '';
+ALTER TABLE business_config ADD COLUMN backup_last_file TEXT NOT NULL DEFAULT '';
+ALTER TABLE business_config ADD COLUMN backup_effective_dir TEXT NOT NULL DEFAULT '';
 `

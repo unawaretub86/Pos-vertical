@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-10 (run 30)
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-11 (run 31) · 2026-11-10 (run 30)
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -79,6 +79,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 28 | 2026-11-09 | US-097 (R-157) | L (M requested; analyst recommended L at GATE 1) | ~175k (A 74.6k, last of 47.9k→49.7k→74.6k · T 34.7k · I 26.6k · Q 39.2k) | 71 | ~14.3 | 0 | 1 | 1 contract discrepancy (D-1: 6 frontend strings + 1 backend message, not the 4 in the roadmap) + 2 QA MINOR + 1 pre-existing real bug | 1 new (R-158); R-157 closed | 0 | +134 / −13, 9 files (excluding this benchmark entry) |
 | 29 | 2026-11-10 | US-098 (R-158, closes R-05) | L | ~448k (A 171.7k · T 167.0k · I 43.2k · Q 66.5k) | 135 | ~24.5 | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 1 contract error caught by the test-author + 3 QA MINOR | 6 new (R-159..R-164); R-158 and R-05 closed | 0 | +929 / −55, 27 files (excluding this benchmark entry) |
 | 30 | 2026-11-10 | US-093 (reset-data tool) | L | ~490k (A 219.9k · T 97.2k · I 98.1k · Q 75.2k) | 186 (A 110 · T 21 · I 30 · Q 25) | ~39 excluding the analyst (T ~5.1 · I ~27 · Q ~7); analyst n/a (cumulative agent wall time 3.2 h includes waiting) | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 3 Gemini-verified gaps (Q-13) + 3 test-side errors found by the implementer + 5 QA MINOR | 3 new (R-165..R-167); R-153 cross-referenced | 0 | +2,149 / −0, 14 files, 0 docs (excluding the docs and this benchmark entry) |
+| 31 | 2026-11-11 | US-089 (autostart at Windows logon, daily backups to a configurable folder, 30 copies) | L | ~495k (A 146.0k · T 136.9k · I 139.4k · Q 73.0k) | 283 (A 147 · T 49 · I 63 · Q 24) | ~29 excluding the analyst (T ~13.5 · I ~10 · Q ~5.5); analyst n/a (contract 408 s, sync 2,185 s wall, mostly waiting) | 0 | 1 | 8 contract discrepancies (D-1..D-8) + 5 Gemini-verified contract gaps + 6 test-side errors (invented API names, double-appended tests, 3 fixture collisions, 3 pinned schema versions) + 5 QA MINOR | 5 new (R-168..R-172); R-167 closed | 0 | +2,359 / −53, 22 files (excluding docs, `changes/` and `INSTALL.md`) |
 
 ### Trend
 
@@ -905,6 +906,45 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 31 — US-089 (autostart at Windows logon, daily backups to a configurable folder with 30 copies, level L)
+
+Created from dev `076607e`. Registered in SPRINT-20 before the run; no roadmap item opened it, and it closed R-167. Commits: RED `8da705f`, contract update `e04c610`, dedup `d811cb9`, fixtures `c6a109f`, implementation `50b9f47`, then the docs close.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract 132.9k/52 tools/408 s; GATE 1 decisions 19.2k/3/9 s; contract sync after RED 59.5k/23/2,185 s; close 146.0k/69/205 s) | 146.0k | 147 | n/a (the 2,185 s sync is mostly waiting) |
+| test-author | 3 (RED 108.4k/25/342 s; round 2, resumed for the contract sync 128.3k/18/313 s; round 3, resumed for the fixtures 136.9k/6/157 s; tokens are the last value, tools and seconds per invocation) | 136.9k | 49 | ~13.5 min (812 s, summed) |
+| implementer | 1 round | 139.4k | 63 | ~10 min (602 s) |
+| qa | 1 round | 73.0k | 24 | ~5.5 min (332 s) |
+
+**What it found.**
+- Contract D-1..D-8: `data.db` is a relative path, so a scheduled task without a "Start in" folder would create an empty database in `C:\Windows\System32` (D-1, the blocker for the install step); `INSTALL.md` said no window opens but the exe is a console app (D-2); the glob prune breaks on `[` in the path and could delete manual `data.db.backup-*` copies (D-3); a failed same-day re-run destroyed the good copy and the pre-migration copy shares the daily name (D-4); `PUT /setup` zeroes omitted fields and `GET /setup` is cashier-readable, so the backup settings needed their own endpoints (D-5); `gaps.md` said `pos.db` (D-6); two version pins (D-7); a stale `setupTestDB` line reference (D-8). Backup under concurrent writes was verified by running before the contract was written.
+- Gemini contract review raised 11: 5 verified minor gaps (the AC-10 row-count rule against AC-17 under concurrent writes; AC-14 initial values; AC-14 `last_success_at` and `last_file` preserved after a failed attempt; AC-13 `dir` omitted or `null`; AC-6 file-name time zone) and 6 false positives. It finished after GATE 1, so the gaps were closed in a contract sync round (step 2b) instead of before the PO decided.
+- Test-side errors: the test-author invented API names that the contract did not fix (recorded in contract §5 at the sync); it appended T-6b and T-9b twice (compile error), fixed after the checkpoint with a dedup commit; the implementer then found three fixtures colliding with the seeded admin user (`internal/database/migrate.go:273-275`) and three tests pinning schema 22 where contract D-7 listed two; a resumed test-author fixed them.
+- QA round 1: OK, 0 BLOCKER, 5 MINOR (spec delta pending at QA time, `INSTALL.md` "Ajustes" against the sidebar's "Configuración", both autostart flags together, the pre-migration copy skipped on a brand-new database, the ninth column and two new components). Three became roadmap rows (R-170, R-171, plus R-168 from the contract); the deviations are in the sprint notes.
+
+**Unplanned stops:** 0 outside GATE 1 and GATE 2 (one ownership and US-ID question at the start). QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, ~14 min | 11 | 5 (minor) | 6 | n/a |
+| diff, round 1 | OK, `CLEAN`, ~12 min | 0 | 0 | 0 | no |
+
+QA found nothing Gemini caught that QA missed; Gemini's diff review found nothing.
+
+**Operational friction.**
+- The test-author ran `python -` without a heredoc and left a stray `python.exe` that the orchestrator killed.
+- The first analyst contract took 408 s but the sync took 2,185 s of wall time, mostly waiting.
+- Writing tests first meant the API names (`BackupSource`, `RunBackup`, `canWrite`, `buildTaskXML`, `installAutostart`) had to be read out of the RED commit into contract §5 after the fact.
+
+**Diff.** `git diff dev...HEAD --shortstat` excluding `project-docs/`, `changes/` and `INSTALL.md`: 22 files, +2,359 / −53 (production code: `cmd/pos/autostart.go` 206, `internal/database/backup.go` 286 / −25, `internal/handler/backup.go` 89, `internal/repository/setup.go` 103, migration 23 and `main.go` wiring; frontend `BackupSection` 115, `BackupBanner` 45, `backupSettings.ts` 69; the rest are tests).
+
+### What to measure in run 32
+- Whether the contract should require a full grep for schema-version pins and seeded rows (the admin user) before RED, so fixtures and pins are right in the first test-author round.
+- Whether the Gemini contract review should start before GATE 1 is presented, to avoid a post-gate sync round.
+- The PO manual checks US-089 M-1..M-3 in `gaps.md`: the real Task Scheduler install and reboot have not been run.
 
 ## Run 30 — US-093 (reset-data tool, level L)
 

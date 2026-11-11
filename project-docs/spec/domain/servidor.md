@@ -1,15 +1,29 @@
 # Domain — Server and LAN access
 
 > **Type:** spec · **Current:** yes · **Rules over:** server bind, access from other devices, serving the embedded frontend
-> **Updated:** 2026-11-08 (US-091: route certification, F5 tests, `copy-frontend.go` keeps `.gitkeep`, CI export step) · 2026-11-07 (US-081: concurrent devices, `_txlock=immediate`, busy writes → 503, client retry) · 2026-11-06 (US-086: dynamic pages read their segment from the browser path) · 2026-10-01 (US-056: `/mesas/*` route, CORS `PATCH`) · Verified against the code (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
+> **Updated:** 2026-11-11 (US-089: "Start with Windows", LAN restart wording) · 2026-11-08 (US-091: route certification, F5 tests, `copy-frontend.go` keeps `.gitkeep`, CI export step) · 2026-11-07 (US-081: concurrent devices, `_txlock=immediate`, busy writes → 503, client retry) · 2026-11-06 (US-086: dynamic pages read their segment from the browser path) · 2026-10-01 (US-056: `/mesas/*` route, CORS `PATCH`) · Verified against the code (US-054: `cmd/pos/main.go`, `web/static.go`, `internal/netutil/lan.go`, `internal/handler/setup.go`).
 
 ## LAN access
 
 - The port is `8080` unless `--port N` or the environment variable `POS_PORT` says otherwise (flag first; anything outside 1-65535 is ignored). The bind address, the URL opened in the browser and the `url` of `GET /api/setup/lan-info` (taken from the request `Host`) all follow it (`cmd/pos/main.go`, `resolvePort`; `internal/handler/setup.go`).
-- `business_config.lan_access_enabled = 0` (or unreadable config): listens on `127.0.0.1:8080`. `= 1`: `0.0.0.0:8080`. It is read at startup; changing it takes effect when `pos.exe` is restarted.
+- `business_config.lan_access_enabled = 0` (or unreadable config): listens on `127.0.0.1:8080`. `= 1`: `0.0.0.0:8080`. It is read at startup; changing it takes effect when `pos.exe` is restarted (or after the next Windows logon when it starts by itself, § Start with Windows).
 - The browser always opens at `http://localhost:8080`.
 - `GET /api/setup/lan-info` (admin only) returns `{ip, url}`; `ip` is the first private IPv4 (10/8, 172.16/12, 192.168/16); never loopback nor 169.254.x. With no IP: both empty and Settings shows help.
 - With the toggle on, Settings warns about changing the initial `admin/admin` password.
+
+## Start with Windows (US-089)
+
+After a power cut the POS comes back by itself when the shop's Windows user logs in.
+
+- **Install / uninstall** are flags of `pos.exe`, handled before the database is opened, the server started or the browser opened (`cmd/pos/main.go:42-48`, `cmd/pos/autostart.go`). `pos.exe --install-autostart` registers the per-user scheduled task `POS-Vertical` (replacing one of that name, so running it twice leaves one) and prints `Inicio automático instalado`; `--uninstall-autostart` deletes it and prints `Inicio automático quitado`, or `El inicio automático no estaba instalado` (still exit 0) when there was none. A `schtasks.exe` failure or a non-Windows OS exits 1 with a Spanish message that includes the `schtasks` text; the temporary XML file is always removed. If both flags are given, install wins (QA MINOR, roadmap R-171).
+- **Mechanism:** Go writes the task XML (UTF-16 LE with BOM, as `schtasks /XML` expects) and calls the built-in `schtasks.exe /Create /TN POS-Vertical /XML <file> /F` (`autostart.go:154-184`); no third-party service manager, no PowerShell. The real Task Scheduler behavior was not run by QA: PO manual check `gaps.md` US-089 M-1.
+- **Task definition** (`buildTaskXMLFor`, `autostart.go:87-128`): `LogonTrigger` of the installing user with no delay; runs the absolute path of the running `pos.exe`; **`WorkingDirectory` = the folder of `pos.exe`**; `ExecutionTimeLimit` `PT0S` (the Task Scheduler default of 72 h would kill the POS); `MultipleInstancesPolicy` `IgnoreNew`; starts and keeps running on battery; restarts on failure 3 times, 1 minute apart; `LeastPrivilege` (the POS itself is not elevated). Paths with spaces or `&` are XML-escaped.
+- **Why the working directory matters:** the database path is the relative string `data.db` (`cmd/pos/main.go:56` resolves it against the process working directory). A task with no "Start in" would run from `C:\Windows\System32` and create an empty `data.db` there: the onboarding wizard would reappear and the *fiado* ledger would look lost. The process logs the absolute path it opened (`database: <path>`, `main.go:57`).
+- **"Under 30 s after a reboot"** is measured from the user's logon: a logon task cannot run before someone signs in, so the shop PC must sign in to Windows by itself (`netplwiz`, documented in `INSTALL.md`). The app answers `GET /api/setup/status` in well under a second; the rest is Windows. The backup goroutine does not delay the listener (`backup.md`).
+- **Console window:** `pos.exe` is a console-subsystem executable (no `-H windowsgui`, `Makefile:19`, `:25`), so a black window shows at every logon and **closing it stops the POS**. `INSTALL.md` says to minimize it, not close it. The browser also opens at logon (`cmd/pos/main.go`). A hidden build with a log file and a way to quit and restart is roadmap R-169.
+- **One instance:** a second `pos.exe` fails at `ListenAndServe` and exits (`log.Fatalf`); the task's `IgnoreNew` covers the scheduler side.
+- **Resetting:** with autostart the POS is normally running, so `reset-data` finds the port busy and refuses; close `pos.exe` first (`reset.md`).
+- Tests: `TestAutostart_T15_BuildTaskXML`, `TestAutostart_T16_InstallAndUninstallCalls`, `TestAutostart_T17_Failures`, `TestResolvedDBPath_T18_IsAbsolute` (`cmd/pos/autostart_test.go`, fake `schtasks` runner).
 
 ## Default password (server-enforced)
 

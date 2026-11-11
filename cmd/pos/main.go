@@ -39,11 +39,23 @@ func resolvePort(flagVal, envVal string) string {
 
 func main() {
 	portFlag := flag.String("port", "", "TCP port to listen on (default 8080, or POS_PORT)")
+	installFlag := flag.Bool("install-autostart", false, "register POS-Vertical to start when this Windows user logs in, then exit")
+	uninstallFlag := flag.Bool("uninstall-autostart", false, "remove the POS-Vertical logon task, then exit")
 	flag.Parse()
+
+	// Autostart flags run before anything else: no database, no server, no browser (US-089).
+	if *installFlag || *uninstallFlag {
+		os.Exit(runAutostartFlag(*installFlag, os.Stdout))
+	}
+
 	port = resolvePort(*portFlag, os.Getenv("POS_PORT"))
 
-	// Initialize database
-	db, err := database.New("data.db")
+	// Initialize database. The path is resolved against the working directory,
+	// which a logon task sets to the folder of pos.exe; log it so a wrong
+	// directory is visible.
+	dbPath := resolvedDBPath("data.db")
+	log.Printf("database: %s", dbPath)
+	db, err := database.New(dbPath)
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
 	}
@@ -58,7 +70,7 @@ func main() {
 	posmw.SetJWTSecret(jwtSecret)
 
 	// Start automatic daily backup scheduler
-	db.StartBackupScheduler()
+	db.StartBackupScheduler(setupRepo)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

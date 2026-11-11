@@ -9,6 +9,7 @@ import { api, getSetupStatus } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { formatCOP } from '@/lib/format';
+import BackupBanner from '@/components/BackupBanner';
 import AbonoModal from '@/components/AbonoModal';
 import VoidSaleDialog from '@/components/VoidSaleDialog';
 import { useToast } from '@/components/Toast';
@@ -351,6 +352,8 @@ export default function DashboardPage() {
       />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+        <BackupBanner />
 
         {/* ── Caja Banner ─────────────────────────────────────────────── */}
         <div

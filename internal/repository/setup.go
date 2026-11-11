@@ -4,6 +4,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"fmt"
+	"log"
+	"time"
 )
 
 type BusinessConfig struct {
@@ -150,4 +153,104 @@ func (r *SetupRepository) GetOrGenerateJWTSecret() ([]byte, error) {
 		return nil, err
 	}
 	return []byte(secret), nil
+}
+
+// backupTimeLayout is the UTC text layout of the backup timestamps (US-098 convention).
+const backupTimeLayout = "2006-01-02 15:04:05"
+
+// BackupConfig is the backup folder setting and the report of the last run.
+// It is kept apart from BusinessConfig so PUT /setup can never overwrite it.
+type BackupConfig struct {
+	Dir           string
+	LastAttemptAt *time.Time
+	LastSuccessAt *time.Time
+	LastOK        bool
+	FellBack      bool
+	LastError     string
+	LastFile      string
+	EffectiveDir  string
+}
+
+func parseBackupTime(s sql.NullString) *time.Time {
+	if !s.Valid || s.String == "" {
+		return nil
+	}
+	t, err := time.ParseInLocation(backupTimeLayout, s.String, time.UTC)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+// GetBackupConfig reads the backup folder and the last-run report. A missing
+// business_config row yields the initial values.
+func (r *SetupRepository) GetBackupConfig() (*BackupConfig, error) {
+	var attempt, success sql.NullString
+	cfg := &BackupConfig{}
+	err := r.db.QueryRow(`
+		SELECT backup_dir, backup_last_attempt_at, backup_last_success_at, backup_last_ok,
+		       backup_fell_back, backup_last_error, backup_last_file, backup_effective_dir
+		FROM business_config WHERE id = 1`).Scan(&cfg.Dir, &attempt, &success, &cfg.LastOK,
+		&cfg.FellBack, &cfg.LastError, &cfg.LastFile, &cfg.EffectiveDir)
+	if err == sql.ErrNoRows {
+		return cfg, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get backup config: %w", err)
+	}
+	cfg.LastAttemptAt = parseBackupTime(attempt)
+	cfg.LastSuccessAt = parseBackupTime(success)
+	return cfg, nil
+}
+
+// SaveBackupDir stores the backup folder ("" = default) without touching any
+// other business_config field.
+func (r *SetupRepository) SaveBackupDir(dir string) error {
+	_, err := r.db.Exec(`
+		INSERT INTO business_config (id, backup_dir) VALUES (1, ?)
+		ON CONFLICT(id) DO UPDATE SET backup_dir = excluded.backup_dir
+	`, dir)
+	if err != nil {
+		return fmt.Errorf("save backup dir: %w", err)
+	}
+	return nil
+}
+
+// BackupDir returns the configured backup folder; "" means the default (also
+// when it cannot be read, so a backup is never skipped for a settings error).
+// It makes SetupRepository a database.BackupSource.
+func (r *SetupRepository) BackupDir() string {
+	cfg, err := r.GetBackupConfig()
+	if err != nil {
+		log.Printf("[backup] could not read backup folder, using default: %v", err)
+		return ""
+	}
+	return cfg.Dir
+}
+
+// RecordBackup persists the result of a backup attempt. Only a successful
+// attempt updates last_success_at and last_file.
+func (r *SetupRepository) RecordBackup(at time.Time, ok, fellBack bool, errMsg, effectiveDir, file string) error {
+	ts := at.UTC().Format(backupTimeLayout)
+	var successAt, lastFile any // nil keeps the previous value through COALESCE
+	if ok {
+		successAt, lastFile = ts, file
+	}
+	_, err := r.db.Exec(`
+		INSERT INTO business_config (id, backup_last_attempt_at, backup_last_success_at, backup_last_ok,
+			backup_fell_back, backup_last_error, backup_last_file, backup_effective_dir)
+		VALUES (1, ?, ?, ?, ?, ?, COALESCE(?, ''), ?)
+		ON CONFLICT(id) DO UPDATE SET
+			backup_last_attempt_at = excluded.backup_last_attempt_at,
+			backup_last_success_at = COALESCE(?, business_config.backup_last_success_at),
+			backup_last_ok = excluded.backup_last_ok,
+			backup_fell_back = excluded.backup_fell_back,
+			backup_last_error = excluded.backup_last_error,
+			backup_last_file = COALESCE(?, business_config.backup_last_file),
+			backup_effective_dir = excluded.backup_effective_dir
+	`, ts, successAt, ok, fellBack, errMsg, lastFile, effectiveDir, successAt, lastFile)
+	if err != nil {
+		return fmt.Errorf("record backup: %w", err)
+	}
+	return nil
 }

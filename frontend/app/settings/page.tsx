@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { buildPrinterPayload, isTestPrintDisabled, type PrinterForm } from '@/lib/printerSettings';
+import BackupSection from '@/components/BackupSection';
 import { FISCAL_CONFIG_PATH, showFiscalSection } from '@/lib/fiscalSettings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -601,6 +602,8 @@ function SettingsContent() {
                 </ConfigRow>
               </div>
             </div>
+
+            <BackupSection />
 
             {/* ── Sección: Administración ──────────────────── */}
             <div>

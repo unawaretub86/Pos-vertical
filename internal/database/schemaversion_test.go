@@ -2,15 +2,15 @@ package database
 
 import "testing"
 
-// T-15: SchemaVersion() is the last dbMigrations version (22 today) and equals
+// T-15: SchemaVersion() is the last dbMigrations version (23 today) and equals
 // MAX(version) of a freshly migrated database.
 func TestSchemaVersion_T15_MatchesLastMigrationAndFreshDB(t *testing.T) {
 	last := dbMigrations[len(dbMigrations)-1].version
 	if got := SchemaVersion(); got != last {
 		t.Fatalf("SchemaVersion() = %d, want last dbMigrations version %d", got, last)
 	}
-	if got := SchemaVersion(); got != 22 {
-		t.Fatalf("SchemaVersion() = %d, want 22 today", got)
+	if got := SchemaVersion(); got != 23 {
+		t.Fatalf("SchemaVersion() = %d, want 23 today", got)
 	}
 
 	d, err := New(":memory:")

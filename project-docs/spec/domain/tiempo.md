@@ -1,7 +1,7 @@
 # Domain — Time (stored timestamps and day windows)
 
 > **Type:** spec · **Current:** yes · **Rules over:** how timestamps are stored, what "today / yesterday / this month" mean, how a date range is compared
-> **Updated:** 2026-11-10 (US-098, roadmap R-158 and R-05: created) · Verified against the code at `d8fce78`.
+> **Updated:** 2026-11-11 (US-089: backup file date) · 2026-11-10 (US-098, roadmap R-158 and R-05: created) · Verified against the code at `d8fce78`.
 
 The POS runs on the shop's PC. Rows are stamped by SQLite in UTC, people think in Bogotá time. Before US-098 the two were compared as text and from 19:00 to 24:00 America/Bogota the dashboard "today", the sales report and the assistant's "hoy" omitted that evening's sales.
 
@@ -36,6 +36,8 @@ Today (Nov 9) = S5 + S1 + S2 + S3 = **$87.000, 4 sales**; yesterday = S0 = **$5.
 
 - **Register close** sums by `register_id`, not by date (`internal/repository/register.go:200-232`); `closed_at = CURRENT_TIMESTAMP`.
 - **Elapsed time** (aging `days_overdue` at `internal/repository/metrics.go:415`, order and table minutes at `order.go:375`, `dining_table.go:43`) is `julianday('now') - julianday(created_at)`: UTC against UTC. The low-stock 7-day sales window uses the same form (`metrics.go:303`; before US-098 it compared a local "now" with UTC text and was 5 h too long). Aging rows whose oldest date cannot be parsed by SQLite stay excluded (`metrics.go:418`); a date in the legacy pre-`_time_format=sqlite` Go format would be one, and no stored data has it.
+
+- **Backup file name** `<db>.backup-YYYYMMDD` uses the server's local day (`d.now().In(time.Local)`, `internal/database/backup.go:119`), not the UTC date; the status timestamps of `GET /api/backup/status` are RFC 3339 in that zone (`backup.md`).
 
 ## Known limitations
 

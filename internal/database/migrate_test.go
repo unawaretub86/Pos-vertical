@@ -289,7 +289,7 @@ func TestMigration22_T13_CustomerOpeningBalances(t *testing.T) {
 
 	db, err := New(p)
 	if err != nil {
-		t.Fatalf("upgrade v21 -> v22 failed: %v", err)
+		t.Fatalf("upgrade v21 -> latest failed: %v", err)
 	}
 	defer db.Close()
 
@@ -297,8 +297,8 @@ func TestMigration22_T13_CustomerOpeningBalances(t *testing.T) {
 	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if version != 22 {
-		t.Errorf("schema version = %d, want 22", version)
+	if version != 23 {
+		t.Errorf("schema version = %d, want 23", version)
 	}
 
 	var tables int
@@ -333,5 +333,99 @@ func TestMigration22_T13_CustomerOpeningBalances(t *testing.T) {
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM customer_opening_balances`).Scan(&openings); err != nil || openings != 1 {
 		t.Errorf("customer_opening_balances rows after rejected insert = %d err=%v, want 1", openings, err)
+	}
+}
+
+// ─── US-089 contract §4, T-10 (migration 23) ─────────────────────────────────
+
+func TestMigration23_T10_BackupColumnsOnV22Database(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "v22.db")
+	raw, err := sql.Open("sqlite", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	old := &DB{DB: raw, path: p}
+	if _, err := raw.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range dbMigrations {
+		if m.version > 22 {
+			break
+		}
+		if err := old.runMigration(m); err != nil {
+			t.Fatalf("v%d: %v", m.version, err)
+		}
+	}
+	mustExec := func(q string) {
+		t.Helper()
+		if _, err := raw.Exec(q); err != nil {
+			t.Fatalf("seed: %v\n%s", err, q)
+		}
+	}
+	// Customer owing $179,000: fiado $200,000, abonos $20,000 + $1,000.
+	mustExec(`INSERT INTO business_config (id, name) VALUES (1, 'Tienda Uno')`)
+	mustExec(`INSERT INTO customers (id, name, phone, address) VALUES (1, 'Dora', '', '')`)
+	mustExec(`INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method) VALUES (1, 1, 1, 200000, 200000, 'completed', 'credit')`)
+	mustExec(`INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 200000)`)
+	mustExec(`INSERT INTO customer_payments (id, customer_id, amount, method) VALUES (1, 1, 20000, 'cash')`)
+	mustExec(`INSERT INTO customer_payments (id, customer_id, amount, method) VALUES (2, 1, 1000, 'transfer')`)
+	var before float64
+	if err := raw.QueryRow(customerBalanceSQL, 1, 1).Scan(&before); err != nil || before != 179000 {
+		t.Fatalf("fixture balance before = %.0f err=%v, want 179000", before, err)
+	}
+	raw.Close()
+
+	db, err := New(p)
+	if err != nil {
+		t.Fatalf("upgrade v22 -> v23 failed: %v", err)
+	}
+	defer db.Close()
+
+	var version int
+	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil || version != 23 {
+		t.Fatalf("schema version = %d err=%v, want 23", version, err)
+	}
+	var after float64
+	if err := db.QueryRow(customerBalanceSQL, 1, 1).Scan(&after); err != nil || after != 179000 {
+		t.Errorf("balance after migration = %.0f err=%v, want 179000", after, err)
+	}
+
+	var (
+		dir, lastErr, lastFile string
+		attempt, success       sql.NullString
+		ok, fell               int
+		name                   string
+	)
+	err = db.QueryRow(`SELECT name, backup_dir, backup_last_attempt_at, backup_last_success_at, backup_last_ok, backup_fell_back, backup_last_error, backup_last_file FROM business_config WHERE id = 1`).
+		Scan(&name, &dir, &attempt, &success, &ok, &fell, &lastErr, &lastFile)
+	if err != nil {
+		t.Fatalf("read new columns: %v", err)
+	}
+	if name != "Tienda Uno" {
+		t.Errorf("name = %q, want Tienda Uno (existing row kept)", name)
+	}
+	if dir != "" || attempt.Valid || success.Valid || ok != 0 || fell != 0 || lastErr != "" || lastFile != "" {
+		t.Errorf("defaults wrong: dir=%q attempt=%v success=%v ok=%d fell=%d err=%q file=%q", dir, attempt, success, ok, fell, lastErr, lastFile)
+	}
+}
+
+func TestMigration23_T10_FreshDatabaseReportsVersion23(t *testing.T) {
+	db, err := New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var v int
+	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil || v != 23 {
+		t.Fatalf("fresh DB version = %d err=%v, want 23", v, err)
+	}
+	if _, err := db.Exec(`INSERT INTO business_config (id, name) VALUES (1, 'X')`); err != nil {
+		t.Fatal(err)
+	}
+	var dir string
+	var ok int
+	if err := db.QueryRow(`SELECT backup_dir, backup_last_ok FROM business_config WHERE id = 1`).Scan(&dir, &ok); err != nil || dir != "" || ok != 0 {
+		t.Errorf("fresh defaults dir=%q ok=%d err=%v, want '' and 0", dir, ok, err)
 	}
 }
