@@ -1,7 +1,7 @@
 # Domain — Daily backups
 
 > **Type:** spec · **Current:** yes · **Rules over:** when and where the POS copies its database, how the copy is verified and pruned, the folder setting and its report
-> **Updated:** 2026-11-11 (US-089: created) · Verified against the code at the US-089 branch (`internal/database/backup.go`, `internal/handler/backup.go`, `internal/repository/setup.go`, `internal/database/migrate.go` migration 23, `cmd/pos/main.go`).
+> **Updated:** 2026-11-12 (US-099: pre-migration copy has its own name, `migrate.go` `backupBeforeMigration`) · 2026-11-11 (US-089: created) · Verified against the code at the US-099 branch (`internal/database/backup.go`, `internal/handler/backup.go`, `internal/repository/setup.go`, `internal/database/migrate.go` migration 23, `cmd/pos/main.go`).
 
 The POS copies `data.db` once a day so a dead disk or a bad update does not cost the shop its *fiado* (store credit) ledger. The copy is a SQLite `VACUUM INTO` taken while the POS keeps serving (WAL mode), written and checked before it replaces anything.
 
@@ -13,8 +13,18 @@ The POS copies `data.db` once a day so a dead disk or a bad update does not cost
 
 - Name: `<db base name>.backup-YYYYMMDD`, e.g. `data.db.backup-20261031`. The date is the **server's local day** (`d.now().In(time.Local)`, `backup.go:119`): a backup at 21:05 Bogota on 31/10 is `...-20261031`, not the UTC date (`tiempo.md`). One file per day: a second run the same day overwrites it.
 - Retention: the **30 newest** files in the folder written (`maxBackups = 30`, `backup.go:16`). A PC that is off at weekends therefore keeps about six weeks. The prune runs only after a successful copy.
-- Strict match: only names equal to `<base>.backup-` followed by exactly 8 digits are ever deleted (`isBackupName`, `backup.go:298-310`). The prune lists the directory (no `filepath.Glob`), so `[`, `*` or `?` in the folder path are harmless (`pruneBackups`, `backup.go:312`). Never touched, whatever their age: `<db>.pre-reset-*` (the go-live reset backup, `reset.md`), manual copies such as `data.db.backup-manual` or `data.db.backup-20261001.tmp`, and files of other databases. The daily job never copies a `.pre-reset-*` file anywhere.
+- Strict match: only names equal to `<base>.backup-` followed by exactly 8 digits are ever deleted (`isBackupName`, `backup.go:298-310`). The prune lists the directory (no `filepath.Glob`), so `[`, `*` or `?` in the folder path are harmless (`pruneBackups`, `backup.go:312`). Never touched, whatever their age: `<db>.pre-reset-*` (the go-live reset backup, `reset.md`), `<db>.pre-migration-*` (below), manual copies such as `data.db.backup-manual` or `data.db.backup-20261001.tmp`, and files of other databases. The daily job never copies a `.pre-reset-*` file anywhere.
 - Tests: `TestBackup_T1_KeepsThirtyNewest`, `TestBackup_T2_PruneIgnoresForeignFiles`, `TestBackup_T3_PruneWorksInFolderWithBrackets`, `TestBackup_T9b_FileDateUsesLocalZone` (`internal/database/backup_test.go`).
+
+## Pre-migration copy
+
+Before an upgrade (pending migrations on a database at schema version N > 0) the POS writes `<db>.pre-migration-N-YYYYMMDD` next to `data.db` (`backupBeforeMigration(from)`, `internal/database/migrate.go`), e.g. `data.db.pre-migration-22-20261112`. N is unpadded and the date is the server's local day. It is a `VACUUM INTO` copy taken after a WAL checkpoint and before any migration runs; if it fails, startup stops with `backup before migration` and no migration runs.
+
+- A separate file from the daily backup: `isBackupName` does not match it, so the daily backup never overwrites it and the prune never deletes it. The daily job never copies it to a configured folder; it stays beside `data.db`.
+- Two upgrades the same day from different versions leave two files. A retry the same day from the same version (the database is unchanged because the failed migration rolled back) replaces the earlier file of that name.
+- Skipped on a brand-new database (`current == 0`), on `:memory:` and when no migration is pending.
+- Never pruned: one file per upgrade; delete by hand (PO, 2026-11-12).
+- Tests: `TestPreMigration_T1_CopySurvivesDailyBackup`, `_T4_DifferentVersionsSameDayKeepBoth`, `_T5_SameVersionSameDayReplaces`, `_T6_NoCopyWhenNewOrUpToDate`, `_T7_FailedCopyAbortsBeforeMigrating`, `_T8_DateUsesLocalZone` (`internal/database/migrate_test.go`), `TestBackup_T2_PruneIgnoresForeignFiles`, `TestBackup_PreMigrationCopyStaysBesideDB` (`backup_test.go`).
 
 ## Atomic write and verification
 
@@ -54,12 +64,12 @@ Persisted in `business_config`, so they survive a restart: `backup_dir`, `backup
 
 ## Restore
 
-Manual: close `pos.exe`, copy a `data.db.backup-YYYYMMDD` file over `data.db`, start the POS. There is no restore command or screen.
+Manual: close `pos.exe`, copy a `data.db.backup-YYYYMMDD` file over `data.db`, start the POS. After a bad upgrade, copy the `data.db.pre-migration-N-YYYYMMDD` file over `data.db` the same way. There is no restore command or screen.
 
 ## Not covered
 
 - **Off-machine copy.** A backup on the same disk does not survive a dead disk; `INSTALL.md` tells the operator to copy one backup to a USB stick or cloud drive each week. Cloud backup is out of scope.
 - **Hung network share.** A backup to an unreachable UNC path blocks only the backup goroutine; the server keeps serving. There is no timeout.
 - **Old folder.** After the admin changes the folder, the old folder's files are neither pruned nor moved.
-- **Pre-migration copy name.** `backupBeforeMigration` uses the same name as the daily backup (`internal/database/migrate.go:140` vs `backup.go:120`), so the daily backup of the same day overwrites it (roadmap R-168). It is skipped on a brand-new database (`current == 0`, `migrate.go:80`).
+- **Pre-migration copies are not pruned.** One file per upgrade accumulates beside `data.db`; delete by hand (see "Pre-migration copy").
 - No "back up now" button; no copy of `.pre-reset-*` files to the backup folder (PO, 2026-11-11: it stays next to `data.db`).

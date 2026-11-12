@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -79,7 +80,7 @@ func (db *DB) migrate() error {
 	// database (current == 0), which has nothing worth copying.
 	if db.path != ":memory:" && current > 0 {
 		_, _ = db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
-		if err := db.backupBeforeMigration(); err != nil {
+		if err := db.backupBeforeMigration(current); err != nil {
 			return fmt.Errorf("backup before migration: %w", err)
 		}
 	}
@@ -131,13 +132,16 @@ func (db *DB) runMigration(m migration) error {
 	return nil
 }
 
-// backupBeforeMigration creates a transationally safe copy of the SQLite file.
+// backupBeforeMigration creates a transactionally safe copy of the SQLite file
+// named "<db>.pre-migration-<from>-YYYYMMDD" (server local day), where from is
+// the schema version being upgraded. The name differs from the daily backup so
+// the daily backup and its prune never overwrite or delete it.
 // If the file does not exist yet (first run) it is a no-op.
-func (db *DB) backupBeforeMigration() error {
+func (db *DB) backupBeforeMigration(from int) error {
 	if _, err := os.Stat(db.path); os.IsNotExist(err) {
 		return nil
 	}
-	dst := db.path + ".backup-" + time.Now().Format("20060102")
+	dst := db.path + ".pre-migration-" + strconv.Itoa(from) + "-" + db.now().In(time.Local).Format("20060102")
 	_ = os.Remove(dst)
 	_, err := db.Exec("VACUUM INTO ?", dst)
 	return err

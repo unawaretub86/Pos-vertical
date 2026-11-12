@@ -3,10 +3,13 @@ package database
 // Contrato US-055 §4, T-1 y T-2.
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMigration18_T1_TablesIndexesAndChecks(t *testing.T) {
@@ -427,5 +430,217 @@ func TestMigration23_T10_FreshDatabaseReportsVersion23(t *testing.T) {
 	var ok int
 	if err := db.QueryRow(`SELECT backup_dir, backup_last_ok FROM business_config WHERE id = 1`).Scan(&dir, &ok); err != nil || dir != "" || ok != 0 {
 		t.Errorf("fresh defaults dir=%q ok=%d err=%v, want '' and 0", dir, ok, err)
+	}
+}
+
+// ─── R-168 (US-099): pre-migration safety copy ───────────────────────────────
+
+// pmBuildV22 creates <dir>/data.db migrated up to v22 with a fiado customer
+// (Dora) owing $150,000, closed and ready for New.
+func pmBuildV22(t *testing.T, dir string) string {
+	t.Helper()
+	p := filepath.Join(dir, "data.db")
+	raw, err := sql.Open("sqlite", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	old := &DB{DB: raw, path: p}
+	if _, err := raw.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range dbMigrations {
+		if m.version > 22 {
+			break
+		}
+		if err := old.runMigration(m); err != nil {
+			t.Fatalf("v%d: %v", m.version, err)
+		}
+	}
+	for _, q := range []string{
+		`INSERT INTO customers (id, name, phone, address) VALUES (1, 'Dora', '', '')`,
+		`INSERT INTO sales (id, user_id, customer_id, subtotal, total, status, payment_method) VALUES (1, 1, 1, 150000, 150000, 'completed', 'credit')`,
+		`INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 150000)`,
+	} {
+		if _, err := raw.Exec(q); err != nil {
+			t.Fatalf("seed: %v\n%s", err, q)
+		}
+	}
+	return p
+}
+
+func pmVersion(t *testing.T, path string) int {
+	t.Helper()
+	c, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	var v int
+	if err := c.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+		t.Fatalf("version of %s: %v", path, err)
+	}
+	return v
+}
+
+func pmSum(t *testing.T, path string) (int64, [32]byte) {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return int64(len(b)), sha256.Sum256(b)
+}
+
+func pmGlob(t *testing.T, dir string) []string {
+	t.Helper()
+	m, err := filepath.Glob(filepath.Join(dir, "*.pre-migration-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// T-1 (AC-1, AC-2): the copy holds v22 and survives the daily backup.
+func TestPreMigration_T1_CopySurvivesDailyBackup(t *testing.T) {
+	dir := t.TempDir()
+	p := pmBuildV22(t, dir)
+	today := time.Now().In(time.Local).Format("20060102")
+
+	d, err := New(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+
+	pre := p + ".pre-migration-22-" + today
+	if v := pmVersion(t, pre); v != 22 {
+		t.Fatalf("pre-migration copy version = %d, want 22", v)
+	}
+	c, err := sql.Open("sqlite", pre)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bal float64
+	if err := c.QueryRow(customerBalanceSQL, 1, 1).Scan(&bal); err != nil || bal != 150000 {
+		t.Errorf("balance in copy = %.0f err=%v, want 150000", bal, err)
+	}
+	c.Close()
+	size0, sum0 := pmSum(t, pre)
+
+	if res := d.RunBackup(nil); !res.OK {
+		t.Fatalf("daily backup failed: %+v", res)
+	}
+	size1, sum1 := pmSum(t, pre)
+	if size0 != size1 || sum0 != sum1 {
+		t.Error("pre-migration copy changed after the daily backup")
+	}
+	daily := p + ".backup-" + today
+	if v := pmVersion(t, daily); v != 23 {
+		t.Errorf("daily backup version = %d, want 23", v)
+	}
+}
+
+// T-4 (AC-5): two upgrades the same day from different versions keep both files.
+func TestPreMigration_T4_DifferentVersionsSameDayKeepBoth(t *testing.T) {
+	dir := t.TempDir()
+	d := openBackupDB(t, dir, time.Date(2026, 11, 12, 10, 0, 0, 0, time.Local))
+	for _, from := range []int{20, 22} {
+		if err := d.backupBeforeMigration(from); err != nil {
+			t.Fatalf("backupBeforeMigration(%d): %v", from, err)
+		}
+	}
+	for _, n := range []string{"data.db.pre-migration-20-20261112", "data.db.pre-migration-22-20261112"} {
+		if !bkExists(dir, n) {
+			t.Errorf("%s missing; dir has %v", n, bkNames(t, dir))
+		}
+	}
+}
+
+// T-5 (AC-6): a retry the same day from the same version replaces the file.
+func TestPreMigration_T5_SameVersionSameDayReplaces(t *testing.T) {
+	dir := t.TempDir()
+	d := openBackupDB(t, dir, time.Date(2026, 11, 12, 10, 0, 0, 0, time.Local))
+	if err := d.backupBeforeMigration(22); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`INSERT INTO customers (id, name, phone, address) VALUES (77, 'Nueva', '', '')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.backupBeforeMigration(22); err != nil {
+		t.Fatalf("second copy failed: %v", err)
+	}
+	c, err := sql.Open("sqlite", filepath.Join(dir, "data.db.pre-migration-22-20261112"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	var n int
+	if err := c.QueryRow(`SELECT COUNT(*) FROM customers WHERE id = 77`).Scan(&n); err != nil || n != 1 {
+		t.Errorf("added row in replaced copy = %d err=%v, want 1", n, err)
+	}
+}
+
+// T-6 (AC-7): no copy on a brand-new database nor when nothing is pending.
+func TestPreMigration_T6_NoCopyWhenNewOrUpToDate(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "data.db")
+	d, err := New(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	if got := pmGlob(t, dir); len(got) != 0 {
+		t.Fatalf("brand-new DB left pre-migration files: %v", got)
+	}
+	d, err = New(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	if got := pmGlob(t, dir); len(got) != 0 {
+		t.Fatalf("up-to-date DB left pre-migration files: %v", got)
+	}
+}
+
+// T-7 (AC-8): a failed copy aborts the start before any migration runs.
+func TestPreMigration_T7_FailedCopyAbortsBeforeMigrating(t *testing.T) {
+	dir := t.TempDir()
+	p := pmBuildV22(t, dir)
+	today := time.Now().In(time.Local).Format("20060102")
+	blocker := p + ".pre-migration-22-" + today
+	if err := os.MkdirAll(filepath.Join(blocker, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d, err := New(p)
+	if err == nil {
+		d.Close()
+		t.Fatal("New succeeded, want an error")
+	}
+	if !strings.Contains(err.Error(), "backup before migration") {
+		t.Errorf("error = %q, want it to contain 'backup before migration'", err)
+	}
+	if v := pmVersion(t, p); v != 22 {
+		t.Errorf("version after failed start = %d, want 22", v)
+	}
+}
+
+// T-8 (AC-1): the date part is the server local day, not the UTC day.
+func TestPreMigration_T8_DateUsesLocalZone(t *testing.T) {
+	orig := time.Local
+	time.Local = time.FixedZone("America/Bogota", -5*3600)
+	t.Cleanup(func() { time.Local = orig })
+
+	dir := t.TempDir()
+	// 21:30 Bogota on 12/11/2026 is already 13/11 in UTC.
+	d := openBackupDB(t, dir, time.Date(2026, 11, 13, 2, 30, 0, 0, time.UTC))
+	if err := d.backupBeforeMigration(22); err != nil {
+		t.Fatal(err)
+	}
+	if !bkExists(dir, "data.db.pre-migration-22-20261112") {
+		t.Errorf("local-day copy missing; dir has %v", bkNames(t, dir))
+	}
+	if bkExists(dir, "data.db.pre-migration-22-20261113") {
+		t.Error("copy dated in UTC (20261113) was written")
 	}
 }

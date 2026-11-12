@@ -184,6 +184,8 @@ func TestBackup_T2_PruneIgnoresForeignFiles(t *testing.T) {
 	bkTouch(t, dir, "data.db", bkDateRange(bkDay(2026, 10, 1), bkDay(2026, 11, 1))...) // 32 files
 	extras := []string{
 		"data.db.pre-reset-20261110-143005",
+		"data.db.pre-migration-22-20261001",
+		"data.db.pre-migration-5-20250101",
 		"data.db.backup-manual",
 		"data.db.backup-20261001.tmp",
 		"other.db.backup-20250101",
@@ -212,6 +214,36 @@ func TestBackup_T2_PruneIgnoresForeignFiles(t *testing.T) {
 		if !bkExists(dir, e) {
 			t.Errorf("%s must never be deleted", e)
 		}
+	}
+	if isBackupName("data.db.pre-migration-22-20261001", "data.db") {
+		t.Error("isBackupName must be false for a pre-migration file")
+	}
+}
+
+// R-168 T-3 (AC-4): the pre-migration copy stays beside data.db when another folder is configured.
+func TestBackup_PreMigrationCopyStaysBesideDB(t *testing.T) {
+	root := t.TempDir()
+	dbDir := filepath.Join(root, "app")
+	cfgDir := filepath.Join(root, "copias")
+	for _, p := range []string{dbDir, cfgDir} {
+		if err := os.Mkdir(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d := openBackupDB(t, dbDir, bkDay(2026, 11, 12))
+	const pre = "data.db.pre-migration-22-20261112"
+	if err := os.WriteFile(filepath.Join(dbDir, pre), []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if res := d.runBackup(bkSource{dir: cfgDir}); !res.OK {
+		t.Fatalf("backup failed: %+v", res)
+	}
+	got := bkNames(t, cfgDir)
+	if len(got) != 1 || got[0] != "data.db.backup-20261112" {
+		t.Errorf("cfgDir holds %v, want only data.db.backup-20261112", got)
+	}
+	if !bkExists(dbDir, pre) {
+		t.Error("pre-migration file left the db folder")
 	}
 }
 

@@ -296,6 +296,7 @@ func (d *DB) verifyCopyCounts(path string, before map[string]int) (retry bool, e
 }
 
 // isBackupName reports whether name is exactly "<base>.backup-" + 8 digits.
+// It is false for <base>.pre-migration-* and <base>.pre-reset-* files.
 func isBackupName(name, base string) bool {
 	prefix := base + ".backup-"
 	if len(name) != len(prefix)+8 || !strings.HasPrefix(name, prefix) {
@@ -311,7 +312,7 @@ func isBackupName(name, base string) bool {
 
 // pruneBackups keeps the maxBackups newest strict-name backups of base in dir.
 // It lists the directory (no glob, so [ * ? in the path are harmless) and
-// never touches any other file, such as <base>.pre-reset-*.
+// never touches any other file, such as <base>.pre-migration-* or <base>.pre-reset-*.
 func pruneBackups(dir, base string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

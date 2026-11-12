@@ -80,6 +80,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 29 | 2026-11-10 | US-098 (R-158, closes R-05) | L | ~448k (A 171.7k · T 167.0k · I 43.2k · Q 66.5k) | 135 | ~24.5 | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 1 contract error caught by the test-author + 3 QA MINOR | 6 new (R-159..R-164); R-158 and R-05 closed | 0 | +929 / −55, 27 files (excluding this benchmark entry) |
 | 30 | 2026-11-10 | US-093 (reset-data tool) | L | ~490k (A 219.9k · T 97.2k · I 98.1k · Q 75.2k) | 186 (A 110 · T 21 · I 30 · Q 25) | ~39 excluding the analyst (T ~5.1 · I ~27 · Q ~7); analyst n/a (cumulative agent wall time 3.2 h includes waiting) | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 3 Gemini-verified gaps (Q-13) + 3 test-side errors found by the implementer + 5 QA MINOR | 3 new (R-165..R-167); R-153 cross-referenced | 0 | +2,149 / −0, 14 files, 0 docs (excluding the docs and this benchmark entry) |
 | 31 | 2026-11-11 | US-089 (autostart at Windows logon, daily backups to a configurable folder, 30 copies) | L | ~495k (A 146.0k · T 136.9k · I 139.4k · Q 73.0k) | 283 (A 147 · T 49 · I 63 · Q 24) | ~29 excluding the analyst (T ~13.5 · I ~10 · Q ~5.5); analyst n/a (contract 408 s, sync 2,185 s wall, mostly waiting) | 0 | 1 | 8 contract discrepancies (D-1..D-8) + 5 Gemini-verified contract gaps + 6 test-side errors (invented API names, double-appended tests, 3 fixture collisions, 3 pinned schema versions) + 5 QA MINOR | 5 new (R-168..R-172); R-167 closed | 0 | +2,359 / −53, 22 files (excluding docs, `changes/` and `INSTALL.md`) |
+| 32 | 2026-11-12 | US-099 (R-168: pre-migration copy gets its own file name) | M | ~176k (A 81.0k, last of 65.7k→81.0k · I 60.2k · Q 34.6k) | 73 (A 33 · I 31 · Q 9) | ~5.2 (I ~3.2 · Q ~1.9); analyst contract 139 s, close 48 s | 0 | 1 | 0 contract discrepancies (1 addition: `.gitignore` did not cover `.pre-reset-*`) + 3 QA MINOR (2 were the close step, 1 weak red on T-5) | 0 new; R-168 and K2 closed | 0 | +319 / −12, 9 files (incl. docs) |
 
 ### Trend
 
@@ -906,6 +907,39 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 32 — US-099 (R-168: the pre-migration copy gets its own file name, level M)
+
+Created from dev `306f98b`. A roadmap item (R-168, go-live K2), registered by the analyst as US-099 in SPRINT-20. Commits: register `3f32b14`, implementation `e38c898`, docs close `25aeaa8`. First run at level M since run 22: no test-author, so the implementer wrote tests T-1..T-8 itself.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 2 (contract 65.7k/21 tools/139 s; close, resumed with SendMessage 81.0k/12/48 s) | 81.0k | 33 | ~3.1 min (187 s) |
+| implementer | 1 round | 60.2k | 31 | ~3.2 min (190 s) |
+| qa | 1 round | 34.6k | 9 | ~1.9 min (111 s) |
+
+**What it found.**
+- The analyst reproduced the bug by running it (v22 DB through `New`, then `RunBackup`: the same-day file moved from v22 to v23) and found no discrepancy against the roadmap text. One addition: `.gitignore:11` covered only `data.db.backup-*`; Q-3 added the two missing patterns.
+- QA round 1: OK, 0 BLOCKER, 3 MINOR (spec and roadmap pending at QA time, both done at close; T-5 fails against the old code only by compile error because the replace-on-retry behavior is unchanged). Real-binary smoke: `data.db.pre-migration-22-20261112` kept v22 after the same-day startup backup.
+- The implementer's red state was a compile error (`backupBeforeMigration` signature), not an assertion failure; QA confirmed by reading that T-1 and T-2 would fail on the old behavior.
+
+**Unplanned stops:** 0 outside GATE 1 and GATE 2. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, `CLEAN`, finished after GATE 1 | 0 | 0 | 0 | n/a |
+| diff, round 1 | OK, `CLEAN`, ~4 min | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- At level M the pipeline text assigns the tests to the test-author, so the orchestrator had to tell the implementer to write them; `.claude/commands/us.md` does not say so (proposal below).
+- `ListAgents` showed no agents after they finished; `SendMessage` to the analyst id resumed it for the close.
+- A stale `../Pos-vertical-wt/R-170` dir and others from earlier runs are still on disk (Windows leftovers).
+
+**Proposal (not applied, needs PO yes):** in `.claude/commands/us.md`, state that at level M the implementer writes the tests, and that the "tests untouched" check then compares only pre-existing assertions (no removed lines).
+
+### What to measure in run 33
+- Whether a level M run with implementer-written tests keeps the same QA findings as level L (here 0 BLOCKER).
 
 ## Run 31 — US-089 (autostart at Windows logon, daily backups to a configurable folder with 30 copies, level L)
 

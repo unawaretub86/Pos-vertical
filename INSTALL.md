@@ -77,6 +77,8 @@ Se guarda una copia por día y se conservan las últimas 30. Puede elegir otra c
 
 **Importante:** una copia en el mismo computador no protege contra un disco dañado. Cada semana copie un archivo `data.db.backup-*` a una memoria USB o a Google Drive.
 
+El archivo `data.db.pre-migration-*` es la copia que el sistema hace justo antes de una actualización; no se borra automáticamente, y puede eliminarla usted cuando ya no la necesite.
+
 Para hacer una copia manual, simplemente copie el archivo `data.db` a otro lugar (USB, Google Drive, etc.) con el programa cerrado.
 
 ---

@@ -36,6 +36,7 @@
 | US-096 | Money QA layer 1: property-based invariant tests over random sequences of money operations | [x] | 2026-11-08 |
 | US-097 | Singular/plural wording in the catalog import UI (roadmap R-157) | [x] | 2026-11-09 |
 | US-098 | Day windows and stored timestamps agree on one zone: after-19:00 sales missing from "today" (roadmap R-158, R-05) | [x] | 2026-11-10 |
+| US-099 | The pre-migration safety copy gets its own name and survives the daily backup (roadmap R-168, K2) | [x] | 2026-11-12 |
 
 **Total estimated effort: ~8 days**
 
@@ -54,6 +55,7 @@
 | **7** | US-093 | Run after the dry run, right before go-live. |
 | **8** | US-089 | Last code before install; tested on the real install path. |
 | **9** | US-098 | Fixes the 7 p.m.-midnight gap in "today" figures before the on-site dry run reads them; independent of the other US. |
+| **10** | US-099 (done) | Small fix to the US-089 backup code: the pre-upgrade copy must not be overwritten by the same-day daily backup. Land before the first real upgrade of the client's `data.db`. |
 
 ---
 
@@ -432,3 +434,41 @@ Contract findings and server-side validation gaps resolved: the suite drives ran
 - Existing tests tightened by corrected UTC fixtures: `TestMetricsRepo_T2_SoldHalfOpenMidnight`, `TestAssistant_T9_PeriodLabelNamedInText`.
 
 **Results:** QA round 1 OK (0 BLOCKER, 3 MINOR, 1 NOTE: the spec delta, applied at close; MINOR 1 is roadmap R-159, the other two are style/defensive and not tracked); Gemini diff review clean. `go build ./...`, `go test ./...` and frontend `pnpm test` (240 tests), `pnpm lint` and `pnpm build` green; the real-binary smoke ran at 14:19 Bogota, before the 19:00 gap, so the evening behaviour is proven by the pinned-clock tests.
+
+---
+
+## US-099 — The pre-migration safety copy gets its own name and survives the daily backup
+
+**Status:** picked up from roadmap R-168 (go-live item K2), 2026-11-12. Level M. Done 2026-11-12 (pipeline ID R-168). Approved at GATE 1 (PO, 2026-11-12): Q-1..Q-3 as recommended.
+
+**As** Don Carlos (owner),
+**I want** the copy the POS takes right before an update to stay on disk after the daily backup runs,
+**so that** a bad update never costs me my *fiado* (store credit) ledger.
+
+**Problem (verified 2026-11-12):** `backupBeforeMigration` writes `<db>.backup-YYYYMMDD` (`internal/database/migrate.go:140`), the same name as the daily backup (`internal/database/backup.go:120`). `database.New` migrates first and the startup backup then overwrites that file the same day (reproduced: the copy held schema v22 before, v23 after).
+
+**Acceptance criteria:**
+- [x] AC-1: WHEN pending migrations exist on a database at version N > 0, the system SHALL write `<db>.pre-migration-N-YYYYMMDD` (local day) before any migration runs.
+- [x] AC-2: WHEN the daily backup runs the same day, the pre-migration copy SHALL stay byte-identical.
+- [x] AC-3: the daily prune SHALL never delete a `<db>.pre-migration-*` file.
+- [x] AC-4: WHILE another backup folder is configured, the pre-migration copy SHALL stay beside `data.db`.
+- [x] AC-5: two upgrades the same day from different versions SHALL leave two files.
+- [x] AC-6: a same-day retry from the same version SHALL replace the earlier file of that name.
+- [x] AC-7: a brand-new database, `:memory:` or no pending migration SHALL write no copy (unchanged).
+- [x] AC-8: IF the copy fails, THEN startup SHALL stop with `backup before migration` and run no migration (unchanged).
+- [x] AC-9: spec, `INSTALL.md` and `.gitignore` SHALL describe the new name.
+
+**Decisions (GATE 1, PO, 2026-11-12):** name `<db>.pre-migration-<from>-YYYYMMDD` with the from-version unpadded; copies are never pruned (delete by hand); `.gitignore` gets `data.db.pre-migration-*` and `data.db.pre-reset-*`. Spec: `spec/domain/backup.md`.
+
+**Verified criteria:**
+- AC-1: `internal/database/migrate_test.go` `TestPreMigration_T1_CopySurvivesDailyBackup` (v22 copy named `.pre-migration-22-<day>`), `TestPreMigration_T8_DateUsesLocalZone` (21:30 Bogota gives the local day, not the UTC day).
+- AC-2: `TestPreMigration_T1_CopySurvivesDailyBackup` (size and SHA-256 unchanged after `RunBackup`; daily file at v23).
+- AC-3: `internal/database/backup_test.go` `TestBackup_T2_PruneIgnoresForeignFiles` (pre-migration names among the kept foreign files; `isBackupName` false).
+- AC-4: `TestBackup_PreMigrationCopyStaysBesideDB` (same file).
+- AC-5: `TestPreMigration_T4_DifferentVersionsSameDayKeepBoth`.
+- AC-6: `TestPreMigration_T5_SameVersionSameDayReplaces`.
+- AC-7: `TestPreMigration_T6_NoCopyWhenNewOrUpToDate`.
+- AC-8: `TestPreMigration_T7_FailedCopyAbortsBeforeMigrating` (error contains `backup before migration`, version stays 22).
+- AC-9: `spec/domain/backup.md`, `INSTALL.md` (one Spanish line), `.gitignore` (two lines).
+
+**Results:** QA round 1 OK (0 BLOCKER, 3 MINOR: spec and roadmap applied at close; T-5 is correct but would fail on the old code only by compile error, informational); Gemini diff clean. `go build ./...` and `go test ./...` green; a real-binary smoke left `data.db.pre-migration-22-<day>` at schema v22 next to a same-day daily backup and live `data.db` at v23.
