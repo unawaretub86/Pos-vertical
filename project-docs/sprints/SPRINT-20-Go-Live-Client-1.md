@@ -37,6 +37,7 @@
 | US-097 | Singular/plural wording in the catalog import UI (roadmap R-157) | [x] | 2026-11-09 |
 | US-098 | Day windows and stored timestamps agree on one zone: after-19:00 sales missing from "today" (roadmap R-158, R-05) | [x] | 2026-11-10 |
 | US-099 | The pre-migration safety copy gets its own name and survives the daily backup (roadmap R-168, K2) | [x] | 2026-11-12 |
+| US-101 | One name for the Settings screen: "Configuración" in `INSTALL.md`, `MANUAL-USUARIO.md` and the Mesas empty state (roadmap R-170, go-live K4) | [x] | 2026-11-12 |
 
 **Total estimated effort: ~8 days**
 
@@ -504,3 +505,19 @@ Contract findings and server-side validation gaps resolved: the suite drives ran
 - AC-7: `spec/domain/tiempo.md` § Server zone caveat.
 
 **Results:** QA round 1 OK (0 BLOCKER, 1 MINOR: the spec line, applied at close); Gemini diff clean. `go build ./...` and `go test ./...` green. The warning path is covered by unit tests only: Go on Windows ignores `TZ`, so it cannot be forced from the environment. Follow-up: roadmap R-176 (UI banner).
+
+---
+
+## US-101 — One name for the Settings screen
+
+**Status:** picked up from roadmap R-170, 2026-11-11. Level M, docs and one UI string. Done 2026-11-12. Built in a parallel session as "US-099" (pipeline ID R-170, implementation `d69099c`, QA round 1 OK); renumbered US-101 when merged because US-099 had meanwhile been taken by R-168. Approved at GATE 1 (PO, 2026-11-11): Q-1..Q-3 as recommended.
+
+**Problem (verified 2026-11-11):** `INSTALL.md` named the screen "Ajustes" while the sidebar and page title say "Configuración" (`frontend/components/Sidebar.tsx:142`, `frontend/app/settings/page.tsx:378`). The same mismatch existed in `MANUAL-USUARIO.md:20` and the Mesas empty-state link (`frontend/app/mesas/page.tsx:80`).
+
+**Verified criteria:**
+- AC-1: every reference to the screen in `INSTALL.md` SHALL read "Configuración" (`:40`, `:42`, `:76` twice) and "Ajustes" SHALL NOT appear. Check: `grep -n "Ajustes" INSTALL.md` returns nothing; `grep -o "Configuración" INSTALL.md | wc -l` → 4.
+- AC-2: `MANUAL-USUARIO.md:20` SHALL say "Configuración".
+- AC-3: WHEN an admin opens Mesas with no tables, the link SHALL read "Crea mesas en Configuración". No test asserts the string.
+- AC-4: No other behavior changes; the `nav.test.ts:11` fixture label is renamed, assertions untouched.
+
+**Results:** QA round 1 OK (0 BLOCKER, 1 MINOR: the contract check used `grep -c`, which counts lines, not occurrences; corrected in AC-1). No spec change (the spec never names the screen). Gemini skipped (docs-only).

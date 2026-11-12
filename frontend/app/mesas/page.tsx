@@ -77,7 +77,7 @@ export default function MesasPage() {
           ) : tables.length === 0 ? (
             <div style={{ color: 'var(--text-secondary)', fontSize: '14px', textAlign: 'center', padding: '40px 0' }}>
               No hay mesas.{' '}
-              <Link href="/settings" style={{ color: 'var(--accent)' }}>Crea mesas en Ajustes</Link>
+              <Link href="/settings" style={{ color: 'var(--accent)' }}>Crea mesas en Configuración</Link>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '12px' }}>

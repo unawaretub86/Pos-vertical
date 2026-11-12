@@ -8,7 +8,7 @@ const items = [
   { href: '/register', label: 'Caja' },
   { href: '/mesas', label: 'Mesas', restaurantOnly: true },
   { href: '/barra', label: 'Barra', restaurantOnly: true },
-  { href: '/settings', label: 'Ajustes', adminOnly: true },
+  { href: '/settings', label: 'Configuración', adminOnly: true },
 ];
 
 const hrefs = (r: { href: string }[]) => r.map((i) => i.href);

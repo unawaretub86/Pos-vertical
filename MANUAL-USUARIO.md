@@ -17,7 +17,7 @@ Sistema de punto de venta para Windows. Sin internet, sin instalación, sin comp
 2. Se abrirá el navegador automáticamente en `http://localhost:8080`.
 3. Si no abre solo, escribe esa dirección en el navegador manualmente.
 
-> Para usar el POS desde un celular o tablet de la misma WiFi, activa el acceso en Ajustes y reinicia `pos.exe` (ver INSTALL.md).
+> Para usar el POS desde un celular o tablet de la misma WiFi, activa el acceso en Configuración y reinicia `pos.exe` (ver INSTALL.md).
 
 > **No cierres la ventana negra de consola** mientras usas el sistema. Es el servidor que mantiene todo funcionando.
 
