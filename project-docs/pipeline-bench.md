@@ -81,6 +81,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 30 | 2026-11-10 | US-093 (reset-data tool) | L | ~490k (A 219.9k · T 97.2k · I 98.1k · Q 75.2k) | 186 (A 110 · T 21 · I 30 · Q 25) | ~39 excluding the analyst (T ~5.1 · I ~27 · Q ~7); analyst n/a (cumulative agent wall time 3.2 h includes waiting) | 1 | 1 | 6 contract discrepancies (D-1..D-6) + 3 Gemini-verified gaps (Q-13) + 3 test-side errors found by the implementer + 5 QA MINOR | 3 new (R-165..R-167); R-153 cross-referenced | 0 | +2,149 / −0, 14 files, 0 docs (excluding the docs and this benchmark entry) |
 | 31 | 2026-11-11 | US-089 (autostart at Windows logon, daily backups to a configurable folder, 30 copies) | L | ~495k (A 146.0k · T 136.9k · I 139.4k · Q 73.0k) | 283 (A 147 · T 49 · I 63 · Q 24) | ~29 excluding the analyst (T ~13.5 · I ~10 · Q ~5.5); analyst n/a (contract 408 s, sync 2,185 s wall, mostly waiting) | 0 | 1 | 8 contract discrepancies (D-1..D-8) + 5 Gemini-verified contract gaps + 6 test-side errors (invented API names, double-appended tests, 3 fixture collisions, 3 pinned schema versions) + 5 QA MINOR | 5 new (R-168..R-172); R-167 closed | 0 | +2,359 / −53, 22 files (excluding docs, `changes/` and `INSTALL.md`) |
 | 32 | 2026-11-12 | US-099 (R-168: pre-migration copy gets its own file name) | M | ~176k (A 81.0k, last of 65.7k→81.0k · I 60.2k · Q 34.6k) | 73 (A 33 · I 31 · Q 9) | ~5.2 (I ~3.2 · Q ~1.9); analyst contract 139 s, close 48 s | 0 | 1 | 0 contract discrepancies (1 addition: `.gitignore` did not cover `.pre-reset-*`) + 3 QA MINOR (2 were the close step, 1 weak red on T-5) | 0 new; R-168 and K2 closed | 0 | +319 / −12, 9 files (incl. docs) |
+| 33 | 2026-11-12 | US-100 (R-162: time-zone startup warning) | M | ~103k (A 51.4k, last of 40.8k→51.4k · I 26.5k · Q 24.9k) | 35 (A 19 · I 10 · Q 6) | ~4.2 (A ~2.0 · I ~1.6 · Q ~0.6) | 0 | 1 | 0 contract discrepancies + 1 QA MINOR (spec pending until close) + 1 Gemini false positive | 1 new (R-176); R-162 and K3 closed | 0 | +90 / −1, 2 code files (excluding docs) |
 
 ### Trend
 
@@ -907,6 +908,36 @@ Already registered in SPRINT-18. Same session from contract to merge; metrics fr
 
 ### What to measure in run 22
 - Whether the CI wall time grows past what is acceptable with the 5 s lock tests (handler package ~43 s).
+
+## Run 33 — US-100 (R-162: startup warning when the PC time zone is not UTC-5, level M)
+
+Created from dev `4d3b22f`. A roadmap item (R-162, go-live K3), registered by the analyst as US-100 in SPRINT-20. Commits: register `1b5eca9`, implementation `b23c538`, docs close after it. Second level M run in a row: the implementer wrote tests T-1..T-5 itself (orchestrator told it so in the prompt, see proposal in run 32).
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 2 (contract 40.8k/10 tools/80 s; close, resumed with SendMessage 51.4k/9/40 s) | 51.4k | 19 | ~2.0 min (120 s) |
+| implementer | 1 round | 26.5k | 10 | ~1.6 min (95 s) |
+| qa | 1 round | 24.9k | 6 | ~0.6 min (37 s) |
+
+**What it found.**
+- The analyst found that Go on Windows reports the zone as `-05` (not `COT`) and ignores `TZ`, so the contract compares the offset in seconds and the helper takes an injected `time.Time`. No discrepancy against R-162 or `tiempo.md`.
+- QA round 1: OK, 0 BLOCKER, 1 MINOR (spec line pending at QA time, applied at close). Real-binary smoke logged `time zone: UTC-05:00` with no warning; the warning path is covered by unit tests only.
+- GATE 1 decisions: Q-1 log only (R-176 opened for a UI banner), Q-2 fixed -05:00 offset.
+
+**Unplanned stops:** 0 outside GATE 1 and GATE 2. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK | 1 | 0 | 1 (spec assigned to the analyst at close is the pipeline design, a known pending proposal) | n/a |
+| diff, round 1 | OK, `CLEAN` | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- The stale `../Pos-vertical-wt/` dirs and the `us/R-170` and `us/US-099` branches are still present.
+- IDE diagnostics on the worktree (`undefined: runAutostartFlag`, module not in workspace) are gopls noise; `go build` passes.
+
+### What to measure in run 34
+- Whether the level M tests-by-implementer proposal gets applied, and the `us.md` wording at M.
 
 ## Run 32 — US-099 (R-168: the pre-migration copy gets its own file name, level M)
 

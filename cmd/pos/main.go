@@ -4,6 +4,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -37,6 +38,27 @@ func resolvePort(flagVal, envVal string) string {
 	return "8080"
 }
 
+// timeZoneNotice describes the UTC offset of now and, when it is not -05:00,
+// returns a warning (empty otherwise). It compares the offset in seconds, not
+// the zone name: Windows reports "-05", not "America/Bogota" (R-162).
+func timeZoneNotice(now time.Time) (info, warn string) {
+	_, secs := now.Zone()
+	sign := "+"
+	abs := secs
+	if secs < 0 {
+		sign = "-"
+		abs = -secs
+	}
+	offset := fmt.Sprintf("%s%02d:%02d", sign, abs/3600, (abs%3600)/60)
+	info = "time zone: UTC" + offset
+	if secs != -5*3600 {
+		warn = "WARNING: this PC's time zone is UTC" + offset + ", not UTC-05:00. " +
+			"\"Today\" and the register/report day boundaries will be shifted. " +
+			"Set the Windows time zone to \"(UTC-05:00) Bogota, Lima, Quito\" and restart the POS."
+	}
+	return info, warn
+}
+
 func main() {
 	portFlag := flag.String("port", "", "TCP port to listen on (default 8080, or POS_PORT)")
 	installFlag := flag.Bool("install-autostart", false, "register POS-Vertical to start when this Windows user logs in, then exit")
@@ -49,6 +71,13 @@ func main() {
 	}
 
 	port = resolvePort(*portFlag, os.Getenv("POS_PORT"))
+
+	// Log the zone offset; a wrong one only warns, it never stops startup (R-162).
+	tzInfo, tzWarn := timeZoneNotice(time.Now())
+	log.Print(tzInfo)
+	if tzWarn != "" {
+		log.Print(tzWarn)
+	}
 
 	// Initialize database. The path is resolved against the working directory,
 	// which a logon task sets to the folder of pos.exe; log it so a wrong

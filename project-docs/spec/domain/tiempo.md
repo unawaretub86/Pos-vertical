@@ -1,7 +1,7 @@
 # Domain — Time (stored timestamps and day windows)
 
 > **Type:** spec · **Current:** yes · **Rules over:** how timestamps are stored, what "today / yesterday / this month" mean, how a date range is compared
-> **Updated:** 2026-11-11 (US-089: backup file date) · 2026-11-10 (US-098, roadmap R-158 and R-05: created) · Verified against the code at `d8fce78`.
+> **Updated:** 2026-11-12 (US-100, roadmap R-162: startup zone check) · 2026-11-11 (US-089: backup file date) · 2026-11-10 (US-098, roadmap R-158 and R-05: created) · Verified against the code at `d8fce78`.
 
 The POS runs on the shop's PC. Rows are stamped by SQLite in UTC, people think in Bogotá time. Before US-098 the two were compared as text and from 19:00 to 24:00 America/Bogota the dashboard "today", the sales report and the assistant's "hoy" omitted that evening's sales.
 
@@ -30,7 +30,7 @@ Worked example (America/Bogotá, clock 2026-11-09 20:30; stored text is UTC):
 
 Today (Nov 9) = S5 + S1 + S2 + S3 = **$87.000, 4 sales**; yesterday = S0 = **$5.000, 1 sale**; Nov 10 = S4 = $3.000. A sale exactly at a window's `from` belongs to it; exactly at `to` belongs to the next. "Este mes" at 20:30 on Nov 9 is `[Nov 1, now)` = S0 + S5 + S1 + S2 = **$72.000, 4 sales** (S3 and S4 are later than the clock).
 
-**Server zone caveat.** The window follows the PC's zone. A Windows PC with a wrong time zone silently shifts every day boundary (with the zone at UTC, 19:00-24:00 Bogotá sales land in tomorrow again). There is no startup check yet (roadmap R-162).
+**Server zone caveat.** The window follows the PC's zone. A Windows PC with a wrong time zone silently shifts every day boundary (with the zone at UTC, 19:00-24:00 Bogotá sales land in tomorrow again). At startup `pos.exe` logs `time zone: UTC±HH:MM` and, when the offset is not -05:00, a warning with the offset found and how to fix the Windows zone (`timeZoneNotice`, `cmd/pos/main.go:41`, called at `:76`). It only warns: it never blocks startup or changes the zone. It compares the offset in seconds, not the name (Windows reports `-05`), so Lima and Quito also pass. The line goes to the console only (no log file yet, roadmap R-169) and there is no UI banner (roadmap R-176).
 
 ## Rule: what does not use a day window
 

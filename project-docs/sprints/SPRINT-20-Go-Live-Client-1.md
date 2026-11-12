@@ -472,3 +472,35 @@ Contract findings and server-side validation gaps resolved: the suite drives ran
 - AC-9: `spec/domain/backup.md`, `INSTALL.md` (one Spanish line), `.gitignore` (two lines).
 
 **Results:** QA round 1 OK (0 BLOCKER, 3 MINOR: spec and roadmap applied at close; T-5 is correct but would fail on the old code only by compile error, informational); Gemini diff clean. `go build ./...` and `go test ./...` green; a real-binary smoke left `data.db.pre-migration-22-<day>` at schema v22 next to a same-day daily backup and live `data.db` at v23.
+
+---
+
+## US-100 — Startup warning when the PC time zone is not UTC-5
+
+**Status:** picked up from roadmap R-162 (go-live item K3), 2026-11-12. Level M (pipeline ID R-162). Done 2026-11-12 (pipeline ID R-162). Approved at GATE 1 (PO): log only, fixed -05:00 offset.
+
+**As** Don Carlos (owner) or whoever installs the POS,
+**I want** the POS to say at startup when the Windows time zone is not Bogota time,
+**so that** a wrong zone does not silently shift "today", the reports and the register close.
+
+**Problem (verified 2026-11-12):** day windows follow the PC zone (`time.Local`, `spec/domain/tiempo.md`) and nothing checks it at startup (`cmd/pos/main.go:40-60`).
+
+**Acceptance criteria:**
+- [x] AC-1: WHEN `pos.exe` starts the server, the system SHALL log the local UTC offset (`time zone: UTC-05:00`).
+- [x] AC-2: IF the offset is not -05:00, THEN the system SHALL log a warning with the offset found and how to fix the Windows zone.
+- [x] AC-3: WHILE the offset is -05:00, the system SHALL log no warning.
+- [x] AC-4: the check SHALL compare the offset in seconds, never the zone name.
+- [x] AC-5: a wrong offset SHALL NOT stop startup.
+- [x] AC-6: the offset SHALL come from an injected `time.Time`.
+- [x] AC-7: `spec/domain/tiempo.md` SHALL describe the check.
+
+**Verified criteria:**
+- AC-1: `cmd/pos/main_test.go` `TestTimeZoneNotice_T1_Bogota` (`COT` -18000 gives info `time zone: UTC-05:00`), `TestTimeZoneNotice_T2_UTC` (UTC gives `UTC+00:00`); logged from `cmd/pos/main.go:76-77`, after `resolvePort` and before the `database:` log; a real-binary run printed `time zone: UTC-05:00` first.
+- AC-2: `TestTimeZoneNotice_T2_UTC` (offset 0, warning contains `+00:00`), `TestTimeZoneNotice_T3_Minutes` (UTC-4 gives `-04:00`, UTC+5:30 gives `+05:30`).
+- AC-3: `TestTimeZoneNotice_T1_Bogota` (warning empty at -18000).
+- AC-4: `TestTimeZoneNotice_T4_OffsetNotName` (name `UTC` at -18000 gives no warning; name `COT` at 0 warns); `secs != -5*3600` at `cmd/pos/main.go:54`.
+- AC-5: read in the diff: `main.go:76-80` only calls `log.Print`, no `log.Fatal` or `os.Exit`.
+- AC-6: `TestTimeZoneNotice_T5_Injected` (same helper, -18000 vs 0, different results whatever the host zone).
+- AC-7: `spec/domain/tiempo.md` § Server zone caveat.
+
+**Results:** QA round 1 OK (0 BLOCKER, 1 MINOR: the spec line, applied at close); Gemini diff clean. `go build ./...` and `go test ./...` green. The warning path is covered by unit tests only: Go on Windows ignores `TZ`, so it cannot be forced from the environment. Follow-up: roadmap R-176 (UI banner).
