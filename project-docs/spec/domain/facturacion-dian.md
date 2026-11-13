@@ -1,7 +1,7 @@
 # Domain — DIAN electronic invoicing
 
 > **Type:** spec · **Current:** yes · **Rules over:** how invoicing relates to the sale
-> **Updated:** 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-09 (US-095: void dialog text for the 409) · 2026-11-07 (US-090: behavior with DIAN off) · Verified against `internal/factelect/` on 2026-09-21 and against `internal/handler/` on 2026-11-07.
+> **Updated:** 2026-11-13 (US-102: per-line whole-peso tax in the document) · 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-09 (US-095: void dialog text for the 409) · 2026-11-07 (US-090: behavior with DIAN off) · Verified against `internal/factelect/` on 2026-09-21 and against `internal/handler/` on 2026-11-07.
 
 This document covers **the product rule**. Implementation detail and provider research live in `project-docs/reference/facturacion-electronica.md` (formerly `fix-gaps.md`) and `project-docs/research/2026-05-dian-proveedores.md` (formerly `facElect-finds.md`), both from May 2026 and marked as implementation reference, not current state.
 
@@ -26,6 +26,10 @@ A shopkeeper who does not invoice electronically never sees any of this: the Set
 Every sale flow works unchanged: create, read, ticket, reprint, void and table checkout, and no electronic document is created even if a buyer email is sent. The DIAN-only endpoints answer a 4xx with `facturación electrónica no habilitada`: `POST /sales/{id}/void-with-credit-note` → 400 (a missing motive is checked first → 400 `motive requerido`), `GET /sales/{id}/factura` → 400, `GET /sales/{id}/factura/pdf` → 404. Certified by `internal/handler/dian_off_test.go` (US-090).
 
 A sale that already has an `accepted` or `pending` document (DIAN was on before) cannot be voided while DIAN is off: `DELETE /sales/{id}/void` answers 409 with `error` `sale_has_accepted_invoice` and `requires_credit_note: true` (for an `accepted` or `pending` document), and the credit-note endpoint answers 400. The void dialog shows `Esta venta tiene un documento electrónico ante la DIAN; para anularla se necesita una nota crédito.` and offers no credit-note action (test: `TestSaleVoidUI_T6_ErrorBodies`). This is a known limitation, tracked in the roadmap (R-126).
+
+### Amounts in the document (US-102)
+
+The adapter builds the document from the stored sale (`internal/factelect/pos_adapter.go`, `buildItems`): each line's `TaxAmount` is the same whole-peso per-line tax as the sale (`service.LineTax`, [dinero.md](dinero.md)), so `TotalIVA` = Σ line `TaxAmount` = `sales.tax`, and `Total` = `sales.total`. Example: 3 lines of $1.001 at 19% → each `TaxAmount` 190, `TotalIVA` 570, `Total` 3.573. Documents already issued before US-102 are not rebuilt. Whether DIAN's validation would also accept a per-rate-group rounding was not verified; the per-line choice does not depend on it.
 
 ## Fiscal configuration
 

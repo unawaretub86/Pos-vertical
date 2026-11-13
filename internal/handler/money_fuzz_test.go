@@ -83,18 +83,19 @@ func FuzzSaleAmounts(f *testing.F) {
 
 // moneyAbonoSeedWant is the status each T-5 seed must get (method cash).
 var moneyAbonoSeedWant = map[float64]int{
-	0.4:    http.StatusCreated,
-	1e-9:   http.StatusCreated,
+	0.4:    http.StatusBadRequest, // US-102: non-whole abonos are rejected
+	1e-9:   http.StatusBadRequest,
 	1e308:  http.StatusBadRequest,
 	0:      http.StatusBadRequest,
 	-1:     http.StatusBadRequest,
-	2999.5: http.StatusCreated,
+	2999.5: http.StatusBadRequest,
+	3000:   http.StatusCreated,
 }
 
-// T-5. Each input runs on a fresh DB where Dora owes $2.999,50 and a register
+// T-5. Each input runs on a fresh DB where Dora owes $3.000 and a register
 // is open; the cashier posts the abono.
 func FuzzAbonoAmount(f *testing.F) {
-	for _, a := range []float64{0.4, 1e-9, 1e308, 0, -1, 2999.5} {
+	for _, a := range []float64{0.4, 1e-9, 1e308, 0, -1, 2999.5, 3000} {
 		f.Add(a, "cash")
 	}
 
@@ -110,10 +111,10 @@ func FuzzAbonoAmount(f *testing.F) {
 
 		e := newMoneyEnv(t, t.TempDir(), template, moneyFullCatalog())
 		assertCode(t, "open register", e.doOpen(t, 100000), http.StatusCreated)
-		e.exec(t, `INSERT INTO sales (id, user_id, customer_id, register_id, subtotal, total, status, payment_method) VALUES (1, 1, 1, 1, 2999.5, 2999.5, 'completed', 'credit')`)
-		e.exec(t, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 2999.5)`)
-		if got := e.customerBalance(t, 1); got != 2999.5 {
-			t.Fatalf("seeded Dora balance = %v, want 2999.5", got)
+		e.exec(t, `INSERT INTO sales (id, user_id, customer_id, register_id, subtotal, total, status, payment_method) VALUES (1, 1, 1, 1, 3000, 3000, 'completed', 'credit')`)
+		e.exec(t, `INSERT INTO sale_payments (sale_id, method, amount) VALUES (1, 'credit', 3000)`)
+		if got := e.customerBalance(t, 1); got != 3000 {
+			t.Fatalf("seeded Dora balance = %v, want 3000", got)
 		}
 
 		before := e.snapshot(t)

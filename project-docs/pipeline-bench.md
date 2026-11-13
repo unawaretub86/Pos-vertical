@@ -83,6 +83,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 32 | 2026-11-12 | US-099 (R-168: pre-migration copy gets its own file name) | M | ~176k (A 81.0k, last of 65.7k→81.0k · I 60.2k · Q 34.6k) | 73 (A 33 · I 31 · Q 9) | ~5.2 (I ~3.2 · Q ~1.9); analyst contract 139 s, close 48 s | 0 | 1 | 0 contract discrepancies (1 addition: `.gitignore` did not cover `.pre-reset-*`) + 3 QA MINOR (2 were the close step, 1 weak red on T-5) | 0 new; R-168 and K2 closed | 0 | +319 / −12, 9 files (incl. docs) |
 | 33 | 2026-11-12 | US-100 (R-162: time-zone startup warning) | M | ~103k (A 51.4k, last of 40.8k→51.4k · I 26.5k · Q 24.9k) | 35 (A 19 · I 10 · Q 6) | ~4.2 (A ~2.0 · I ~1.6 · Q ~0.6) | 0 | 1 | 0 contract discrepancies + 1 QA MINOR (spec pending until close) + 1 Gemini false positive | 1 new (R-176); R-162 and K3 closed | 0 | +90 / −1, 2 code files (excluding docs) |
 | 34 | 2026-11-11 | US-101 (R-170, one name for the Settings screen; built as "US-099" in a parallel session, renumbered at merge) | M | ~87k excluding the close pass (A 38.8k · I 22.2k · Q 26.5k) | 36 excluding the close pass (A 24 · I 5 · Q 7) | ~4.1 min excluding the close pass (A 69 s · I 58 s · Q 117 s) | 0 | 1 | 3 contract discrepancies (D-1..D-3) + 1 QA MINOR (check wording) | 0 new; R-170 closed | 0 | docs and one UI string |
+| 35 | 2026-11-13 | US-102 (R-133 + R-106, whole-peso money with one rounding rule; go-live K5) | L | ~796k (A 225.4k cumulative over 3 invocations · T 226.0k · I 156.7k · Q 83.9k) | 293 (A 127 · T 70 · I 59 · Q 37) | ~46 min excluding the analyst (T ~13.7 · I ~9.1 · Q ~17.4 incl. a smoke run); analyst n/a (contract 476 s, GATE 1 fold-in 837 s, close mostly waiting) | 0 | 1 | 4 contract discrepancies (incl. a new table-checkout IVA bug) + 6 Gemini-verified contract gaps + 5 QA MINOR | 5 new (R-177..R-181); R-133 and R-106 closed | 0 | +1,992 / −215, 46 files (code 21 files +501 / −111) |
 
 ### Trend
 
@@ -1470,3 +1471,24 @@ Built 2026-11-11 from dev `d174ea7` in a parallel session under the pipeline ID 
 **What it found.** Contract D-1..D-3: the roadmap row listed only `INSTALL.md`, but `MANUAL-USUARIO.md:20` and the Mesas empty-state link (`frontend/app/mesas/page.tsx:80`) had the same mismatch; `INSTALL.md:76` holds two occurrences; the `nav.test.ts:11` fixture used the old label. QA round 1: OK, 0 BLOCKER, 1 MINOR (`grep -c` counts lines, not occurrences).
 
 **Operational friction.** Two sessions picked the next free US number independently: the R-170 session took US-099 while the R-168 session did too. Step 0 should check `git branch -a` for `us/*` branches before choosing a number.
+
+## Run 35 — US-102 (R-133 + R-106, whole-peso money with one rounding rule, level L)
+
+Created from dev `4aeaa4c`. Roadmap items R-133 and R-106, registered as US-102 by the analyst (US-101 was taken). Commits: register `4440be0`, RED `b4c59bc`, implementation `ca70c15`, then the docs close. Orchestrated by session pos-vertical-4c.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract 140.5k/49/476 s; GATE 1 fold-in 164.0k/70/837 s; close 225.4k/127/3,488 s, cumulative values) | 225.4k | 127 | n/a (wall time mostly waiting) |
+| test-author | 1 | 226.0k | 70 | ~13.7 min |
+| implementer | 1 round | 156.7k | 59 | ~9.1 min |
+| qa | 1 round | 83.9k | 37 | ~17.4 min |
+
+**What it found.** Contract: a table checkout with an IVA product could not be paid (the order handler never priced IVA); the sprint's "$1 gap" was only half true (payments checked at 0.5); stale tolerance statements in four spec files; `TestMoneyProperties_WholePeso` already pinned the target under a build tag. PO decided Q-1..Q-9 as recommended (per-line rounding, keep float64/REAL, migration 24, exact tolerance, full validation scope). QA round 1: OK, 0 BLOCKER, 5 MINOR (open-orders list without IVA, residue 0<x<1, migration clamp, one unexplained 647 s hang of `go test ./internal/service`, spec deferred to close); real-binary smoke passed except migration 24, which was only exercised by `migrate_money_test.go` (no v23 database at hand).
+
+**Gemini.** Contract: STATUS OK, 14 raised, 6 verified true (AC-2 vs T-7, zero-total sale, order tax computation, audit user, rates outside 0/5/19, discount bounds), 4 false positives, 4 not verifiable at GATE 1; all 6 verified points were folded into the contract. Diff round 1: partial output after a 7 min timeout, 0 findings; the round had QA only.
+
+**Unplanned stops:** 0. QA rounds: 1. Violations: 0 (no test edited after RED).
+
+**Operational friction.** The test-author weakened two existing assertions (cash_out 0.4 → 400; float tolerance test) as the contract required, and the pos-guard hook warned on both. Two peer sessions were idle during the run. The gopls "not in workspace" diagnostics for the worktree are noise.
+
+**What to measure next.** Whether Gemini diff timeouts repeat on diffs of this size (~2,000 lines); whether R-180 (service-test hang) recurs in CI.

@@ -161,6 +161,10 @@ type Sale struct {
 	Items         []SaleItem `json:"items,omitempty"`
 	Payments      []Payment  `json:"payments,omitempty"`
 	OrderID       *int64     `json:"order_id,omitempty"`
+	// NoClientTotal is set by the handler when the request carried no
+	// "total": the service then prices the sale and skips the total
+	// comparison (table checkout shape). Never serialized.
+	NoClientTotal bool `json:"-"`
 }
 
 // Payment is one payment line of a sale. A sale with a single payment method

@@ -300,8 +300,8 @@ func TestMigration22_T13_CustomerOpeningBalances(t *testing.T) {
 	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if version != 23 {
-		t.Errorf("schema version = %d, want 23", version)
+	if version != 24 {
+		t.Errorf("schema version = %d, want 24", version)
 	}
 
 	var tables int
@@ -386,8 +386,8 @@ func TestMigration23_T10_BackupColumnsOnV22Database(t *testing.T) {
 	defer db.Close()
 
 	var version int
-	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil || version != 23 {
-		t.Fatalf("schema version = %d err=%v, want 23", version, err)
+	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil || version != 24 {
+		t.Fatalf("schema version = %d err=%v, want 24", version, err)
 	}
 	var after float64
 	if err := db.QueryRow(customerBalanceSQL, 1, 1).Scan(&after); err != nil || after != 179000 {
@@ -413,15 +413,15 @@ func TestMigration23_T10_BackupColumnsOnV22Database(t *testing.T) {
 	}
 }
 
-func TestMigration23_T10_FreshDatabaseReportsVersion23(t *testing.T) {
+func TestMigration23_T10_FreshDatabaseReportsVersion24(t *testing.T) {
 	db, err := New(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 	var v int
-	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil || v != 23 {
-		t.Fatalf("fresh DB version = %d err=%v, want 23", v, err)
+	if err := db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil || v != 24 {
+		t.Fatalf("fresh DB version = %d err=%v, want 24", v, err)
 	}
 	if _, err := db.Exec(`INSERT INTO business_config (id, name) VALUES (1, 'X')`); err != nil {
 		t.Fatal(err)
@@ -536,8 +536,8 @@ func TestPreMigration_T1_CopySurvivesDailyBackup(t *testing.T) {
 		t.Error("pre-migration copy changed after the daily backup")
 	}
 	daily := p + ".backup-" + today
-	if v := pmVersion(t, daily); v != 23 {
-		t.Errorf("daily backup version = %d, want 23", v)
+	if v := pmVersion(t, daily); v != 24 {
+		t.Errorf("daily backup version = %d, want 24", v)
 	}
 }
 

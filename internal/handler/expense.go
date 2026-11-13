@@ -23,7 +23,7 @@ func (h *Handler) createExpense(w http.ResponseWriter, r *http.Request) {
 
 	claims := appmw.GetClaims(r)
 	expense, err := h.expenses.Create(r.Context(), claims.UserID, body.Category, body.Amount, body.Note)
-	if errors.Is(err, service.ErrInvalidExpenseAmount) || errors.Is(err, service.ErrInvalidExpenseCategory) {
+	if errors.Is(err, service.ErrInvalidExpenseAmount) || errors.Is(err, service.ErrNotWholePeso) || errors.Is(err, service.ErrInvalidExpenseCategory) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}

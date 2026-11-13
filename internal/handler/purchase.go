@@ -44,6 +44,7 @@ func (h *Handler) createPurchase(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, service.ErrPurchaseNoItems),
 		errors.Is(err, service.ErrPurchaseInvalidQty),
 		errors.Is(err, service.ErrPurchaseInvalidCost),
+		errors.Is(err, service.ErrNotWholePeso),
 		errors.Is(err, service.ErrPurchaseSupplierGone):
 		respondError(w, http.StatusBadRequest, err.Error())
 		return

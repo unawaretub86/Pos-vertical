@@ -49,6 +49,9 @@ func (s *RegisterService) Open(ctx context.Context, userID int64, openingAmount 
 	if openingAmount < 0 {
 		return nil, ErrNegativeOpening
 	}
+	if !IsWholePeso(openingAmount) {
+		return nil, ErrNotWholePeso
+	}
 	_, err := s.repo.GetOpen(ctx)
 	if err == nil {
 		return nil, ErrRegisterAlreadyOpen
@@ -134,6 +137,9 @@ func (s *RegisterService) Summary(ctx context.Context, id int64) (*RegisterSumma
 
 // Close closes the register with the actual cash counted.
 func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float64) (*RegisterSummary, error) {
+	if !IsWholePeso(actualClose) {
+		return nil, ErrNotWholePeso
+	}
 	reg, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -222,6 +228,9 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 func (s *RegisterService) AddMovement(ctx context.Context, registerID int64, mvType string, amount float64, description string) (*model.RegisterMovement, error) {
 	if amount <= 0 {
 		return nil, ErrInvalidMovement
+	}
+	if !IsWholePeso(amount) {
+		return nil, ErrNotWholePeso
 	}
 	reg, err := s.repo.GetByID(ctx, registerID)
 	if err != nil {

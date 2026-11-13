@@ -70,9 +70,74 @@ describe('paymentsBalanced / sumPayments', () => {
     expect(paymentsBalanced([{ amount: 60001 }], 60000)).toBe(false);
   });
 
-  it('tolerates sub-peso floating point rounding', () => {
-    // 0.1 + 0.2 !== 0.3 in IEEE754 — this must still balance.
-    expect(paymentsBalanced([{ amount: 0.1 }, { amount: 0.2 }], 0.3)).toBe(true);
+  // US-102 (R-133, AC-10): tolerance 0. Money is whole pesos, so any gap,
+  // even a sub-peso one, is unbalanced (was: tolerated below 0.5).
+  it('T-19 requires exact equality: a sub-peso gap is not balanced', () => {
+    expect(paymentsBalanced([{ amount: 11901 }], 11901.5)).toBe(false);
+    expect(paymentsBalanced([{ amount: 11901 }], 11901.19)).toBe(false);
+    expect(paymentsBalanced([{ amount: 11901.19 }], 11901)).toBe(false);
+    expect(paymentsBalanced([{ amount: 11901 }], 11901)).toBe(true);
+  });
+
+  it('T-19 three whole payments that add up to the total balance exactly', () => {
+    expect(paymentsBalanced([{ amount: 5000 }, { amount: 6000 }, { amount: 901 }], 11901)).toBe(true);
+  });
+});
+
+// US-102 (R-133) T-19 / T-22: the whole-peso rule of contract section 3, pinned
+// 1:1 with internal/service/sale_money_test.go (T-1 .. T-5, T-22). Half away
+// from zero, per line: lineBase = round(qty x unit), lineTax = round(base x rate).
+describe('whole-peso rule (shared cases with the Go tests)', () => {
+  const line = (unitPrice: number, quantity: number, taxRate: number, discount = 0): CalcItem => ({
+    unitPrice,
+    quantity,
+    discount,
+    taxRate,
+  });
+
+  const cases: {
+    name: string;
+    items: CalcItem[];
+    globalDiscount: number;
+    subtotal: number;
+    tax: number;
+    total: number;
+  }[] = [
+    { name: 'T-1 $10.001 at 19%', items: [line(10001, 1, 0.19)], globalDiscount: 0, subtotal: 10001, tax: 1900, total: 11901 },
+    { name: 'T-2 3 x $1.001 at 19% (per line)', items: [line(1001, 1, 0.19), line(1001, 1, 0.19), line(1001, 1, 0.19)], globalDiscount: 0, subtotal: 3003, tax: 570, total: 3573 },
+    { name: 'T-3 $50 at 5% (2,5 rounds up)', items: [line(50, 1, 0.05)], globalDiscount: 0, subtotal: 50, tax: 3, total: 53 },
+    { name: 'T-3 $1.050 at 19% (199,5 rounds up)', items: [line(1050, 1, 0.19)], globalDiscount: 0, subtotal: 1050, tax: 200, total: 1250 },
+    { name: 'T-4 0,5 kg at $9.999', items: [line(9999, 0.5, 0)], globalDiscount: 0, subtotal: 5000, tax: 0, total: 5000 },
+    { name: 'T-4 0,1 kg at $9.999', items: [line(9999, 0.1, 0)], globalDiscount: 0, subtotal: 1000, tax: 0, total: 1000 },
+    { name: 'T-4 0,125 kg at $9.999', items: [line(9999, 0.125, 0)], globalDiscount: 0, subtotal: 1250, tax: 0, total: 1250 },
+    { name: 'T-5 item discount $1 on $10.001 at 19%', items: [line(10001, 1, 0.19, 1)], globalDiscount: 0, subtotal: 10000, tax: 1900, total: 11900 },
+    { name: 'T-5 global discount $500 does not lower the tax base', items: [line(10001, 1, 0.19)], globalDiscount: 500, subtotal: 10001, tax: 1900, total: 11401 },
+    { name: 'T-22 $1.001 at 8%', items: [line(1001, 1, 0.08)], globalDiscount: 0, subtotal: 1001, tax: 80, total: 1081 },
+    { name: 'T-22 $1.050 at 8%', items: [line(1050, 1, 0.08)], globalDiscount: 0, subtotal: 1050, tax: 84, total: 1134 },
+    { name: 'T-22 $1.001 at 2,5%', items: [line(1001, 1, 0.025)], globalDiscount: 0, subtotal: 1001, tax: 25, total: 1026 },
+  ];
+
+  for (const c of cases) {
+    it(`${c.name}: subtotal ${c.subtotal}, tax ${c.tax}, total ${c.total}`, () => {
+      expect(calcSubtotal(c.items)).toBe(c.subtotal);
+      expect(calcTax(c.items)).toBe(c.tax);
+      expect(calcTotal(c.items, c.globalDiscount)).toBe(c.total);
+    });
+  }
+
+  it('T-19 1,005 kg at $1.000 is 1005 (the float 1.005 * 1000 is 1004.9999999999999)', () => {
+    expect(calcSubtotal([line(1000, 1.005, 0)])).toBe(1005);
+  });
+
+  it('T-19 a quantity that float-multiplies just under a half still rounds half up', () => {
+    // 1,005 kg x $10 = 10.05 -> 10 (not a half); 0,5 kg x $1 = 0.5 -> 1.
+    expect(calcSubtotal([line(10, 1.005, 0)])).toBe(10);
+    expect(calcSubtotal([line(1, 0.5, 0)])).toBe(1);
+  });
+
+  it('T-19 per-line sum differs from per-sale rounding: 570, not 571', () => {
+    const items = [line(1001, 1, 0.19), line(1001, 1, 0.19), line(1001, 1, 0.19)];
+    expect(calcTax(items)).toBe(570);
   });
 });
 

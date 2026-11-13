@@ -61,6 +61,15 @@ func validateProduct(p *model.Product) error {
 	if p.SalePrice < 0 {
 		return errors.New("el precio de venta no puede ser negativo")
 	}
+	if !IsWholePeso(p.SalePrice) {
+		return errors.New("el precio de venta debe ser un número entero de pesos")
+	}
+	if !IsWholePeso(p.Cost) {
+		return errors.New("el costo debe ser un número entero de pesos")
+	}
+	if p.WholesalePrice != nil && !IsWholePeso(*p.WholesalePrice) {
+		return errors.New("el precio mayorista debe ser un número entero de pesos")
+	}
 	if p.Type != "product" && p.Type != "service" {
 		return errors.New("tipo inválido: debe ser 'product' o 'service'")
 	}

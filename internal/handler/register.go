@@ -25,7 +25,7 @@ func (h *Handler) openRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	claims := appmw.GetClaims(r)
 	reg, err := h.registers.Open(r.Context(), claims.UserID, body.OpeningAmount)
-	if errors.Is(err, service.ErrNegativeOpening) {
+	if errors.Is(err, service.ErrNegativeOpening) || errors.Is(err, service.ErrNotWholePeso) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -99,6 +99,10 @@ func (h *Handler) closeRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	summary, err := h.registers.Close(r.Context(), id, body.ActualClose)
+	if errors.Is(err, service.ErrNotWholePeso) {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if errors.Is(err, service.ErrRegisterClosed) {
 		respondError(w, http.StatusConflict, err.Error())
 		return
@@ -197,7 +201,7 @@ func (h *Handler) addMovement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mv, err := h.registers.AddMovement(r.Context(), id, body.Type, body.Amount, body.Description)
-	if errors.Is(err, service.ErrInvalidMovement) {
+	if errors.Is(err, service.ErrInvalidMovement) || errors.Is(err, service.ErrNotWholePeso) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}

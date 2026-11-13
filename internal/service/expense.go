@@ -37,6 +37,9 @@ func (s *ExpenseService) Create(ctx context.Context, userID int64, category stri
 	if amount <= 0 {
 		return nil, ErrInvalidExpenseAmount
 	}
+	if !IsWholePeso(amount) {
+		return nil, ErrNotWholePeso
+	}
 	if !validExpenseCategories[category] {
 		return nil, ErrInvalidExpenseCategory
 	}

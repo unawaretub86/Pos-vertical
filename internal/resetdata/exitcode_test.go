@@ -62,12 +62,12 @@ func TestCheckSchemaVersion_T14(t *testing.T) {
 	ctx := context.Background()
 
 	if err := CheckSchemaVersion(ctx, db); err != nil {
-		t.Fatalf("current schema (23) refused: %v", err)
+		t.Fatalf("current schema (24) refused: %v", err)
 	}
 
-	mustExec(t, db, `DELETE FROM schema_migrations WHERE version = 23`)
-	if n := count(t, db, `SELECT MAX(version) FROM schema_migrations`); n != 22 {
-		t.Fatalf("setup: max version = %d, want 22", n)
+	mustExec(t, db, `DELETE FROM schema_migrations WHERE version = 24`)
+	if n := count(t, db, `SELECT MAX(version) FROM schema_migrations`); n != 23 {
+		t.Fatalf("setup: max version = %d, want 23", n)
 	}
 	err := CheckSchemaVersion(ctx, db)
 	if !errors.Is(err, ErrSchemaVersion) || !errors.Is(err, ErrRefused) {

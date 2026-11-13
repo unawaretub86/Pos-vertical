@@ -17,11 +17,18 @@ import (
 func (h *Handler) createSale(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		model.Sale
-		BuyerEmail string `json:"buyer_email"`
+		// Shadows Sale.Total so an absent "total" differs from "total": 0.
+		Total      *float64 `json:"total"`
+		BuyerEmail string   `json:"buyer_email"`
 	}
 	if err := decode(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "request inválido")
 		return
+	}
+	if req.Total != nil {
+		req.Sale.Total = *req.Total
+	} else {
+		req.Sale.NoClientTotal = true
 	}
 
 	claims := appmw.GetClaims(r)
@@ -29,15 +36,7 @@ func (h *Handler) createSale(w http.ResponseWriter, r *http.Request) {
 		req.Sale.UserID = claims.UserID
 	}
 
-	var subtotal float64
-	for i := range req.Sale.Items {
-		item := &req.Sale.Items[i]
-		item.Subtotal = item.UnitPrice*item.Quantity - item.Discount
-		subtotal += item.Subtotal
-	}
-	req.Sale.Subtotal = subtotal
-	req.Sale.Total = subtotal - req.Sale.Discount + req.Sale.Tax
-
+	// The service prices the sale; the client subtotal and tax are ignored.
 	created, err := h.sales.Create(r.Context(), &req.Sale)
 	if errors.Is(err, repository.ErrBusy) {
 		respondError(w, http.StatusServiceUnavailable, msgBusy)

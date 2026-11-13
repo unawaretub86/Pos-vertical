@@ -8,6 +8,7 @@ import (
 
 	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
+	"github.com/andreyo/pos/internal/service"
 )
 
 // PosSaleAdapter implements SaleAdapter for the POS vertical.
@@ -102,7 +103,7 @@ func (a *PosSaleAdapter) buildItems(ctx context.Context, sale *model.Sale) ([]Bi
 		if err != nil {
 			return nil, BillTotals{}, fmt.Errorf("pos_adapter: producto %d: %w", si.ProductID, err)
 		}
-		taxAmt := si.Subtotal * si.TaxRate
+		taxAmt := service.LineTax(si.Subtotal, si.TaxRate)
 		totalIVA += taxAmt
 		items = append(items, BillItem{
 			Description:  prod.Name,

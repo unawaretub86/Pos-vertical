@@ -75,7 +75,21 @@ func (s *OrderService) Cancel(ctx context.Context, orderID, userID int64, reason
 }
 
 func (s *OrderService) Get(ctx context.Context, id int64) (*model.Order, error) {
-	return s.repo.Get(ctx, id)
+	o, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Payable total with IVA, priced at read time with the same per-line
+	// rule as a counter sale (money.go); tax is not stored on the order.
+	o.Total = 0
+	for i := range o.Items {
+		it := &o.Items[i]
+		it.Subtotal = LineBase(it.Quantity, it.UnitPrice)
+		if it.Status != "void" {
+			o.Total += it.Subtotal + LineTax(it.Subtotal, it.TaxRate)
+		}
+	}
+	return o, nil
 }
 
 func (s *OrderService) List(ctx context.Context, status string) ([]*model.OrderSummary, error) {

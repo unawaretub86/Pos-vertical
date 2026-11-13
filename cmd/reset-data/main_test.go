@@ -114,7 +114,7 @@ func TestRun_T14_BadFlagExit2(t *testing.T) {
 // T-14 / AC-14: a schema version different from the binary's is a refusal (exit 1), nothing deleted.
 func TestRun_T14_SchemaVersionMismatchExit1(t *testing.T) {
 	path := newDB(t)
-	exec(t, path, `DELETE FROM schema_migrations WHERE version = 23`)
+	exec(t, path, `DELETE FROM schema_migrations WHERE version = 24`)
 	code, out := runCLI([]string{"--db", path, "--apply", "--confirm", "BORRAR 4", "--port", strconv.Itoa(freePort(t))}, "")
 	if code != 1 {
 		t.Errorf("exit = %d, want 1 (output %q)", code, out)

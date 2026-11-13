@@ -1,7 +1,7 @@
 # Domain — Restaurant (restaurant mode and tables)
 
 > **Type:** spec · **Current:** yes · **Rules over:** restaurant mode, tables and table state
-> **Updated:** 2026-11-07 (US-081: `SQLITE_BUSY` on orders, tables and table checkout → 503) · 2026-11-06 (US-087: `/pos`, table checkout and `/barra` read the business config inside its provider; bar screen rule) · 2026-11-06 (US-086: order and catalog pages read their segment from the URL path) · 2026-10-13 (US-076: `PUT /api/setup` password exception) · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
+> **Updated:** 2026-11-13 (US-102: the order total includes IVA and table checkout is priced by the server; open-orders list total still without IVA, R-177) · 2026-11-07 (US-081: `SQLITE_BUSY` on orders, tables and table checkout → 503) · 2026-11-06 (US-087: `/pos`, table checkout and `/barra` read the business config inside its provider; bar screen rule) · 2026-11-06 (US-086: order and catalog pages read their segment from the URL path) · 2026-10-13 (US-076: `PUT /api/setup` password exception) · Verified against the code on that date (US-055: `internal/repository/dining_table.go`, `internal/handler/tables.go`, `frontend/lib/nav.ts`; US-056: `internal/repository/order.go`, `internal/handler/order.go`, `internal/handler/handler.go:213-219`).
 
 Module for cafeterías and restaurants: tables, orders and a bar screen (SPRINT-13). Table management, the switch, per-table orders (open, items, void, cancel), table checkout (US-057) and the bar screen (US-058) all exist. This file covers the mode, tables, orders, their screens and the bar screen; the checkout and KDS endpoints are not specified here yet.
 
@@ -48,6 +48,8 @@ Table `dining_tables`: unique `name`, `zone` (free text for grouping), `seats` (
 - A list with no tables serializes as `[]`, not `null`.
 
 ## Orders
+
+**Money (US-102).** The payable total of an order includes IVA: `GET /orders/{id}` prices the non-void items with the whole-peso per-line rule (`internal/service/order.go`, `Get`; [dinero.md](dinero.md)) from each product's current `tax_rate`. Tax is not stored on `orders` or `order_items`. Table checkout (`POST /orders/{id}/checkout`) sends no total: the server prices the sale the same way and the payments must equal that total exactly. Before US-102 an order with an IVA product could not be paid at all (the order total had no IVA and the payment was rejected). Example: one item $10.001 at 19% → order total 11.901; cash 11.901 → 201 and sale total 11.901; cash 10.001 → 400. Known gap: the open-orders list (`GET /orders`, `ListOpen`) still shows the total without IVA and unrounded (roadmap R-177).
 
 An order is the open tab of a table. All authenticated users (`cashier` and `admin`) operate orders; without a token, 401. They do not write to `sales` (checkout arrives with US-057). Routes in `internal/handler/handler.go:213-219`.
 

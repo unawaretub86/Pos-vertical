@@ -112,6 +112,9 @@ func (s *CustomerService) CreatePayment(ctx context.Context, customerID int64, a
 	if amount <= 0 {
 		return nil, &abonoInputError{"el monto del abono debe ser mayor a cero"}
 	}
+	if !IsWholePeso(amount) {
+		return nil, &abonoInputError{"el monto del abono debe ser un número entero de pesos"}
+	}
 	method = strings.TrimSpace(method)
 	if method == "" {
 		method = "cash"

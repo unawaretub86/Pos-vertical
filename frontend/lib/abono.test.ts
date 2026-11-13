@@ -226,3 +226,24 @@ describe('abonoFieldValue', () => {
     expect(abonoFieldValue(0)).toBe(0);
   });
 });
+
+// US-102 (R-133) T-20: a $10.001 sale at 19% on credit now carries a whole
+// credit line of 11901, so the abono of its displayed amount settles it.
+describe('whole-peso fiado balance (US-102 T-20)', () => {
+  it('T-20 abonoFieldValue(11901) is 11901', () => {
+    expect(abonoFieldValue(11901)).toBe(11901);
+  });
+
+  it('T-20 abonoAmountToSend(11901, 11901) is 11901 and the preview ends at $0', () => {
+    expect(abonoAmountToSend(11901, 11901)).toBe(11901);
+    expect(abonoPreview(11901, 11901)).toEqual({
+      valid: true,
+      line: 'Saldo anterior: $11.901 → Nuevo saldo: $0',
+      error: null,
+    });
+  });
+
+  it('T-20 a settled balance of 0 reads Al día', () => {
+    expect(customerBalanceLabel(0)).toEqual({ text: 'Al día', color: 'var(--success)' });
+  });
+});

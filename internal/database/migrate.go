@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 type migration struct {
 	version int
 	up      string   // SQL executed inside a transaction; failure stops the binary
+	upFn    func(ctx context.Context, tx *sql.Tx) error // optional Go step in the same transaction, runs after up
 	fixup   []string // SQL run after commit with errors silently ignored (idempotent ops)
 }
 
@@ -46,6 +48,7 @@ var dbMigrations = []migration{
 	{version: 21, up: migration21},
 	{version: 22, up: migration22},
 	{version: 23, up: migration23},
+	{version: 24, upFn: migration24},
 }
 
 // migrate creates the schema_migrations table, detects pending migrations,
@@ -115,8 +118,15 @@ func (db *DB) runMigration(m migration) error {
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	if _, err := tx.ExecContext(ctx, m.up); err != nil {
-		return err
+	if m.up != "" {
+		if _, err := tx.ExecContext(ctx, m.up); err != nil {
+			return err
+		}
+	}
+	if m.upFn != nil {
+		if err := m.upFn(ctx, tx); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES (?)`, m.version); err != nil {
 		return err

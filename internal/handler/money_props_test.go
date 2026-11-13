@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	moneyTol = 0.01 // one centavo (AC-1..AC-7 "Tolerance")
+	moneyTol = 0 // US-102 (R-133, AC-12): whole pesos, exact equality
 	stockTol = 1e-9
 
 	msgNoOpenRegister  = "no hay caja abierta"
@@ -571,16 +571,26 @@ type moneyPayReqJSON struct {
 	Amount float64 `json:"amount"`
 }
 
+// moneyRoundDiv is round(n / d) half away from zero for n >= 0, d > 0, with
+// integer arithmetic only (US-102 contract §3).
+func moneyRoundDiv(n, d int64) int64 { return (n + d/2) / d }
+
+// moneyLineTotals is the §3 rule: lineBase = round(qty x unit price), lineTax =
+// round(lineBase x rateBP / 10000), the quantity taken in thousandths.
+func moneyLineTotals(qty, price, rate float64) (base, tax int64) {
+	base = moneyRoundDiv(int64(math.Round(qty*1000))*int64(price), 1000)
+	tax = moneyRoundDiv(base*int64(math.Round(rate*10000)), 10000)
+	return base, tax
+}
+
 // clientTotals mirrors frontend/lib/saleCalc.ts calcSubtotal / calcTax with no
-// discounts, in the same summation order.
+// discounts: the whole-peso per-line rule of US-102 contract §3.
 func (e *moneyEnv) clientTotals(lines []moneyLine) (subtotal, tax float64) {
 	for _, l := range lines {
 		p := e.product(l.productID)
-		subtotal += p.price*l.qty - 0
-	}
-	for _, l := range lines {
-		p := e.product(l.productID)
-		tax += (p.price*l.qty - 0) * p.taxRate
+		base, lineTax := moneyLineTotals(l.qty, p.price, p.taxRate)
+		subtotal += float64(base)
+		tax += float64(lineTax)
 	}
 	return subtotal, tax
 }
@@ -885,8 +895,8 @@ func (e *moneyEnv) checkStoredRows(tb moneyTB) {
 			rows.Close()
 			tb.Fatalf("AC-2 scan: %v", err)
 		}
-		if n == 0 || !(math.Abs(paid-total) <= 0.5) {
-			tb.Errorf("AC-2: sale %d has %d payment lines summing %v for total %v (gap %v, max 0.5)", id, n, paid, total, paid-total)
+		if n == 0 || paid != total {
+			tb.Errorf("AC-2: sale %d has %d payment lines summing %v for total %v (gap %v, want exact)", id, n, paid, total, paid-total)
 		}
 	}
 	rows.Close()
@@ -914,7 +924,7 @@ func (e *moneyEnv) checkStoredRows(tb moneyTB) {
 	}
 }
 
-// checkWholePesos is the whole-peso part of AC-7 (zero-tax sub-domain) and AC-11.
+// checkWholePesos is the whole-peso part of AC-7 and AC-11 over the full domain.
 func (e *moneyEnv) checkWholePesos(tb moneyTB) {
 	tb.Helper()
 	cols := []struct{ table, col string }{
@@ -1310,10 +1320,10 @@ func TestMoneyModel_T0_ScriptedSequence(t *testing.T) {
 	}{
 		{"open $50.000", func() int { return e.doOpen(t, 50000) }, 201},
 		{"cash sale 1 x Gaseosa", func() int {
-			return e.doSale(t, 0, []moneyLine{{2, 1}}, []moneyPay{{"cash", 1191.19}})
+			return e.doSale(t, 0, []moneyLine{{2, 1}}, []moneyPay{{"cash", 1191}})
 		}, 201},
 		{"credit sale 0.5 kg Queso to Dora", func() int {
-			return e.doSale(t, 1, []moneyLine{{4, 0.5}}, []moneyPay{{"credit", 4999.5}})
+			return e.doSale(t, 1, []moneyLine{{4, 0.5}}, []moneyPay{{"credit", 5000}})
 		}, 201},
 		{"mixed sale 4 x Arroz", func() int {
 			return e.doSale(t, 0, []moneyLine{{1, 4}}, []moneyPay{{"cash", 4000}, {"card", 6000}})
@@ -1331,16 +1341,16 @@ func TestMoneyModel_T0_ScriptedSequence(t *testing.T) {
 	var sum moneyRegisterSummary
 	e.get(t, "/registers/1", &sum)
 	reg := e.reg(1)
-	assertMoney(t, "cash_sales", sum.CashSales, 1191.19)
-	assertMoney(t, "model cash_sales", e.modelCashSales(1), 1191.19)
+	assertMoney(t, "cash_sales", sum.CashSales, 1191)
+	assertMoney(t, "model cash_sales", e.modelCashSales(1), 1191)
 	assertMoney(t, "cash_abonos", sum.CashAbonos, 0)
 	assertMoney(t, "model cash_abonos", e.modelCashAbonos(1), 0)
 	assertMoney(t, "cash_out", sum.CashOut, 8000)
 	assertMoney(t, "model cash_out", e.modelMoves(1, "cash_out"), 8000)
-	assertMoney(t, "expected", sum.Expected, 43191.19)
-	assertMoney(t, "model expected", e.modelExpected(reg), 43191.19)
-	assertMoney(t, "Dora balance", e.customerBalance(t, 1), 2999.5)
-	assertMoney(t, "model Dora balance", e.modelBalance(1), 2999.5)
+	assertMoney(t, "expected", sum.Expected, 43191)
+	assertMoney(t, "model expected", e.modelExpected(reg), 43191)
+	assertMoney(t, "Dora balance", e.customerBalance(t, 1), 3000)
+	assertMoney(t, "model Dora balance", e.modelBalance(1), 3000)
 	if got := e.float(t, `SELECT stock FROM products WHERE id = 1`); got != 500 {
 		t.Errorf("Arroz stock = %v, want 500", got)
 	}
@@ -1366,10 +1376,10 @@ func TestMoneyModel_T3_Rejections(t *testing.T) {
 	assertCode(t, "sale with no register", e.doSale(t, 0, []moneyLine{{1, 1}}, []moneyPay{{"cash", 2500}}), 400)
 	assertCode(t, "open", e.doOpen(t, 50000), 201)
 	assertCode(t, "second open", e.doOpen(t, 10000), 409)
-	assertCode(t, "credit sale 0.5 kg Queso to Dora", e.doSale(t, 1, []moneyLine{{4, 0.5}}, []moneyPay{{"credit", 4999.5}}), 201)
+	assertCode(t, "credit sale 0.5 kg Queso to Dora", e.doSale(t, 1, []moneyLine{{4, 0.5}}, []moneyPay{{"credit", 5000}}), 201)
 	assertCode(t, "abono $2.000", e.doAbono(t, 1, 2000, "cash", "cashier"), 201)
-	assertMoney(t, "Dora balance", e.customerBalance(t, 1), 2999.5)
-	assertCode(t, "abono $3.000 on $2.999,50", e.doAbono(t, 1, 3000, "cash", "cashier"), 400)
+	assertMoney(t, "Dora balance", e.customerBalance(t, 1), 3000)
+	assertCode(t, "abono $3.001 on $3.000", e.doAbono(t, 1, 3001, "cash", "cashier"), 400)
 	assertCode(t, "501 x Arroz with stock 500", e.doSale(t, 0, []moneyLine{{1, 501}}, []moneyPay{{"cash", 1252500}}), 400)
 	e.check(t)
 	assertCode(t, "close register 1", e.doClose(t, 1, 50000), 200)

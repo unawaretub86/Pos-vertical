@@ -38,6 +38,7 @@
 | US-098 | Day windows and stored timestamps agree on one zone: after-19:00 sales missing from "today" (roadmap R-158, R-05) | [x] | 2026-11-10 |
 | US-099 | The pre-migration safety copy gets its own name and survives the daily backup (roadmap R-168, K2) | [x] | 2026-11-12 |
 | US-101 | One name for the Settings screen: "Configuración" in `INSTALL.md`, `MANUAL-USUARIO.md` and the Mesas empty state (roadmap R-170, go-live K4) | [x] | 2026-11-12 |
+| US-102 | Whole-peso money with one rounding rule: line IVA rounded, totals and payments exact, migration 24 for existing rows, no sub-peso *fiado* residue (roadmap R-133 + R-106, go-live K5) | [x] | 2026-11-13 |
 
 **Total estimated effort: ~8 days**
 
@@ -521,3 +522,42 @@ Contract findings and server-side validation gaps resolved: the suite drives ran
 - AC-4: No other behavior changes; the `nav.test.ts:11` fixture label is renamed, assertions untouched.
 
 **Results:** QA round 1 OK (0 BLOCKER, 1 MINOR: the contract check used `grep -c`, which counts lines, not occurrences; corrected in AC-1). No spec change (the spec never names the screen). Gemini skipped (docs-only).
+
+---
+
+## US-102 — Whole-peso money with one rounding rule
+
+**Status:** registered 2026-11-12 (pipeline ID R-133, merged with R-106; go-live K5, `project-docs/roadmap.md:38`). PO confirmed on 2026-11-11 that client #1 charges IVA. Level L. Closed 2026-11-13 (RED `b4c59bc`, implementation `ca70c15`); it changes a business rule and the data (migration 24).
+
+**As** Don Carlos (owner),
+**I want** every amount in the POS to be a whole peso, with IVA rounded the same way on the screen, the ticket and the books,
+**so that** a customer who pays what the screen shows owes exactly $0 and no `$0` in red remains on the *fiado* list.
+
+**Problem (verified 2026-11-12):** line IVA is never rounded (`internal/service/sale.go:71`): $10.001 at 19% is stored as $11.901,19, and a customer paying the displayed $11.901 keeps a $0,19 balance. Table checkout with an IVA product cannot be paid at all (contract V-7). Details and numbers: contract `changes/R-133/contract.md` (disappears with the worktree; the verified criteria are written here at close).
+
+**Acceptance criteria (draft; the contract refines them):**
+- [x] Line subtotal and line IVA are rounded to whole pesos by one rule on the server, mirrored in the frontend; $10.001 at 19% → $11.901.
+- [x] Client total and payments must equal the server total exactly.
+- [x] Migration 24 converts existing rows and leaves no sub-peso *fiado* residue (one rare case remains, R-178).
+- [x] A table order with IVA products can be checked out.
+- [x] The whole-peso property test passes over the full domain (taxed and kg products).
+
+**Verified criteria (closed 2026-11-13):**
+
+GATE 1 (PO, 2026-11-12): Q-1..Q-9 accepted as recommended: round **per line**; keep `float64`/`REAL` and enforce whole pesos in the service and by migration (no `int64`); migration 24 rounds and recomputes; exact tolerance (0); whole-peso validation on every money input; table-checkout IVA fix in scope (Q-6: whether client #1 uses restaurant mode is unanswered, the manual check can wait); residues settled to 0 with one audit row for drift; spec in the new `spec/domain/dinero.md`; the global discount still does not reduce the tax base. Contract discrepancies: the sprint's "$1 gap" was true only for the client-total check, payments used 0,5 (D-1); table checkout with an IVA product could not be paid at all (D-2, fixed); fractional kg quantities needed rounding too, not only IVA (D-3); `moneyTol` and the `0.5 kg Queso → credit 4999.5` case in the money QA layer had to change (D-4); stale spec lines in `caja.md`, `catalogo.md`, `fiado.md` (D-5, fixed at close). Verified by running: reading a `REAL` column into `int64` fails from $1.000.000 up. Six Gemini contract points resolved before code (client tax ignored, zero-total sale, order tax at checkout, audit user and inactive customers, other tax rates, discount bounds). QA round 1: OK, 0 BLOCKER, 5 MINOR (R-177..R-180 opened; the fifth was this spec update); the implementer changed no test after RED. Gemini diff round 1 timed out with no findings. `go build`, `go test ./... -count=1`, `pnpm build`, `pnpm test` (273 tests) and `pnpm lint` (0 problems) green on the rerun; the very first `go test` run hung once in `internal/service` (R-180). Smoke on the compiled binary (port 8099): IVA sale with a bogus client `tax` 1000 stored tax 1.900 and total 11.901; client totals 11.902 and 11.901,19 → 400; abono 100,5 → 400, abono 11.901 → balance 0; table checkout with cash 11.901 → 201; item discount 10.001 on a $10.001 line with empty payments → 201, total 0. **Not run:** migration 24 against a real v23 database file (covered by tests only), and the frontend in a browser. R-181 (UI edge) was found while writing the rules.
+
+Spec: `spec/domain/dinero.md` (new), `caja.md` (I-1, I-2, I-6, known limitation closed), `fiado.md`, `catalogo.md`, `facturacion-dian.md`, `restaurante.md`, `project-docs/README.md`. `rentabilidad.md` needs no change (it states no rounding rule; cost × quantity stays as is).
+
+- AC-1: WHEN a sale is created, the system SHALL price every line with `lineBase = round(quantity × price)`, `lineTax = round(lineSubtotal × rate)` and store whole pesos. $10.001 at 19% → subtotal 10.001, tax 1.900, total 11.901; 3 × $1.001 → tax 570; $50 at 5% → tax 3; $1.050 at 19% → 200; 0,5 kg × $9.999 → 5.000; 8% on $1.001 → 80. Tests: `internal/service/sale_money_test.go` `TestSaleMoney_T1_TaxRoundedAndClientTotalExact`, `T2_TaxIsRoundedPerLine`, `T3_HalfRoundsUp`, `T4_QuantityFractions`, `T5_Discounts`, `T22_OtherRates`.
+- AC-2: The server SHALL ignore the client `tax` and `subtotal` and compare only `total`, exactly: 11.902 → 400 `total inconsistente: esperado 11901, recibido 11902`; 11.901,19 → 400 non-whole; no total (table shape) → priced by the server. Tests: `TestSaleMoney_T1_ErrorNamesBothTotals`, `TestSaleMoneyHTTP_T7_ServerPricesTheSale`.
+- AC-3, AC-4: IF an input is not whole, or a discount is negative or above its line base (global: above Σ line subtotals), THEN 400 and nothing stored; payments must equal the total exactly (cash 5.000 + credit 6.900 on 11.901 → 400; 5.000 + 6.901 → 201). Tests: `TestSaleMoneyHTTP_T6_WholePesoInputsAndExactPayments`, `TestSaleMoneyHTTP_T23_DiscountBounds`.
+- AC-4a: WHEN the server total is 0, an empty payment list SHALL be accepted (no `sale_payments` row), a supplied line rejected. Test: `TestSaleMoneyHTTP_T21_ZeroTotalSale`; `TestMoneyValidation_T12_TotalMustBePositive` rewritten to the new rule.
+- AC-5: WHEN a table order is checked out, the server SHALL price it with the same rule from the non-void items and the products' current `tax_rate`; `GET /orders/{id}` total includes IVA (11.901) and nothing is stored on the order. Tests: `internal/handler/order_money_test.go` `TestOrderMoney_T8_TableCheckoutWithIVA`, `TestOrderMoney_T25_TaxIsNotPersistedOnOrders`.
+- AC-6: WHEN a customer pays a credit sale with an *abono* equal to its credit line, the balance SHALL be exactly 0 ($11.901 credit, *abono* $11.901 → 0; mixed cash 5.000 + credit 6.901, *abono* 6.901 → 0, 6.902 → 400). Tests: `TestSaleMoneyHTTP_T9_AbonoOfDisplayedCreditLeavesZero`, `TestSaleMoneyHTTP_T10_MixedSaleAbono`.
+- AC-7: IF an *abono*, movement, expense, opening or closing amount, product price, cost, wholesale price or purchase unit cost is not whole, THEN 400 and nothing stored. Test: `TestMoneyValidation_US102_T11_NonWholeInputsRejected`.
+- AC-8, AC-9: Migration 24 SHALL round and recompute every stored amount, never fail startup, and write one `money_rounding_migration` audit row for drift (lowest-id active admin; skipped with a log when none; inactive customers included). $11.901,19 credit with abonos 5.000 + 6.901,19 → 0 before and after; credit 11.901,19 with abono 11.901 → 0,19 → 0; two credits of 100,4 and an abono of 200,8 → −1 and one audit row. Tests: `internal/database/migrate_money_test.go` `TestMigration24_T12_RoundsAndRecomputesSales`, `T13_ResiduesSettleToZero`, `T14_DriftWritesOneAuditRow`, `T15_RegisterAndOtherColumns`, `T16_WholeValuesUntouchedAndEmptyDB`, `T24_AuditRowAdminAndInactiveCustomers`; version pins 23 → 24 in `internal/database/schemaversion_test.go`.
+- AC-10: The frontend SHALL compute the same numbers and require `paymentsBalanced` exactly. Tests: `frontend/lib/saleCalc.test.ts` (T-19), `frontend/lib/abono.test.ts` "whole-peso fiado balance (US-102 T-20)".
+- AC-11: The DIAN adapter SHALL compute each line's `TaxAmount` with the per-line rule so `TotalIVA` = Σ lines = `sales.tax` (3 × $1.001 → 190 × 3 = 570, total 3.573). Tests: `internal/factelect/pos_adapter_test.go` `TestPosAdapter_T17_TaxAmountRoundedPerLine`, `TestPosAdapter_T17_HalfRoundsUpOnTheLine`.
+- AC-12: The money property tests SHALL assert whole values over the full domain with exact equality. Tests: `TestMoneyProperties_WholePeso` (build tag removed), `moneyTol` 0 in `internal/handler/money_props_test.go`.
+
+Follow-ups opened: R-177 (open-orders list total without IVA), R-178 (residue 0 < x < 1 may not end at 0), R-179 (clamp can add $1), R-180 (one unexplained `go test` hang), R-181 (cart discount above the base after lowering the quantity).

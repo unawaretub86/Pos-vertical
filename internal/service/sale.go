@@ -37,13 +37,11 @@ func NewSaleService(repo repository.SaleRepository, productRepo repository.Produ
 }
 
 func (s *SaleService) Create(ctx context.Context, sale *model.Sale) (*model.Sale, error) {
+	// Legacy callers send a bare payment_method with no payments[]; validateSale
+	// turns it into one line, which is re-priced to the server total below.
+	legacy := len(sale.Payments) == 0 && sale.PaymentMethod != ""
 	if err := validateSale(sale); err != nil {
 		return nil, err
-	}
-	if len(sale.Payments) > 1 {
-		sale.PaymentMethod = "mixed"
-	} else {
-		sale.PaymentMethod = sale.Payments[0].Method
 	}
 
 	// Verify open register
@@ -53,47 +51,67 @@ func (s *SaleService) Create(ctx context.Context, sale *model.Sale) (*model.Sale
 	}
 	sale.RegisterID = &reg.ID
 
-	// Recalculate totals server-side (subtotal, tax from product tax_rate, total)
+	// Price the sale server-side with the whole-peso rule (money.go): the
+	// client subtotal and tax are never used.
 	var subtotal, tax float64
 	for i := range sale.Items {
-		itemSub := sale.Items[i].Quantity*sale.Items[i].UnitPrice - sale.Items[i].Discount
-		sale.Items[i].Subtotal = itemSub
-		subtotal += itemSub
+		item := &sale.Items[i]
+		lineSub := LineBase(item.Quantity, item.UnitPrice) - item.Discount
+		item.Subtotal = lineSub
+		subtotal += lineSub
 
-		product, err := s.productRepo.GetByID(ctx, sale.Items[i].ProductID)
+		product, err := s.productRepo.GetByID(ctx, item.ProductID)
 		if err != nil {
-			return nil, fmt.Errorf("producto no encontrado (id=%d): %w", sale.Items[i].ProductID, err)
+			return nil, fmt.Errorf("producto no encontrado (id=%d): %w", item.ProductID, err)
 		}
-		if product.Type == "product" && sale.Items[i].Quantity > product.Stock {
-			return nil, fmt.Errorf("stock insuficiente para el producto '%s' (disponible: %.0f, solicitado: %.0f)", product.Name, product.Stock, sale.Items[i].Quantity)
+		if product.Type == "product" && item.Quantity > product.Stock {
+			return nil, fmt.Errorf("stock insuficiente para el producto '%s' (disponible: %.0f, solicitado: %.0f)", product.Name, product.Stock, item.Quantity)
 		}
-		sale.Items[i].TaxRate = product.TaxRate
-		tax += itemSub * product.TaxRate
+		item.TaxRate = product.TaxRate
+		tax += LineTax(lineSub, product.TaxRate)
 
 		// Detect price override
-		if math.Abs(sale.Items[i].UnitPrice-product.SalePrice) > 0.01 {
+		if math.Abs(item.UnitPrice-product.SalePrice) > 0.01 {
 			claims, _ := ctx.Value(appmw.ClaimsKey).(*model.Claims)
 			if claims == nil || claims.Role != "admin" {
 				return nil, fmt.Errorf("solo un administrador puede modificar el precio del producto '%s'", product.Name)
 			}
-			sale.Items[i].OriginalPrice = product.SalePrice
+			item.OriginalPrice = product.SalePrice
 		}
+	}
+	if sale.Discount > subtotal {
+		return nil, errors.New("el descuento no puede superar el subtotal de la venta")
 	}
 	sale.Subtotal = subtotal
 	sale.Tax = tax
 	recalcTotal := subtotal - sale.Discount + tax
-	if math.Abs(recalcTotal-sale.Total) > 1 {
+	if !sale.NoClientTotal && sale.Total != recalcTotal {
 		return nil, fmt.Errorf("total inconsistente: esperado %.0f, recibido %.0f", recalcTotal, sale.Total)
 	}
-	if recalcTotal <= 0 {
-		return nil, errors.New("el total de la venta debe ser mayor a cero")
+	if legacy {
+		if recalcTotal > 0 {
+			sale.Payments[0].Amount = recalcTotal
+		} else {
+			sale.Payments = nil
+		}
 	}
-	// Check payments against the recalculated total too: the client total
-	// may differ by up to 1 from it (US-096, AC-15).
-	if paymentsSum := sumPayments(sale.Payments); math.Abs(paymentsSum-recalcTotal) > 0.5 {
+	if len(sale.Payments) == 0 && recalcTotal > 0 {
+		return nil, errors.New("la venta debe tener al menos un método de pago")
+	}
+	if paymentsSum := sumPayments(sale.Payments); paymentsSum != recalcTotal {
 		return nil, fmt.Errorf("la suma de los pagos ($%.0f) no coincide con el total de la venta ($%.0f)", paymentsSum, recalcTotal)
 	}
 	sale.Total = recalcTotal
+
+	switch {
+	case len(sale.Payments) > 1:
+		sale.PaymentMethod = "mixed"
+	case len(sale.Payments) == 1:
+		sale.PaymentMethod = sale.Payments[0].Method
+	default:
+		// Zero-total sale (every line discounted 100%): no payment rows.
+		sale.PaymentMethod = "cash"
+	}
 
 	if sale.Status == "" {
 		sale.Status = "completed"
@@ -123,50 +141,34 @@ func (s *SaleService) Void(ctx context.Context, saleID int64, userID int64) (*mo
 	return s.repo.Void(ctx, saleID, userID)
 }
 
+// validateSale runs the checks that need no product data: whole-peso inputs,
+// discount bounds and the shape of the payment lines. Pricing-dependent checks
+// (client total, payments sum) are in Create.
 func validateSale(sale *model.Sale) error {
-	// Legacy callers send a bare payment_method with no payments[]; treat it
-	// as a single-line payment for the sale's total.
 	if len(sale.Payments) == 0 && sale.PaymentMethod != "" {
-		sale.Payments = []model.Payment{{Method: sale.PaymentMethod, Amount: sale.Total}}
-	}
-	if len(sale.Payments) == 0 {
-		return errors.New("la venta debe tener al menos un método de pago")
-	}
-	if len(sale.Payments) > 3 {
-		return errors.New("no se pueden combinar más de 3 métodos de pago")
-	}
-	var paymentsSum float64
-	requiresCustomer := false
-	for _, p := range sale.Payments {
-		if !validPaymentMethods[p.Method] {
-			return errors.New("método de pago inválido: debe ser cash, transfer, card o credit")
+		amount := sale.Total
+		if amount <= 0 {
+			amount = 1 // placeholder, replaced by the server total in Create
 		}
-		if p.Amount <= 0 {
-			return errors.New("el monto de cada método de pago debe ser mayor a cero")
-		}
-		if p.Method == "credit" {
-			requiresCustomer = true
-		}
-		paymentsSum += p.Amount
+		sale.Payments = []model.Payment{{Method: sale.PaymentMethod, Amount: amount}}
 	}
-	if requiresCustomer && sale.CustomerID == nil {
-		return errors.New("el método de pago 'credito' requiere un cliente")
+	if len(sale.Items) == 0 {
+		return errors.New("la venta debe tener al menos un artículo")
+	}
+	if !IsWholePeso(sale.Discount) {
+		return errors.New("el descuento debe ser un número entero de pesos")
 	}
 	if sale.Discount < 0 {
 		return errors.New("el descuento no puede ser negativo")
 	}
-	var itemsSubtotal float64
-	for _, item := range sale.Items {
-		itemsSubtotal += item.Quantity*item.UnitPrice - item.Discount
+	if !sale.NoClientTotal && !IsWholePeso(sale.Total) {
+		return errors.New("el total debe ser un número entero de pesos")
 	}
-	if sale.Discount > itemsSubtotal {
-		return errors.New("el descuento no puede superar el subtotal de la venta")
+	if sale.CashTendered != nil && !IsWholePeso(*sale.CashTendered) {
+		return errors.New("el efectivo recibido debe ser un número entero de pesos")
 	}
-	if math.Abs(paymentsSum-sale.Total) > 0.5 {
-		return fmt.Errorf("la suma de los pagos ($%.0f) no coincide con el total de la venta ($%.0f)", paymentsSum, sale.Total)
-	}
-	if len(sale.Items) == 0 {
-		return errors.New("la venta debe tener al menos un artículo")
+	if sale.ChangeAmount != nil && !IsWholePeso(*sale.ChangeAmount) {
+		return errors.New("el cambio debe ser un número entero de pesos")
 	}
 	for _, item := range sale.Items {
 		if item.Quantity <= 0 {
@@ -175,12 +177,39 @@ func validateSale(sale *model.Sale) error {
 		if item.UnitPrice < 0 {
 			return errors.New("el precio unitario no puede ser negativo")
 		}
+		if !IsWholePeso(item.UnitPrice) {
+			return errors.New("el precio unitario debe ser un número entero de pesos")
+		}
+		if !IsWholePeso(item.Discount) {
+			return errors.New("el descuento por artículo debe ser un número entero de pesos")
+		}
 		if item.Discount < 0 {
 			return errors.New("el descuento por artículo no puede ser negativo")
 		}
-		if item.Discount > item.Quantity*item.UnitPrice {
+		if item.Discount > LineBase(item.Quantity, item.UnitPrice) {
 			return errors.New("el descuento por artículo no puede superar el subtotal del artículo")
 		}
+	}
+	if len(sale.Payments) > 3 {
+		return errors.New("no se pueden combinar más de 3 métodos de pago")
+	}
+	requiresCustomer := false
+	for _, p := range sale.Payments {
+		if !validPaymentMethods[p.Method] {
+			return errors.New("método de pago inválido: debe ser cash, transfer, card o credit")
+		}
+		if !IsWholePeso(p.Amount) {
+			return errors.New("el monto de cada método de pago debe ser un número entero de pesos")
+		}
+		if p.Amount <= 0 {
+			return errors.New("el monto de cada método de pago debe ser mayor a cero")
+		}
+		if p.Method == "credit" {
+			requiresCustomer = true
+		}
+	}
+	if requiresCustomer && sale.CustomerID == nil {
+		return errors.New("el método de pago 'credito' requiere un cliente")
 	}
 	return nil
 }

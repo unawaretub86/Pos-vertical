@@ -47,7 +47,10 @@ func (s *PurchaseService) Create(ctx context.Context, userID int64, p *model.Pur
 		if p.Items[i].UnitCost < 0 {
 			return nil, ErrPurchaseInvalidCost
 		}
-		p.Items[i].Subtotal = p.Items[i].Quantity * p.Items[i].UnitCost
+		if !IsWholePeso(p.Items[i].UnitCost) {
+			return nil, ErrNotWholePeso
+		}
+		p.Items[i].Subtotal = LineBase(p.Items[i].Quantity, p.Items[i].UnitCost)
 		total += p.Items[i].Subtotal
 	}
 	p.Total = total

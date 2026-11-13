@@ -64,7 +64,7 @@ type queryer interface {
 
 const itemSelect = `
 	SELECT i.id, i.order_id, i.product_id, p.name, i.quantity, i.unit_price,
-	       i.quantity * i.unit_price, COALESCE(i.note, ''), i.status
+	       i.quantity * i.unit_price, COALESCE(i.note, ''), i.status, p.tax_rate
 	FROM order_items i JOIN products p ON p.id = i.product_id`
 
 type rowScanner interface {
@@ -74,7 +74,7 @@ type rowScanner interface {
 func scanItem(s rowScanner) (*model.OrderItem, error) {
 	it := &model.OrderItem{}
 	if err := s.Scan(&it.ID, &it.OrderID, &it.ProductID, &it.ProductName, &it.Quantity,
-		&it.UnitPrice, &it.Subtotal, &it.Note, &it.Status); err != nil {
+		&it.UnitPrice, &it.Subtotal, &it.Note, &it.Status, &it.TaxRate); err != nil {
 		return nil, err
 	}
 	return it, nil
@@ -353,9 +353,6 @@ func (r *orderRepo) Get(ctx context.Context, id int64) (*model.Order, error) {
 		it, err := scanItem(rows)
 		if err != nil {
 			return nil, fmt.Errorf("order item scan: %w", err)
-		}
-		if it.Status != "void" {
-			o.Total += it.Subtotal
 		}
 		o.Items = append(o.Items, *it)
 	}

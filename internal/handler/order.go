@@ -220,14 +220,9 @@ func (h *Handler) checkoutOrder(w http.ResponseWriter, r *http.Request) {
 		req.Sale.UserID = claims.UserID
 	}
 
-	var subtotal float64
-	for i := range req.Sale.Items {
-		item := &req.Sale.Items[i]
-		item.Subtotal = item.UnitPrice*item.Quantity - item.Discount
-		subtotal += item.Subtotal
-	}
-	req.Sale.Subtotal = subtotal
-	req.Sale.Total = subtotal - req.Sale.Discount + req.Sale.Tax
+	// The service prices the sale (including IVA) from the products' current
+	// tax_rate; the order total is not trusted from the client.
+	req.Sale.NoClientTotal = true
 
 	created, err := h.sales.Create(r.Context(), &req.Sale)
 	if errors.Is(err, repository.ErrBusy) {

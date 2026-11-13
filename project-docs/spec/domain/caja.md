@@ -1,7 +1,7 @@
 # Domain — Cash register (*caja*: opening, movements, close)
 
 > **Type:** spec · **Current:** yes · **Rules over:** cash count (*arqueo*), reconciliation (*cuadre*), register difference
-> **Updated:** 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-10 (US-098: the "day" of the estimated cash is the server-local day, see `tiempo.md`) · 2026-11-09 (US-095: void dialog in the dashboard, closed-register warning) · 2026-11-09 (US-092: an opening *fiado* balance never reaches the register; I-3 reads opening + credit − *abonos*) · 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
+> **Updated:** 2026-11-13 (US-102: whole-peso money, I-1, I-2 and I-6 exact, known limitation closed, see `dinero.md`) · 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-10 (US-098: the "day" of the estimated cash is the server-local day, see `tiempo.md`) · 2026-11-09 (US-095: void dialog in the dashboard, closed-register warning) · 2026-11-09 (US-092: an opening *fiado* balance never reaches the register; I-3 reads opening + credit − *abonos*) · 2026-11-08 (US-096: movement validations and money invariants) · 2026-11-08 (US-091: certified shift worked example; transfer/card *abonos* reach no close figure, R-134) · 2026-11-07 (US-081: several LAN devices share the one open register; open race noted, R-121) · 2026-11-07 (US-088: a void inserts no register movement, R-110 closed) · 2026-11-05 (US-082: cash *abonos* in expected cash) · Verified against the code on 2026-11-05 for the expected-cash rule (US-082) and on 2026-10-13 for the rest (US-071: transactional opening, US-053: email at close, US-076: App Password never returned by the API).
 
 The register is where the system earns or loses the cashier's trust. A reconciliation that comes out wrong with no explanation sends the shop back to the notebook.
 
@@ -68,20 +68,16 @@ An opening *fiado* balance (*deuda anterior*, `fiado.md` "Rule: opening balance"
 
 A state-machine property test suite (`TestMoneyProperties_StateMachine` and `TestMoneyProperties_WholePesoZeroTax` in `internal/handler/money_props_test.go`, using `pgregory.net/rapid`) generates random sequences of money operations (open register, cash / transfer / card / mixed / credit sales, *abonos*, cash in / out, expenses, voids, close) across 100 sequences (~30 steps each) through real HTTP routes and checks six invariants after every step against an independent model:
 
-- **I-1 (payments vs total):** `|Σ sale_payments.amount − sales.total| ≤ 0.5`, and every payment line is `> 0`.
-- **I-2 (register):** For every register, `GET /registers/{id}` returns `cash_sales`, `cash_abonos`, `cash_in`, `cash_out` and `expected` equal to the model within the ±$0,01 tolerance. When a register is closed, stored `expected_close` equals the model's expected at that moment, and `difference = actual_close − expected_close`. A later void adjusts only recomputed `expected`.
+- **I-1 (payments vs total):** `Σ sale_payments.amount = sales.total` exactly (US-102; it was within 0.5), and every payment line is `> 0`. The one exception is a zero-total sale, which has no payment rows (`dinero.md`).
+- **I-2 (register):** For every register, `GET /registers/{id}` returns `cash_sales`, `cash_abonos`, `cash_in`, `cash_out` and `expected` equal to the model exactly (US-102; the tolerance was ±$0,01). When a register is closed, stored `expected_close` equals the model's expected at that moment, and `difference = actual_close − expected_close`. A later void adjusts only recomputed `expected`.
 - **I-3 (balance):** Customer balance in `GET /customers/{id}/balance`, `GET /customers` and `pos-summary` agree with each other and with the model's opening + completed credit − *abonos* (`fiado.md`, "Rule: customer balance"). The generator never records an opening balance, so opening is 0 for every customer it creates (US-092). `total_portfolio` equals the sum of positive model balances. Unvoided credit sales keep balance `≥ 0`.
 - **I-4 (void):** An admin void drops register `expected` by the cash payments, drops customer balance by credit lines, restores stock for product items (service items unchanged), and adds no register movements. Repeated void answers 400 `la venta ya fue anulada`; a cashier gets 403.
 - **I-5 (rejected step changes nothing):** If a step is rejected (any 4xx or 500), row counts and sums of sales, payments, movements, registers, expenses, and product stock remain unchanged.
-- **I-6 (positive and whole amounts):** Every payment, movement, and expense amount is `> 0`, and `opening_amount ≥ 0`. In zero-tax unit product sequences, every stored money column is an integer (`x == math.Trunc(x)`).
+- **I-6 (positive and whole amounts):** Every payment, movement, and expense amount is `> 0`, and `opening_amount ≥ 0`. In the full domain (taxed lines, kg quantities), every stored money column is an integer (`x == math.Trunc(x)`, `TestMoneyProperties_WholePeso`, `dinero.md`).
 
 Amount fuzz targets (`FuzzSaleAmounts` and `FuzzAbonoAmount` in `internal/handler/money_fuzz_test.go`) verify that sale and *abono* inputs never trigger a panic or 5xx; valid inputs satisfy I-1 and I-6, while 4xx rejections change nothing (I-5).
 
-**Known limitation:** Amounts are not whole pesos in the full domain (taxed lines, kg quantities, *abonos* such as 0.4). This can be reproduced with:
-```bash
-go test -count=1 -tags moneyexact ./internal/handler/ -run 'TestMoneyProperties_WholePeso$'
-```
-(tracked in roadmap R-133).
+**Whole pesos (US-102).** Every money amount is a whole peso and the rounding rule lives in [dinero.md](dinero.md). The register inputs (opening amount, cash in/out amount, closing count) must be whole: a fraction → 400 and nothing is stored. The former "known limitation" (taxed lines, kg quantities and *abonos* such as 0.4 left cents) is closed; the `moneyexact` build tag is gone.
 
 ## Rule: estimated cash of the day (dashboard)
 

@@ -1,7 +1,7 @@
 # Domain — Product catalog (products, categories, catalog import)
 
 > **Type:** spec · **Current:** yes · **Rules over:** what a product is, barcode and category uniqueness, how stock is traced, how a catalog is imported from CSV
-> **Updated:** 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-09 (US-097: singular wording for count 1 in the catalog import UI; US-094: catalog import from CSV) · Verified against the code on that date (`internal/model/model.go:71-87`, `internal/database/migrate.go:170-192`, `:302-303`, `internal/service/product.go`, `internal/service/product_import.go`, `internal/repository/product_import.go`, `internal/handler/product_import.go`, `frontend/lib/productImport.ts`, `frontend/components/ProductImportModal.tsx`).
+> **Updated:** 2026-11-13 (US-102: whole-peso prices and cost on the manual form and API) · 2026-11-10 (US-093: pointer to the go-live reset) · 2026-11-09 (US-097: singular wording for count 1 in the catalog import UI; US-094: catalog import from CSV) · Verified against the code on that date (`internal/model/model.go:71-87`, `internal/database/migrate.go:170-192`, `:302-303`, `internal/service/product.go`, `internal/service/product_import.go`, `internal/repository/product_import.go`, `internal/handler/product_import.go`, `frontend/lib/productImport.ts`, `frontend/components/ProductImportModal.tsx`).
 
 The catalog is master data: the US-093 reset keeps products, categories and the stock loaded by an import, and rebuilds `products.stock` from `stock_entries` (rule B, [reset.md](reset.md)). Stock that no entry explains (manual product form, R-153) is lost unless re-entered; the reset dry-run lists it.
 
@@ -17,12 +17,12 @@ The catalog is master data: the US-093 reset keeps products, categories and the 
 | `category_id` | Optional (NULL = no category); must exist (foreign key). |
 | `type` | `product` or `service`. |
 | `unit` | `unit`, `kg`, `lb` or `liter` (CHECK + service). |
-| `sale_price`, `cost`, `wholesale_price` | Pesos stored as `REAL` (whole-peso storage is roadmap R-133). |
+| `sale_price`, `cost`, `wholesale_price` | Whole pesos (`REAL` columns that only hold integers, [dinero.md](dinero.md)). The manual form and the API reject a fraction with 400 `el precio de venta / el costo / el precio mayorista debe ser un número entero de pesos` (US-102). |
 | `stock`, `min_stock` | `REAL`; `stock < min_stock` is *se está acabando* (running low, `glosario.md`). |
 | `tax_rate` | IVA (Colombian VAT) as a fraction: 0, 0.05, 0.19. The form shows a percentage. |
 | `active` | Logical delete: `DELETE /products/{id}` sets `active = 0`. |
 
-Known gap: the manual create/edit form validates only name, `sale_price ≥ 0`, type and unit, so it accepts fractional prices and negative cost, stock and minimum stock (roadmap R-150). The import is stricter.
+Known gap: the manual create/edit form validates name, `sale_price ≥ 0`, type, unit and (since US-102) whole-peso prices and cost, but still accepts a negative cost, stock and minimum stock (roadmap R-150, now only that part). The import is stricter.
 
 ## Category
 

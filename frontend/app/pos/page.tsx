@@ -12,7 +12,7 @@ import { getUser } from '@/lib/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { shouldAutoPrint, handleTicketPrint } from '@/lib/printFlow';
-import { calcSubtotal, calcTax, calcTotal } from '@/lib/saleCalc';
+import { calcSubtotal, calcTax, calcTotal, lineBase } from '@/lib/saleCalc';
 import { readActiveCart, writeActiveCart } from '@/lib/activeCart';
 import SalePaymentPanel, { type CheckoutData, type Customer } from '@/components/SalePaymentPanel';
 import { decideUsualAdd, type PosSummaryTopProduct } from '@/lib/posSummary';
@@ -226,7 +226,7 @@ function CartItemRow({
   const [hovered, setHovered] = useState(false);
   const [trashHover, setTrashHover] = useState(false);
   const [showDiscount, setShowDiscount] = useState(item.discount > 0);
-  const lineTotal = item.unitPrice * item.quantity - item.discount;
+  const lineTotal = lineBase(item.unitPrice, item.quantity) - item.discount;
   const hasWholesale = (item.product.wholesale_price ?? 0) > 0;
   const expectedPrice = item.priceMode === 'wholesale' ? (item.product.wholesale_price ?? item.product.sale_price) : item.product.sale_price;
   const isPriceOverridden = item.unitPrice !== expectedPrice;
@@ -241,11 +241,11 @@ function CartItemRow({
     let discountAmount: number;
     if (item.discountType === 'pct') {
       const pct = Math.min(num, 100);
-      discountAmount = (item.unitPrice * item.quantity * pct) / 100;
+      discountAmount = Math.round((lineBase(item.unitPrice, item.quantity) * pct) / 100);
       onDiscountChange(discountAmount, 'pct', String(pct));
     } else {
-      const max = item.unitPrice * item.quantity;
-      discountAmount = Math.min(num, max);
+      const max = lineBase(item.unitPrice, item.quantity);
+      discountAmount = Math.min(Math.round(num), max);
       onDiscountChange(discountAmount, 'fixed', String(discountAmount));
     }
   }
@@ -380,7 +380,7 @@ function CartItemRow({
               const raw = e.target.value;
               const num = parseFloat(raw);
               if (raw === '') { onPriceChange(item.product.sale_price, ''); return; }
-              if (!isNaN(num) && num >= 0) onPriceChange(num, raw);
+              if (!isNaN(num) && num >= 0) onPriceChange(Math.round(num), raw);
             }}
             onBlur={e => {
               const num = parseFloat(e.target.value);
@@ -779,7 +779,7 @@ function POSContent() {
           quantity: i.quantity,
           unit_price: i.unitPrice,
           discount: i.discount,
-          subtotal: i.unitPrice * i.quantity - i.discount,
+          subtotal: lineBase(i.unitPrice, i.quantity) - i.discount,
         })),
       };
 
@@ -1201,7 +1201,7 @@ function POSContent() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {parkedCarts.map(parked => {
-                  const parkedTotal = parked.items.reduce((s, i) => s + i.unitPrice * i.quantity - i.discount, 0);
+                  const parkedTotal = parked.items.reduce((s, i) => s + lineBase(i.unitPrice, i.quantity) - i.discount, 0);
                   return (
                     <div
                       key={parked.id}

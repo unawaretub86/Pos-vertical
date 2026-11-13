@@ -26,6 +26,9 @@ type OrderItem struct {
 	Subtotal    float64 `json:"subtotal"`
 	Note        string  `json:"note"`
 	Status      string  `json:"status"`
+	// TaxRate is the product's current IVA rate, read with the item so the
+	// service can price the order. It is not stored on the item.
+	TaxRate float64 `json:"-"`
 }
 
 // OrderSummary is a row of the open-orders list.
