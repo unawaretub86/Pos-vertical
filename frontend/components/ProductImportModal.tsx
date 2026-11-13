@@ -5,7 +5,11 @@ import { api } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import {
   IMPORT_FIELDS,
+  STARTER_CATALOG_FILE_NAME,
+  STARTER_CATALOG_WARNING,
   TEMPLATE_FILE_NAME,
+  loadStarterCatalog,
+  shouldShowStarterWarning,
   buildMappingPayload,
   buildTemplateCSV,
   bytesToBase64,
@@ -97,6 +101,23 @@ export default function ProductImportModal({ onClose, onImported }: ProductImpor
     await check(b64, file.name, null, bytes);
   }
 
+  async function handleStarter() {
+    setError(null);
+    let bytes: Uint8Array;
+    try {
+      bytes = await loadStarterCatalog();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el catálogo base');
+      return;
+    }
+    const b64 = bytesToBase64(bytes);
+    setFileName(STARTER_CATALOG_FILE_NAME);
+    setContent(b64);
+    setHeaders([]);
+    setMapping(emptyMapping());
+    await check(b64, STARTER_CATALOG_FILE_NAME, null, bytes);
+  }
+
   async function handleCommit() {
     if (!report || sentRef.current) return;
     sentRef.current = true;
@@ -134,7 +155,8 @@ export default function ProductImportModal({ onClose, onImported }: ProductImpor
 
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
           Sube un archivo CSV. Desde Excel: Archivo › Guardar como › CSV UTF-8.{' '}
-          <button type="button" onClick={downloadTemplate} style={linkStyle}>Descargar plantilla</button>
+          <button type="button" onClick={downloadTemplate} style={linkStyle}>Descargar plantilla</button>{' '}
+          <button type="button" onClick={handleStarter} disabled={busy !== null} style={linkStyle}>Cargar catálogo base de tienda</button>
         </div>
 
         <input
@@ -230,6 +252,12 @@ export default function ProductImportModal({ onClose, onImported }: ProductImpor
             {report.new_categories.length > 0 && (
               <div style={{ color: 'var(--text-secondary)' }}>Categorías nuevas: {report.new_categories.join(', ')}</div>
             )}
+          </div>
+        )}
+
+        {shouldShowStarterWarning(fileName) && (
+          <div style={{ fontSize: '13px', color: 'var(--warning)', padding: '8px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '6px', overflowWrap: 'anywhere' }}>
+            {STARTER_CATALOG_WARNING}
           </div>
         )}
 

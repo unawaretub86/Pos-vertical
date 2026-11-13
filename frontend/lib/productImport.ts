@@ -70,6 +70,29 @@ export function buildTemplateCSV(): string {
   return '﻿' + TEMPLATE_LINES.join('\r\n');
 }
 
+/** Starter catalog (US-103): static file embedded in the exe through public/. */
+export const STARTER_CATALOG_URL = '/catalogo-base-tienda.csv';
+export const STARTER_CATALOG_FILE_NAME = 'catalogo-base-tienda.csv';
+export const STARTER_CATALOG_WARNING = 'Todos los precios son $1.000 de referencia; ajústelos antes de vender.';
+
+/** The placeholder-price warning shows only while the starter file is the loaded one. */
+export function shouldShowStarterWarning(fileName: string): boolean {
+  return fileName === STARTER_CATALOG_FILE_NAME;
+}
+
+/** Fetches the starter catalog as raw bytes; throws a user-facing error on failure. */
+export async function loadStarterCatalog(
+  fetchFn: typeof fetch = fetch,
+): Promise<Uint8Array> {
+  try {
+    const res = await fetchFn(STARTER_CATALOG_URL);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    return new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    throw new Error('No se pudo cargar el catálogo base', { cause: err });
+  }
+}
+
 /**
  * Base64 of raw bytes (not of UTF-8 text, so a Windows-1252 file survives).
  * Built in chunks: spreading a large array into String.fromCharCode

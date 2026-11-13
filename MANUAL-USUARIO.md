@@ -28,6 +28,12 @@ Al iniciar por primera vez se pedirá configurar:
 - Moneda
 - Usuario y contraseña del administrador
 
+### Catálogo base de tienda
+
+Antes de agregar otros productos, puede cargar una lista de productos frecuentes de tienda de barrio: vaya a Inventario › Productos › Importar productos › **Cargar catálogo base de tienda** y confirme.
+
+**Todos los precios del catálogo base son de $1.000 de referencia. Usted debe ajustarlos antes de vender.**
+
 ---
 
 ## Cómo cerrar el sistema

@@ -56,6 +56,8 @@ Para que el sistema arranque solo cuando el computador se enciende y entra a Win
 
 4. Configure su negocio: ingrese el nombre, NIT y moneda. Luego cree su primer cajero y registre sus productos.
 
+5. **Catálogo base de tienda (opcional).** Antes de agregar otros productos, vaya a Inventario › Productos › Importar productos › **Cargar catálogo base de tienda** y confirme. **Todos los precios del catálogo base son de $1.000 de referencia: usted debe ajustarlos antes de vender.**
+
 > A partir de este momento el sistema está listo para usarse.
 
 ---

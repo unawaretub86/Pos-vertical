@@ -39,6 +39,7 @@
 | US-099 | The pre-migration safety copy gets its own name and survives the daily backup (roadmap R-168, K2) | [x] | 2026-11-12 |
 | US-101 | One name for the Settings screen: "Configuración" in `INSTALL.md`, `MANUAL-USUARIO.md` and the Mesas empty state (roadmap R-170, go-live K4) | [x] | 2026-11-12 |
 | US-102 | Whole-peso money with one rounding rule: line IVA rounded, totals and payments exact, migration 24 for existing rows, no sub-peso *fiado* residue (roadmap R-133 + R-106, go-live K5) | [x] | 2026-11-13 |
+| US-103 | Starter catalog for the neighborhood shop: about 150 generic products importable in one click through the US-094 import (roadmap R-173, launch stage 2) | [x] | 2026-11-13 |
 
 **Total estimated effort: ~8 days**
 
@@ -561,3 +562,29 @@ Spec: `spec/domain/dinero.md` (new), `caja.md` (I-1, I-2, I-6, known limitation 
 - AC-12: The money property tests SHALL assert whole values over the full domain with exact equality. Tests: `TestMoneyProperties_WholePeso` (build tag removed), `moneyTol` 0 in `internal/handler/money_props_test.go`.
 
 Follow-ups opened: R-177 (open-orders list total without IVA), R-178 (residue 0 < x < 1 may not end at 0), R-179 (clamp can add $1), R-180 (one unexplained `go test` hang), R-181 (cart discount above the base after lowering the quantity).
+
+---
+
+## US-103 — Starter catalog for the neighborhood shop
+
+**Status:** closed 2026-11-13 (pipeline ID R-173; QA round 1 OK, 0 BLOCKER, 3 MINOR). Level M.
+
+**As** Don Carlos (owner),
+**I want** a ready list of the products a neighborhood shop sells every day, loaded in one click,
+**so that** the POS is not delivered empty and I only fix prices instead of typing 150 products.
+
+**Verified criteria:**
+- AC-1: The repository SHALL contain one starter catalog, `frontend/public/catalogo-base-tienda.csv`, in the template format (UTF-8 BOM, `;`, CRLF, ten-column header). Tests: `TestStarterCatalog_T3_FormatShapeAndPrices`; header equal to the template in `frontend/lib/productImport.test.ts` T-7.
+- AC-2: WHEN the file is dry-run on an empty catalog with no mapping, the system SHALL report `valid: true`, 0 errors, `valid_rows == total_rows`, no ignored headers, `utf-8`, `;`. Test: `TestStarterCatalog_T1_DryRunIsValid`.
+- AC-3: WHEN it is committed on an empty catalog, the system SHALL create one active `product` per row, one category per distinct category and no `stock_entries` (158 products, 12 categories). Test: `TestStarterCatalog_T2_CommitCreatesProductsAndCategories`.
+- AC-4: The file SHALL hold 140-170 rows in 12 categories, unique names after normalization, every price exactly `1000`, under 2 MiB. Test: `TestStarterCatalog_T3_FormatShapeAndPrices`.
+- AC-5: The file SHALL contain no barcode and no IVA value on any row. Test: `TestStarterCatalog_T4_NoBarcodeNoIVA`.
+- AC-6: WHEN an admin opens `Importar productos`, the modal SHALL offer `Cargar catálogo base de tienda`, which fetches `/catalogo-base-tienda.csv` and runs the same dry run, mapping and commit as a picked file; nothing is written until `Importar <n> productos`. Tests: `frontend/lib/productImport.test.ts` T-6 (URL, file name, bytes); render by manual check `gaps.md` US-103 M-1; the embedded file served byte-identical by a built binary (QA smoke).
+- AC-7: IF the file cannot be fetched, the modal SHALL show `No se pudo cargar el catálogo base` and keep the picker usable. Test: `frontend/lib/productImport.test.ts` T-6 (404 throws the message).
+- AC-8: WHILE an ACTIVE product with the same name as a starter row exists, the import SHALL keep its all-or-nothing rejection; an INACTIVE one SHALL NOT block. Tests: `TestStarterCatalog_T5_ActiveSameNameRejectsAll`, `TestStarterCatalog_T5b_InactiveSameNameDoesNotBlock`.
+- AC-9: `INSTALL.md` and `MANUAL-USUARIO.md` SHALL state in bold that all starter prices are $1.000 placeholders to set before selling and that the catalog is loaded first. Verified by QA reading the diff (no automated test).
+- AC-10: WHILE the starter file is loaded, the modal SHALL show `Todos los precios son $1.000 de referencia; ajústelos antes de vender.` above the confirm button. Tests: `frontend/lib/productImport.test.ts` T-8 (constant, `shouldShowStarterWarning`); render by manual check `gaps.md` US-103 M-1.
+
+Spec: `spec/domain/catalogo.md` (UI bullet and new "Starter catalog" section). Manual check parked: `gaps.md` US-103 M-1 (modal render, warning, embedded file served from `pos.exe`, sale of a starter product at $1.000).
+
+Follow-ups opened: R-182 (real prices for the starter catalog), R-183 (importer mode for a blank price), R-184 (PO review of `Recarga a celular`, `Cerveza 330 ml`, `Helado de paleta`, `Panela` unit). Skipping existing rows stays R-154.

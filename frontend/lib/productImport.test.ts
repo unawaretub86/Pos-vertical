@@ -12,7 +12,14 @@ import {
   importedToast,
   canImportProducts,
   PRODUCT_IMPORT_ACTION_LABELS,
+  STARTER_CATALOG_URL,
+  STARTER_CATALOG_FILE_NAME,
+  STARTER_CATALOG_WARNING,
+  loadStarterCatalog,
+  shouldShowStarterWarning,
 } from './productImport';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Contract US-094 §4, F-1..F-6 (product catalog import).
 //
@@ -32,7 +39,7 @@ const TEMPLATE_ROW_2 = 'Queso campesino;;Lácteos;kg;14.000;18.000;3,5;1;0;';
 describe('F-1 buildTemplateCSV', () => {
   it('has a BOM, CRLF lines, the AC-28 header and exactly the two example rows', () => {
     const csv = buildTemplateCSV();
-    expect(csv.startsWith('﻿')).toBe(true);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
     const body = csv.slice(1);
     expect(body).toContain('\r\n');
     // Every line break is CRLF: no bare \n.
@@ -155,5 +162,59 @@ describe('R-157 T-3 audit description singular', () => {
     expect(describeProductImportAudit('{"products_created":0,"file_name":"inventario.csv"}')).toBe(
       '0 productos importados de «inventario.csv»',
     );
+  });
+});
+
+// Contract R-173 (US-103) §4, T-6..T-8 (starter catalog).
+// Assumed, not fixed by the contract: loadStarterCatalog(fetchFn) resolves to a
+// Uint8Array and the fetch stub exposes { ok, status, arrayBuffer() }.
+
+function fetchStub(ok: boolean, status: number, bytes: number[] = []) {
+  return async () => ({
+    ok,
+    status,
+    arrayBuffer: async () => new Uint8Array(bytes).buffer,
+  });
+}
+
+describe('T-6 starter catalog loading', () => {
+  it('exposes the URL and the file name', () => {
+    expect(STARTER_CATALOG_URL).toBe('/catalogo-base-tienda.csv');
+    expect(STARTER_CATALOG_FILE_NAME).toBe('catalogo-base-tienda.csv');
+  });
+
+  it('returns the same 4 bytes the fetch delivered', async () => {
+    const out = await loadStarterCatalog(fetchStub(true, 200, [0xef, 0xbb, 0xbf, 0x4e]) as never);
+    expect(Array.from(out)).toEqual([0xef, 0xbb, 0xbf, 0x4e]);
+  });
+
+  it('throws the Spanish error on a 404', async () => {
+    await expect(loadStarterCatalog(fetchStub(false, 404) as never)).rejects.toThrow(
+      'No se pudo cargar el catálogo base',
+    );
+  });
+});
+
+describe('T-7 template header matches the starter file', () => {
+  it('first line of buildTemplateCSV equals the first line of the starter CSV', () => {
+    const file = readFileSync(resolve(__dirname, '../public/catalogo-base-tienda.csv'), 'utf8');
+    const starterFirst = file.replace(/^\uFEFF/, '').split('\r\n')[0];
+    const templateFirst = buildTemplateCSV().replace(/^\uFEFF/, '').split('\r\n')[0];
+    expect(starterFirst).toBe(templateFirst);
+    expect(starterFirst).toBe(TEMPLATE_HEADER);
+  });
+});
+
+describe('T-8 starter placeholder-price warning', () => {
+  it('has the exact warning text', () => {
+    expect(STARTER_CATALOG_WARNING).toBe(
+      'Todos los precios son $1.000 de referencia; ajústelos antes de vender.',
+    );
+  });
+
+  it('shows only for the starter file name', () => {
+    expect(shouldShowStarterWarning('catalogo-base-tienda.csv')).toBe(true);
+    expect(shouldShowStarterWarning('mis-productos.csv')).toBe(false);
+    expect(shouldShowStarterWarning('')).toBe(false);
   });
 });

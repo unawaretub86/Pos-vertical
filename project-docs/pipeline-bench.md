@@ -1,6 +1,6 @@
 # Agentic pipeline benchmark
 
-> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-11 (run 31) · 2026-11-10 (run 30)
+> **Type:** current · **Rules over:** how the `/us` pipeline performs run by run · **Updated:** 2026-11-12 (run 36) · 2026-11-11 (run 31) · 2026-11-10 (run 30)
 
 Each `/us` run adds a row to the runs table and a detail section. The orchestrator does it in step 6 of `.claude/commands/us.md`, in the same merge commit. It exists to decide with data, not impressions, whether the pipeline is worth what it costs and what to adjust. The design is in [tosdd-plan.md](tosdd-plan.md).
 
@@ -84,6 +84,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 33 | 2026-11-12 | US-100 (R-162: time-zone startup warning) | M | ~103k (A 51.4k, last of 40.8k→51.4k · I 26.5k · Q 24.9k) | 35 (A 19 · I 10 · Q 6) | ~4.2 (A ~2.0 · I ~1.6 · Q ~0.6) | 0 | 1 | 0 contract discrepancies + 1 QA MINOR (spec pending until close) + 1 Gemini false positive | 1 new (R-176); R-162 and K3 closed | 0 | +90 / −1, 2 code files (excluding docs) |
 | 34 | 2026-11-11 | US-101 (R-170, one name for the Settings screen; built as "US-099" in a parallel session, renumbered at merge) | M | ~87k excluding the close pass (A 38.8k · I 22.2k · Q 26.5k) | 36 excluding the close pass (A 24 · I 5 · Q 7) | ~4.1 min excluding the close pass (A 69 s · I 58 s · Q 117 s) | 0 | 1 | 3 contract discrepancies (D-1..D-3) + 1 QA MINOR (check wording) | 0 new; R-170 closed | 0 | docs and one UI string |
 | 35 | 2026-11-13 | US-102 (R-133 + R-106, whole-peso money with one rounding rule; go-live K5) | L | ~796k (A 225.4k cumulative over 3 invocations · T 226.0k · I 156.7k · Q 83.9k) | 293 (A 127 · T 70 · I 59 · Q 37) | ~46 min excluding the analyst (T ~13.7 · I ~9.1 · Q ~17.4 incl. a smoke run); analyst n/a (contract 476 s, GATE 1 fold-in 837 s, close mostly waiting) | 0 | 1 | 4 contract discrepancies (incl. a new table-checkout IVA bug) + 6 Gemini-verified contract gaps + 5 QA MINOR | 5 new (R-177..R-181); R-133 and R-106 closed | 0 | +1,992 / −215, 46 files (code 21 files +501 / −111) |
+| 36 | 2026-11-12 | US-103 (R-173, starter product list for the catalog; registered as US-103 by the analyst) | M | ~350k (A 188.2k over 4 invocations · T 62.9k over 2 · I 55.8k · Q 43.1k) | 130 (A 62 · T 25 · I 27 · Q 16) | ~13 min excluding Gemini and GATE waits (A 317 s · T 112 s · I 220 s · Q 130 s) | 0 outside GATE 1 and 2 (1 test-author relaunch) | 1 | 4 Gemini-verified minor contract gaps + 3 QA MINOR (product-list content) | 3 new (R-182..R-184, real prices); R-173 closed | 0 | n/a |
 
 ### Trend
 
@@ -1492,3 +1493,24 @@ Created from dev `4aeaa4c`. Roadmap items R-133 and R-106, registered as US-102 
 **Operational friction.** The test-author weakened two existing assertions (cash_out 0.4 → 400; float tolerance test) as the contract required, and the pos-guard hook warned on both. Two peer sessions were idle during the run. The gopls "not in workspace" diagnostics for the worktree are noise.
 
 **What to measure next.** Whether Gemini diff timeouts repeat on diffs of this size (~2,000 lines); whether R-180 (service-test hang) recurs in CI.
+
+## Run 36 — US-103 (R-173, starter product list for the catalog, level M)
+
+Created from dev `55406b6`. The `/us` command arrived with a blank ID; the roadmap item R-173 was registered as US-103 by the analyst. Orchestrated by session pos-vertical-e8. RED checkpoint `76f7041`.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract 59.9k/17/143 s; two GATE 1 revisions 36.0k/19/49 s and 28.1k/10/21 s; close 64.2k/16/104 s) | 188.2k | 62 | 317 s |
+| test-author | 2 (tests 46.0k/22/104 s; seed fix 16.9k/3/8 s) | 62.9k | 25 | 112 s |
+| implementer | 1 round | 55.8k | 27 | 220 s |
+| qa | 1 round | 43.1k | 16 | 130 s |
+
+Total subagent tokens (sum of last values): 350,070. Each analyst call after the first was a cold start (ListAgents showed none alive).
+
+**What it found.** Gemini contract mode: STATUS OK, 14 raised, 4 verified valid (all minor), 10 discarded as false positives or out of scope (e.g. it claimed `INSTALL.md` must be English, wrongly); nothing changed scope. QA round 1: OK, 0 BLOCKER, 3 MINOR (all about product-list content); the modal render was not checked (no browser tooling). Gemini diff round 1: STATUS OK, CLEAN, 0 raised, about 15 min wall time (started in parallel with QA).
+
+**Unplanned stops:** 0 outside GATE 1 and 2. One test-author relaunch: its seed used `'unidad'` where the DB CHECK needs `'unit'`; the implementer found it and the orchestrator verified it at `internal/database/migrate.go:202`. QA rounds: 1. Violations: 0.
+
+**Operational friction.** Blank ID on `/us`. GATE 1 had 8 PO questions; the PO had no price data, so prices are a $1.000 placeholder (follow-ups R-182..R-184). The analyst close script truncated the sprint doc once; it was restored with `git checkout`. Two stale worktrees (US-099, R-170) from earlier runs were found and left alone.
+
+**What to measure next.** Whether the PO-question round at GATE 1 can be shortened by pre-filling defaults in the contract.
