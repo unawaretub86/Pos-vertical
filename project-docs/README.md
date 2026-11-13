@@ -40,6 +40,7 @@ Each document opens with a status stamp that says which is which.
 | When and where is the database backed up? How are copies verified and pruned? How does the POS start with Windows? | [spec/domain/backup.md](spec/domain/backup.md), [spec/domain/servidor.md](spec/domain/servidor.md) § Start with Windows |
 | In which zone are timestamps stored? What is "today"? How is a date range compared? | [spec/domain/tiempo.md](spec/domain/tiempo.md) |
 | Are amounts whole pesos? How is IVA rounded? Which tolerances apply to totals and payments? | [spec/domain/dinero.md](spec/domain/dinero.md) |
+| **What does the product do today? What may we promise a customer?** | [features.md](features.md) — feature inventory; customer-facing kit in [`../docs/comercial/`](../docs/comercial/) (Spanish product content) |
 | **What do we build next?** | [roadmap.md](roadmap.md) — single source |
 | How is a sprint worked? | [workflow.md](workflow.md) |
 | What is the stack, the code conventions and the language rule? | [`../CLAUDE.md`](../CLAUDE.md) |
@@ -83,6 +84,8 @@ The former names were similar and indistinguishable from each other. If you only
 | [`2026-05-plan-mvp.md`](archive/2026-05-plan-mvp.md) | `PLAN.md` | MVP-era checklist (1,298 lines). Describes April–May 2026 code. Concrete example: at `:1134` it reports a `cash_in` bug in the register close **that is already fixed** (`internal/service/register.go:113`) |
 | [`2026-05-prd-mvp.md`](archive/2026-05-prd-mvp.md) | `PRD.md` | MVP PRD. The personas are still current and were extracted to `spec/personas.md`; the rest is history |
 | [`2026-05-mvp-context.md`](archive/2026-05-mvp-context.md) | `mvp-context.md` | Initial vision. What is current was extracted to `spec/product.md` |
+| [`2026-07-27-pre-sale.md`](archive/2026-07-27-pre-sale.md) | `pre-sale.md` | First prospect, July 2026 (Spanish, frozen). Replaced by `../docs/comercial/` (offer, pitch, installer checklist) on 2026-11-13 |
+| [`2026-07-29-pos-validation.md`](archive/2026-07-29-pos-validation.md) | `pos-validation.md` | 14-day validation plan, July 2026 (Spanish, frozen). Its checklist predates SPRINT-18..20 |
 
 ---
 

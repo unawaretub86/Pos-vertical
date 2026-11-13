@@ -1,7 +1,7 @@
 # Domain — Daily backups
 
 > **Type:** spec · **Current:** yes · **Rules over:** when and where the POS copies its database, how the copy is verified and pruned, the folder setting and its report
-> **Updated:** 2026-11-12 (US-099: pre-migration copy has its own name, `migrate.go` `backupBeforeMigration`) · 2026-11-11 (US-089: created) · Verified against the code at the US-099 branch (`internal/database/backup.go`, `internal/handler/backup.go`, `internal/repository/setup.go`, `internal/database/migrate.go` migration 23, `cmd/pos/main.go`).
+> **Updated:** 2026-11-13 (docs review: restore moves `data.db-wal` and `data.db-shm` aside; off-machine copies use `data.db.backup-*`) · 2026-11-12 (US-099: pre-migration copy has its own name, `migrate.go` `backupBeforeMigration`) · 2026-11-11 (US-089: created) · Verified against the code at the US-099 branch (`internal/database/backup.go`, `internal/handler/backup.go`, `internal/repository/setup.go`, `internal/database/migrate.go` migration 23, `cmd/pos/main.go`).
 
 The POS copies `data.db` once a day so a dead disk or a bad update does not cost the shop its *fiado* (store credit) ledger. The copy is a SQLite `VACUUM INTO` taken while the POS keeps serving (WAL mode), written and checked before it replaces anything.
 
@@ -64,7 +64,9 @@ Persisted in `business_config`, so they survive a restart: `backup_dir`, `backup
 
 ## Restore
 
-Manual: close `pos.exe`, copy a `data.db.backup-YYYYMMDD` file over `data.db`, start the POS. After a bad upgrade, copy the `data.db.pre-migration-N-YYYYMMDD` file over `data.db` the same way. There is no restore command or screen.
+Manual: close `pos.exe`; move `data.db`, `data.db-wal` and `data.db-shm` out of the folder; copy a `data.db.backup-YYYYMMDD` file in as `data.db`; start the POS. After a bad upgrade, use the `data.db.pre-migration-N-YYYYMMDD` file the same way. There is no restore command or screen.
+
+**Why the WAL files must go.** The database runs in WAL mode (`internal/database/database.go:27`) and `pos.exe` has no shutdown handler (`defer db.Close()` at `cmd/pos/main.go:91` is skipped when the console window is closed), so `data.db-wal` usually still holds the latest pages. Two consequences, reproduced with `modernc.org/sqlite v1.46.1` and the same pragmas (docs QA 2026-11-13): a copy of `data.db` alone can miss recent rows or even every table; and restoring over `data.db` with a stale `data.db-wal` left in place replays the old WAL on top of the backup, silently (`integrity_check` ok). An off-machine copy must therefore be a `data.db.backup-*` file (a self-contained `VACUUM INTO` copy), never `data.db`.
 
 ## Not covered
 

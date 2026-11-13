@@ -104,14 +104,14 @@
 - [ ] Probar con credenciales de Factus inválidas o sin internet — el sistema no debe crashear, debe dar error claro y dejar seguir vendiendo (fiscal no debe bloquear el POS).
 - [ ] Nota de crédito por anulación (ligado a `voidSaleWithCreditNote`) llega correctamente al proveedor fiscal.
 
-> Nota: según `pos-validation.md`, facturación DIAN es explícitamente NO bloqueante para el piloto. Probar igual porque ya hay cliente real pagando (pre-sale.md) que puede necesitarlo.
+> Nota: según `project-docs/archive/2026-07-29-pos-validation.md`, facturación DIAN es explícitamente NO bloqueante para el piloto. Probar igual porque ya hay cliente real pagando (`project-docs/archive/2026-07-27-pre-sale.md`) que puede necesitarlo.
 
 ---
 
 ## 8. Configuración inicial (setup) y negocio
 
 - [ ] Wizard de instalación en limpio (`getSetup` / `updateSetup`) — nombre del negocio, NIT, moneda.
-- [ ] Instalación completa cronometrada desde carpeta limpia siguiendo `INSTALL.md` — meta <30 min (pendiente en `pre-sale.md`).
+- [ ] Instalación completa cronometrada desde carpeta limpia siguiendo `INSTALL.md` — meta <30 min (pendiente en `project-docs/archive/2026-07-27-pre-sale.md`).
 - [ ] Cambiar configuración del negocio después de ya tener ventas — no rompe datos históricos.
 
 ---
@@ -129,7 +129,7 @@
 - [ ] `settings` — cambios se guardan y persisten tras cerrar/reabrir.
 - [ ] `change-password` — flujo usable sin soporte.
 - [ ] `setup` — primera vez que se abre la app, sin datos, no crashea.
-- [ ] Responsive/usable en Android gama media si el negocio necesita acceso desde celular (mencionado como pendiente en `pos-validation.md` para pilotos multi-dispositivo).
+- [ ] Responsive/usable en Android gama media si el negocio necesita acceso desde celular (mencionado como pendiente en `project-docs/archive/2026-07-29-pos-validation.md` para pilotos multi-dispositivo).
 
 ---
 
