@@ -6,6 +6,7 @@ import Topbar from '@/components/Topbar';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { formatCOP } from '@/lib/format';
+import { differenceDisplay, differenceColor } from '@/lib/registerClose';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -527,7 +528,7 @@ export default function ReportsPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', overflow: 'hidden', borderRadius: '8px', border: '1px solid var(--border)' }}>
               {registers.slice(0, 8).map(reg => {
-                const diff = reg.difference ?? 0;
+                const diff = differenceDisplay(reg.difference, { short: true });
                 return (
                   <div key={reg.id} style={{
                     display: 'grid',
@@ -553,12 +554,12 @@ export default function ReportsPage() {
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', minWidth: '60px' }}>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Dif.</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{diff.label}</div>
                       <div className="tnum" style={{
                         fontSize: '12px', fontWeight: 600,
-                        color: reg.difference == null ? 'var(--text-muted)' : diff >= 0 ? 'var(--success)' : 'var(--danger)',
+                        color: differenceColor(diff.tone),
                       }}>
-                        {reg.difference == null ? '—' : (diff >= 0 ? '+' : '') + formatCOP(diff)}
+                        {diff.amount}
                       </div>
                     </div>
                   </div>

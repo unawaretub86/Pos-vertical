@@ -9,6 +9,11 @@ import { formatCOP, formatInputCOP, parseInputCOP } from '@/lib/format';
 import { COP_DENOMINATIONS, sumDenominations, type DenominationCounts } from '@/lib/denominations';
 import { getUser } from '@/lib/auth';
 import CloseTicketPreview, { type CloseTicketData } from '@/components/CloseTicketPreview';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import {
+  closeCheck, faltanteWarning, faltanteConfirmMessage, differenceDisplay, differenceColor,
+  closeBreakdown, singleFlight, closeErrorMessage,
+} from '@/lib/registerClose';
 import type { TicketBusiness } from '@/components/TicketPreview';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -308,24 +313,38 @@ function CloseModal({
   const [counted, setCounted] = useState('');
   const [showDenoms, setShowDenoms] = useState(true);
   const [loading, setLoading] = useState(false);
-  const countedNum = parseInputCOP(counted);
-  const difference = counted ? countedNum - summary.expected : 0;
-  const hasFaltante = counted !== '' && difference < 0;
+  const [confirmFaltante, setConfirmFaltante] = useState(false);
+  const check = closeCheck(counted, summary.expected);
+  const difference = check.difference;
+  // One close request at a time: a second submit, Enter or confirm press while
+  // the request is in flight sends nothing (AC-13).
+  const [runClose] = useState(() => singleFlight(async (amount: number, confirm: (n: number) => Promise<void>) => {
+    setLoading(true);
+    try {
+      await confirm(amount);
+    } finally {
+      setLoading(false);
+    }
+  }));
 
   const handleDenomChange = (next: DenominationCounts) => {
     setDenomCounts(next);
     setCounted(formatInputCOP(String(sumDenominations(next))));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (hasFaltante || counted === '') return;
-    setLoading(true);
-    try {
-      await onConfirm(countedNum);
-    } finally {
-      setLoading(false);
+    if (!check.canSubmit || loading) return;
+    if (check.needsConfirm) {
+      setConfirmFaltante(true);
+      return;
     }
+    void runClose(check.counted, onConfirm);
+  };
+
+  const handleConfirmFaltante = () => {
+    setConfirmFaltante(false);
+    void runClose(check.counted, onConfirm);
   };
 
   return (
@@ -360,16 +379,11 @@ function CloseModal({
           background: 'var(--surface-2)', border: '1px solid var(--border)',
           borderRadius: 8, padding: '12px 16px', marginBottom: 20,
         }}>
-          {[
-            ['Base apertura', summary.register.opening_amount],
-            ['Ventas efectivo', summary.cash_sales],
-            ['Abonos en efectivo', summary.cash_abonos],
-            ['Salidas manuales', -summary.cash_out],
-          ].map(([label, val]) => (
-            <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-              <span style={{ color: 'var(--text-secondary)' }}>{label as string}</span>
+          {closeBreakdown(summary).map(({ label, value }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
               <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
-                {formatCOP(val as number)}
+                {formatCOP(value)}
               </span>
             </div>
           ))}
@@ -424,13 +438,13 @@ function CloseModal({
             </div>
           )}
 
-          {hasFaltante && (
-            <div style={{
+          {check.kind === 'faltante' && (
+            <div role="alert" style={{
               padding: '10px 14px', borderRadius: 8, marginBottom: 12,
               background: 'var(--danger-dim)', border: '1px solid var(--danger)',
               fontSize: 13, color: 'var(--danger)', fontWeight: 500,
             }}>
-              No se puede cerrar la caja con faltante. Ajusta el monto contado o agrega efectivo antes de cerrar.
+              {faltanteWarning(difference)}
             </div>
           )}
 
@@ -438,12 +452,22 @@ function CloseModal({
             <button type="button" className="btn btn-full" onClick={onClose} disabled={loading}>
               Cancelar
             </button>
-            <button type="submit" className="btn btn-full btn-danger" disabled={loading || hasFaltante || counted === ''}>
+            <button type="submit" className="btn btn-full btn-danger" disabled={loading || !check.canSubmit}>
               {loading ? 'Cerrando...' : `Cerrar Caja · ${formatCOP(summary.expected)}`}
             </button>
           </div>
         </form>
       </div>
+      <ConfirmDialog
+        open={confirmFaltante}
+        title="¿Cerrar la caja con faltante?"
+        message={faltanteConfirmMessage(check.counted, summary.expected)}
+        confirmLabel="Cerrar con faltante"
+        cancelLabel="Volver a contar"
+        danger
+        onConfirm={handleConfirmFaltante}
+        onCancel={() => setConfirmFaltante(false)}
+      />
     </div>
   );
 }
@@ -506,6 +530,7 @@ function HistoryView() {
         const isOpen = reg.status === 'open';
         const isExpanded = expanded === reg.id;
         const mvs = movements[reg.id];
+        const diff = differenceDisplay(reg.difference);
         return (
           <div key={reg.id} style={{ borderBottom: '1px solid var(--border)' }}>
             <button
@@ -544,9 +569,9 @@ function HistoryView() {
                 )}
                 {reg.difference !== null && (
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Diferencia</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: reg.difference >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                      {reg.difference >= 0 ? '+' : ''}{formatCOP(reg.difference)}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{diff.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: differenceColor(diff.tone) }}>
+                      {diff.amount}
                     </div>
                   </div>
                 )}
@@ -634,7 +659,14 @@ export default function RegisterPage() {
 
   const handleClose = async (actualClose: number) => {
     if (!summary) return;
-    const closed = await api.post<RegisterSummary>(`/registers/${summary.register.id}/close`, { actual_close: actualClose });
+    let closed: RegisterSummary;
+    try {
+      closed = await api.post<RegisterSummary>(`/registers/${summary.register.id}/close`, { actual_close: actualClose });
+    } catch (err) {
+      // Keep the close modal and its counts open; no ticket, no success toast (AC-14).
+      toast(closeErrorMessage(err), 'error');
+      return;
+    }
     toast('Caja cerrada correctamente', 'success');
     setShowClose(false);
 
@@ -663,6 +695,7 @@ export default function RegisterPage() {
   };
 
   const isOpen = summary?.register?.status === 'open';
+  const closeDiff = differenceDisplay(summary?.register?.difference ?? null);
 
   const topbarActions = (
     <div style={{ display: 'flex', gap: 8 }}>
@@ -764,12 +797,12 @@ export default function RegisterPage() {
                           </div>
                         ))}
                         <div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Diferencia</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{closeDiff.label}</div>
                           <div style={{
                             fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-                            color: (summary.register.difference ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)',
+                            color: differenceColor(closeDiff.tone),
                           }}>
-                            {(summary.register.difference ?? 0) >= 0 ? '+' : ''}{formatCOP(summary.register.difference ?? 0)}
+                            {closeDiff.amount}
                           </div>
                         </div>
                       </div>

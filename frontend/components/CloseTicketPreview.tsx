@@ -1,6 +1,7 @@
 'use client';
 
 import { formatCOP } from '@/lib/format';
+import { differenceDisplay } from '@/lib/registerClose';
 import type { TicketBusiness } from './TicketPreview';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ interface Props {
 }
 
 export default function CloseTicketPreview({ ticket, onPrint, onClose }: Props) {
-  const isNegative = ticket.difference < 0;
+  const diff = differenceDisplay(ticket.difference);
 
   function handlePrint() {
     if (onPrint) onPrint();
@@ -156,12 +157,10 @@ export default function CloseTicketPreview({ ticket, onPrint, onClose }: Props) 
         </div>
         <div style={{
           display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '12px', marginTop: '4px',
-          color: isNegative ? '#b91c1c' : '#111',
+          color: diff.tone === 'danger' ? '#b91c1c' : '#111',
         }}>
-          <span>Diferencia</span>
-          <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {ticket.difference >= 0 ? '+' : ''}{formatCOP(ticket.difference)}
-          </span>
+          <span>{diff.label}</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{diff.amount}</span>
         </div>
 
         <div style={{ borderTop: '1px dashed #aaa', margin: '8px 0' }} />

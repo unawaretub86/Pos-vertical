@@ -1,7 +1,7 @@
 # Feature inventory — Pos-vertical
 
 > **Type:** current · **Rules over:** what the product does today, who sees it, and what not to promise
-> **Updated:** 2026-11-13 · Verified against `dev` at `ba4ae01` (routes in `internal/handler/handler.go:124-306`, sidebar in `frontend/components/Sidebar.tsx`, rules in `spec/`).
+> **Updated:** 2026-11-13 (US-104: register close row; the shortage limitation row removed) · 2026-11-13 · Verified against `dev` at `ba4ae01` (routes in `internal/handler/handler.go:124-306`, sidebar in `frontend/components/Sidebar.tsx`, rules in `spec/`).
 
 This is the list to sell from. Each row says what exists, who can use it and where the rule lives. The rules themselves stay in `spec/`; this file only points at them. When a US adds or removes a feature, update the row in the same commit (CLAUDE.md Rule 2).
 
@@ -51,7 +51,7 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 |---|---|---|---|
 | Open with a starting float (default amount configurable) | Live | both | `caja.md` |
 | Cash in / cash out movements with a note | Live | both | `caja.md` § Movements |
-| Close with count by bill and coin, expected vs counted. A *sobrante* (surplus) closes; **a *faltante* (shortage) blocks the close** (`No se puede cerrar la caja con faltante`), the workaround is a `Salida` for the difference (R-186) | Live | both | `caja.md` § Expected cash; `frontend/app/register/page.tsx:313`, `:441` |
+| Close with count by bill and coin, expected vs counted. A *sobrante* (surplus) closes directly; a *faltante* (shortage) closes after the confirmation `¿Cerrar la caja con faltante?` and is shown as `Faltante $X` on the close ticket, `Ver histórico` and `Reportes` (US-104, R-186). The close modal breakdown includes `Entradas`; a failed close shows an error toast | Live | both | `caja.md` § Expected cash; `frontend/lib/registerClose.ts`, `frontend/app/register/page.tsx` (`CloseModal`) |
 | Register history with movements, every past register (`Ver histórico`) | Live | both (`Caja`); admin also in `Reportes` | `frontend/app/register/page.tsx:541-567`, `:685`; `GET /registers` not admin-only |
 | Only cash counts: transfer, card and *fiado* never distort the drawer | Live | — | `caja.md` |
 | Close ticket printed | Live | both | `impresion.md` |
@@ -128,7 +128,6 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 | Blocking a *fiado* over the limit; interest or late fees | Warning and confirmation only | `fiado.md` § What does NOT exist yet |
 | Customer risk score | Roadmap R-17 | `fiado.md` |
 | Voiding any old sale from a history page | Only from the recent-sales list | roadmap D2, R-145 |
-| Closing the register with a shortage | Recount; record a `Salida` for a real shortage | R-186 |
 | "The cashier sees no totals or debts" | The cashier does not see the dashboard, profit, reports or receivables, but does see each customer's debt at checkout, every register's movements (`Ver histórico`), the expected cash and the close ticket by payment method; typing `/customers` shows all balances | R-188 |
 | The cashier taking *abonos* | Only the owner in this version | R-187 |
 | Closing the black console window without stopping the POS | The window must stay open (minimized) | roadmap D3, R-169 |

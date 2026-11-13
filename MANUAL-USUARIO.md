@@ -184,9 +184,10 @@ Entre a **Caja**.
    ```
 
 4. Si sobra dinero es **sobrante** y puede cerrar.
-5. **Si falta dinero, el sistema no deja cerrar** y muestra *"No se puede cerrar la caja con faltante"*. Haga esto:
+5. **Si falta dinero** es **faltante**: el sistema muestra *"Hay un faltante de $X. Vuelve a contar; si de verdad falta, puedes cerrar y el faltante quedará registrado."* Haga esto:
    - Vuelva a contar: casi siempre es un billete mal contado o una venta por Nequi que se cobró como efectivo.
-   - Si de verdad falta plata, llame al dueño. Para cerrar, registre una **Salida** por la diferencia con la nota *"Faltante de cierre"*: así el faltante queda escrito en los movimientos de la caja y en la auditoría, y la caja cierra.
+   - Si de verdad falta plata, avise al dueño y presione **Cerrar Caja**. El sistema pregunta *"¿Cerrar la caja con faltante?"* y muestra lo contado, lo esperado y lo que falta. Con **Cerrar con faltante** la caja cierra y el faltante queda en el ticket de cierre, en el historial de cajas y en el correo al dueño; con **Volver a contar** regresa al conteo sin perder lo que ya anotó.
+   - No registre una **Salida** para tapar el faltante.
 6. Confirme. Puede imprimir el ticket de cierre y, si el dueño configuró su correo, le llega el resumen por e-mail.
 
 Las ventas y abonos por transferencia, tarjeta o fiado **no** entran al conteo, porque esa plata no está en el cajón.
@@ -216,7 +217,7 @@ Solo con el usuario administrador.
 - **Reportes:** ventas por día, semana, mes o el rango que escoja (con exportación a CSV, que abre en Excel), productos más vendidos, cartera, gastos e historial de cajas con sus diferencias.
 - **Lo que más vende no siempre es lo que más le deja.** Además del más vendido, el dashboard le muestra los productos con mayor margen (el porcentaje que le queda de cada venta).
 - **Asistente:** escriba preguntas como *"cuánto vendí hoy"*, *"quién me debe"* o *"qué se está acabando"*. Responde sin internet. Si pregunta por Nequi, le responde con el total de todas las transferencias (Nequi, Daviplata y bancos juntos).
-- **Historial de cajas:** en **Reportes** (y en **Caja › Ver histórico**, que también ve el cajero) están las cajas anteriores con sus movimientos y diferencias. Un faltante resuelto con una **Salida** aparece como ese movimiento (*"Faltante de cierre"*), no como diferencia.
+- **Historial de cajas:** en **Reportes** (y en **Caja › Ver histórico**, que también ve el cajero) están las cajas anteriores con sus movimientos y diferencias. Una caja cerrada con faltante muestra **Faltante** y el valor que faltó, en rojo; una que cuadró o tuvo sobrante muestra **Diferencia** (**Dif.** en Reportes) con un **+**.
 - **Auditoría:** quién anuló ventas, hizo descuentos sobre el total, cambió precios, sacó efectivo, importó productos o corrigió deudas anteriores, y cuándo.
 
 ---
@@ -276,7 +277,8 @@ Desde fuera del negocio (otra red o datos móviles) **no** se puede entrar.
 | "No se puede acceder a este sitio" | El sistema está apagado: abra `pos.exe` (o reinicie el computador si tiene inicio automático). |
 | La sesión se cerró | Vuelva a entrar. El carrito se conserva. |
 | No deja cobrar: "no hay caja abierta" | Abra la caja en **Caja**. |
-| "No se puede cerrar la caja con faltante" | Vuelva a contar; si de verdad falta, siga la sección 8, paso 5. |
+| Al cerrar caja aparece "Hay un faltante de $X" | Vuelva a contar; si de verdad falta, siga la sección 8, paso 5. |
+| Al cerrar caja aparece un mensaje de error y la ventana de cierre sigue abierta | Si dice "la caja ya está cerrada", otra persona ya la cerró: presione **Cancelar**. Si el error es de conexión, puede que la caja se haya cerrado o no: revise que `pos.exe` esté abierto y mire **Caja › Ver histórico** antes de intentar de nuevo. |
 | "Debe haber una caja abierta para registrar un abono" | Abra la caja antes de registrar el abono. |
 | El dashboard avisa que la copia de seguridad falló | Revise que la memoria USB esté conectada, o cambie la carpeta en Configuración › Copias de seguridad. |
 | El ticket sale cortado | Ajuste el tamaño de papel (sección 11). |

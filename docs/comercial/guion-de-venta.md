@@ -24,7 +24,7 @@
 | "No sé quién me debe más ni desde cuándo." | Filtros **Hasta 14 días**, **15–30 días** y **Más de 30 días**, y la cartera ordenada de mayor a menor. |
 | "Me da pena cobrar." | **Cobrar** abre WhatsApp con un mensaje amable ya escrito. Usted solo lo envía. |
 | "Fío de más sin darme cuenta." | Tope de crédito por cliente y aviso **¿Fiar de todas formas?** cuando lo pasa o la deuda tiene más de 30 días. La decisión sigue siendo suya. |
-| "La caja nunca me cuadra." | Cierre con conteo de billetes y monedas: esperado contra contado. Si falta plata, el sistema no deja cerrar hasta que se aclare (se recuenta o se anota la salida). Las ventas por Nequi, tarjeta y fiado no se mezclan con el efectivo. |
+| "La caja nunca me cuadra." | Cierre con conteo de billetes y monedas: esperado contra contado. Si falta plata, el sistema avisa, pide confirmar y deja el faltante escrito en el ticket y el historial. Las ventas por Nequi, tarjeta y fiado no se mezclan con el efectivo. |
 | "No sé cuánto me gano." | Ganancia real del día. Si un producto no tiene costo, no lo inventa: le dice cuántos faltan. Y le muestra que **lo que más vende no es lo que más le deja**. |
 | "El cajero ve todo." | El cajero solo tiene **Punto de Venta** y **Caja**: no ve el dashboard, la ganancia, los reportes, la cartera ni el inventario. (Sí ve la deuda del cliente al fiarle y los movimientos de las cajas.) |
 | "Si se va la luz, pierdo todo." | Lo cobrado queda guardado, el sistema arranca solo al prender el computador y hace una copia de seguridad diaria. |
@@ -41,7 +41,7 @@ Prepare antes, con el usuario del dueño: 10 productos con costo; 2 clientes con
 4. **Cobro por WhatsApp** (30 s): detalle del cliente, **Cobrar**, mostrar el mensaje listo.
 5. **Sin internet** (15 s): desconectar el WiFi y repetir una venta.
 6. **El dueño** (60 s): dashboard con lo vendido, el fiado nuevo y cobrado, la ganancia; preguntar al asistente *"quién me debe"*.
-7. **Cierre** (30 s): **Cerrar Caja**, contar, ver la diferencia. Cuente un poco de más para mostrar un sobrante; con faltante el sistema no deja cerrar.
+7. **Cierre** (30 s): **Cerrar Caja**, contar, ver la diferencia. Cuente un poco de más para mostrar un sobrante; si cuenta de menos, el sistema avisa el faltante y pide confirmar antes de cerrar.
 
 Después pregunte: **"¿Qué le dan los programas que conoce?"** Su respuesta le dice qué espera en soporte y en precio.
 
@@ -66,7 +66,6 @@ Después pregunte: **"¿Qué le dan los programas que conoce?"** Su respuesta le
 - Bloqueo del fiado por tope, intereses o puntaje de clientes.
 - Anular cualquier venta vieja desde una pantalla de historial (solo las recientes).
 - Que el cajero reciba abonos (en esta versión los registra el dueño).
-- Cerrar la caja con faltante sin aclararlo (el sistema lo impide).
 - Que el catálogo base trae precios reales (todos son $1.000 de referencia).
 - Modo restaurante o catálogo en línea: existen pero no se están vendiendo.
 

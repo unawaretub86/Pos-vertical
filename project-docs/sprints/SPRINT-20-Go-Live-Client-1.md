@@ -40,6 +40,7 @@
 | US-101 | One name for the Settings screen: "Configuración" in `INSTALL.md`, `MANUAL-USUARIO.md` and the Mesas empty state (roadmap R-170, go-live K4) | [x] | 2026-11-12 |
 | US-102 | Whole-peso money with one rounding rule: line IVA rounded, totals and payments exact, migration 24 for existing rows, no sub-peso *fiado* residue (roadmap R-133 + R-106, go-live K5) | [x] | 2026-11-13 |
 | US-103 | Starter catalog for the neighborhood shop: about 150 generic products importable in one click through the US-094 import (roadmap R-173, launch stage 2) | [x] | 2026-11-13 |
+| US-104 | Close the register with a *faltante* (shortage) after an explicit confirmation, and show it as `Faltante` on the ticket and in the histories (roadmap R-186, before G-2) | [x] | 2026-11-13 |
 
 **Total estimated effort: ~8 days**
 
@@ -588,3 +589,44 @@ Follow-ups opened: R-177 (open-orders list total without IVA), R-178 (residue 0 
 Spec: `spec/domain/catalogo.md` (UI bullet and new "Starter catalog" section). Manual check parked: `gaps.md` US-103 M-1 (modal render, warning, embedded file served from `pos.exe`, sale of a starter product at $1.000).
 
 Follow-ups opened: R-182 (real prices for the starter catalog), R-183 (importer mode for a blank price), R-184 (PO review of `Recarga a celular`, `Cerveza 330 ml`, `Helado de paleta`, `Panela` unit). Skipping existing rows stays R-154.
+
+---
+
+## US-104 — Close the register with a *faltante* after an explicit confirmation
+
+**Status:** registered 2026-11-13 (pipeline ID R-186). Level M. Closed 2026-11-13 (implementation `8edaea1`, manual row fix `daf53be`). Approved at GATE 1 (PO, 2026-11-13): Q-1..Q-5 as recommended (both roles may close with a shortage; no audit row, R-190 opened; surplus keeps `Diferencia +$X`; tuteo; `Entradas` added to the close modal breakdown). Gemini contract review G-1..G-5 applied. The contract `changes/R-186/contract.md` disappears with the worktree; the verified criteria are below.
+
+**As** the cashier or Don Carlos (owner),
+**I want** to close the register when cash is really missing, after confirming the amount,
+**so that** the stored close shows the real *faltante* instead of a hidden one or a fake `Salida`.
+
+**Problem (verified 2026-11-13):** the close modal refuses any shortage and disables the submit (`frontend/app/register/page.tsx:313`, `:322`, `:427-441`), suggesting `agrega efectivo`. The server accepts it: a cashier `POST /registers/1/close` with $125.000 counted against $130.000 expected answers 200 and stores `difference` −5000 (run in the contract). The ticket and both histories would print it as `$-5.000` (`frontend/lib/format.ts:6-7`); only the email labels it `Faltante`.
+
+**Acceptance criteria:**
+- [x] A shortage shows a warning instead of the block, and the submit opens a confirmation with the counted, expected and missing amounts; cancelling keeps the counts.
+- [x] Confirming stores the negative `difference` as the server already does; a surplus or exact count closes with no confirmation, as today.
+- [x] The close ticket, `Caja › Ver histórico`, the register summary panel and `Reportes › Historial de cajas` show `Faltante $X` for a negative difference; the email keeps `Faltante: $X`.
+- [x] The manual, the commercial docs and `features.md` describe the new flow and drop the `Salida` workaround.
+- [x] The close modal breakdown lists `Entradas`, and its lines add up to `Total esperado`.
+- [x] While the close request is in flight, a second press sends nothing (one request per confirmation).
+- [x] A failed close (409, 500, network) shows an error toast and keeps the modal open with the counts.
+
+**Verified criteria (closed 2026-11-13):**
+- AC-1: WHILE the counted amount is below expected, the close modal SHALL keep the `Faltante $X` badge, show `Hay un faltante de $5.000. Vuelve a contar; si de verdad falta, puedes cerrar y el faltante quedará registrado.` and keep the submit enabled; `No se puede cerrar la caja con faltante` and `agrega efectivo` no longer appear in `frontend/`. Tests: `frontend/lib/registerClose.test.ts` T-1 `closeCheck` (125.000 vs 130.000 → faltante, submit enabled, needs confirm), T-2 `warning for a faltante of 5.000`; grep (QA T-8) empty.
+- AC-2: WHEN the user submits with a shortage, the system SHALL NOT POST yet and SHALL open `¿Cerrar la caja con faltante?` with `Contaste $125.000 y se esperaban $130.000. La caja se cerrará con un faltante de $5.000 y quedará así en el historial y en el ticket de cierre.` (`Cerrar con faltante` / `Volver a contar`). Tests: `frontend/lib/registerClose.test.ts` T-2 `confirm message for counted 125.000 / expected 130.000`; dialog wiring by code reading (QA) and manual check `gaps.md` US-104 M-1.
+- AC-3: WHEN the user picks `Volver a contar` or Escape, the system SHALL close only the dialog, send nothing and keep the counts. Manual check `gaps.md` US-104 M-1 (QA confirmed by code reading).
+- AC-4: WHEN a cashier or admin confirms, the system SHALL send one close and the server SHALL store `expected_close` 130000, `actual_close` 125000, `difference` −5000, with no audit row; a second close answers 409 `la caja ya está cerrada`. Test: `internal/handler/register_shortage_test.go` `TestRegisterShortage_T5_CashierClosesWithFaltante`; QA binary smoke: expected 145.000, counted 140.000 → 200, `difference` −5000.
+- AC-5: WHEN `difference < 0`, the close ticket SHALL show `Faltante` `$5.000`, never `$-5.000` nor `Diferencia`; a surplus keeps `Diferencia +$1.000`. Tests: `frontend/lib/closeTicketPreview.test.tsx` T-4 (`shortage of 5.000 → Faltante $5.000, never $-5.000 nor Diferencia`, `surplus of 1.000 → Diferencia +$1.000`).
+- AC-6: `Caja › Ver histórico` and the `Resumen de cierre` panel SHALL show `Faltante $5.000` in the danger color for a shortage and `Diferencia +$X` in the success color otherwise. Tests: `frontend/lib/registerClose.test.ts` T-3 `differenceDisplay` (long form, including `null` → `Diferencia —`); colors by manual check M-1 (`differenceColor` has no unit test, QA MINOR).
+- AC-7: `Reportes › Historial de cajas` SHALL render through `differenceDisplay(diff, { short: true })`: `Faltante $5.000`, `Dif. +$1.000`, or `Dif. —` for an open register. Tests: `frontend/lib/registerClose.test.ts` T-3 (short form, including `null`).
+- AC-8: WHILE the count is equal to or above expected, the modal SHALL close with no confirmation: $131.000 vs $130.000 → stored `difference` 1000; $130.000 → 0. Tests: `frontend/lib/registerClose.test.ts` T-1 (`exact`, `sobrante 1.000`); `TestRegisterShortage_T6_SurplusAndExactClose` (subtests `surplus`, `exact`, each in a fresh environment).
+- AC-9: IF the counted field is empty, THEN the submit SHALL stay disabled; a count of 0 against $130.000 is a shortage of $130.000. Tests: `frontend/lib/registerClose.test.ts` T-1 (`empty counted → submit disabled`, `counted 0 vs 130.000 → faltante 130.000`).
+- AC-10: WHEN a register closes with a shortage, the email SHALL keep `Faltante: $X` and no `Diferencia` line. Test: `internal/mailer/mailer_test.go` `TestBuildRegisterSummaryEmail_Shortfall` (unchanged).
+- AC-11: `MANUAL-USUARIO.md` (section 8 step 5, the history note, the troubleshooting rows), `docs/comercial/instalacion-y-capacitacion.md`, `docs/comercial/guion-de-venta.md` and `project-docs/features.md` SHALL describe the new flow, with no `Faltante de cierre` workaround. Verified by QA reading the diff and grep (T-8).
+- AC-12: The close modal breakdown SHALL list `Base apertura`, `Ventas efectivo`, `Abonos en efectivo`, `Entradas`, `Salidas manuales`, adding up to `Total esperado` (100.000 + 30.000 + 20.000 + 15.000 − 8.000 = 157.000). Test: `frontend/lib/registerClose.test.ts` T-9 `closeBreakdown`.
+- AC-13: WHILE the close request is in flight, a second press, submit or Enter SHALL send nothing. Tests: `frontend/lib/registerClose.test.ts` T-10 `singleFlight` (calls while pending ignored; guard released after resolve and after reject); double click in the browser by manual check M-1.
+- AC-14: IF the close fails (409, 500 or network), THEN an error toast SHALL show the server or network text (`No se pudo cerrar la caja` when empty), the modal SHALL stay open with its counts, and no ticket or success toast SHALL show. Tests: `frontend/lib/registerClose.test.ts` T-11 `closeErrorMessage`; page wiring by code reading (QA) and manual check M-1.
+
+**Results:** QA round 1 OK (0 BLOCKER, 4 MINOR): the troubleshooting row wording after a network error (fixed in `daf53be`), the spec and roadmap updates (done at this close), `differenceColor` exported with no unit test (accepted), and the page wiring covered only by M-1 (accepted, as planned). `go build`, `go test ./...`, `pnpm test` (304 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18186 stored `difference` −5000. Spec: `spec/domain/caja.md` ("Rule: expected cash at close"). Contract discrepancies: D-1 (the ticket and histories would have shown `$-5.000`) and D-2 (`Entradas` missing from the close modal) fixed; D-6 (a failed close showed nothing) fixed by AC-14; D-3 became R-191; D-4 stays R-84; D-5 (stale spec line refs) fixed. Manual check parked: `gaps.md` US-104 M-1.
+
+Closed: R-186, and R-85 (`Entradas` missing from the close modal, the same gap as contract D-2). Follow-ups opened: R-190 (record who closed the register), R-191 (`formatCOP` prints negatives as `$-X`).

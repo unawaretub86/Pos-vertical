@@ -85,6 +85,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 34 | 2026-11-11 | US-101 (R-170, one name for the Settings screen; built as "US-099" in a parallel session, renumbered at merge) | M | ~87k excluding the close pass (A 38.8k · I 22.2k · Q 26.5k) | 36 excluding the close pass (A 24 · I 5 · Q 7) | ~4.1 min excluding the close pass (A 69 s · I 58 s · Q 117 s) | 0 | 1 | 3 contract discrepancies (D-1..D-3) + 1 QA MINOR (check wording) | 0 new; R-170 closed | 0 | docs and one UI string |
 | 35 | 2026-11-13 | US-102 (R-133 + R-106, whole-peso money with one rounding rule; go-live K5) | L | ~796k (A 225.4k cumulative over 3 invocations · T 226.0k · I 156.7k · Q 83.9k) | 293 (A 127 · T 70 · I 59 · Q 37) | ~46 min excluding the analyst (T ~13.7 · I ~9.1 · Q ~17.4 incl. a smoke run); analyst n/a (contract 476 s, GATE 1 fold-in 837 s, close mostly waiting) | 0 | 1 | 4 contract discrepancies (incl. a new table-checkout IVA bug) + 6 Gemini-verified contract gaps + 5 QA MINOR | 5 new (R-177..R-181); R-133 and R-106 closed | 0 | +1,992 / −215, 46 files (code 21 files +501 / −111) |
 | 36 | 2026-11-12 | US-103 (R-173, starter product list for the catalog; registered as US-103 by the analyst) | M | ~350k (A 188.2k over 4 invocations · T 62.9k over 2 · I 55.8k · Q 43.1k) | 130 (A 62 · T 25 · I 27 · Q 16) | ~13 min excluding Gemini and GATE waits (A 317 s · T 112 s · I 220 s · Q 130 s) | 0 outside GATE 1 and 2 (1 test-author relaunch) | 1 | 4 Gemini-verified minor contract gaps + 3 QA MINOR (product-list content) | 3 new (R-182..R-184, real prices); R-173 closed | 0 | n/a |
+| 37 | 2026-11-13 | US-104 (R-186: close the register with a shortage after confirmation; registered by the analyst) | M | ~355k (A 171.2k over 4 invocations · I 96.3k over 2 · Q 88.5k) | ~118 (A 75 · I 42 · Q 31; analyst tools summed approx.) | ~23 (A ~13.7 · I ~6 · Q ~4.2) | 0 | 1 | 6 contract discrepancies (D-1..D-6, D-6 a silent failed close) + 5 Gemini-verified contract gaps + 4 QA MINOR (1 false manual sentence fixed in round 1) | R-186 and R-85 closed; R-190, R-191 opened | 0 | +589 / −60, 16 files (incl. docs) |
 
 ### Trend
 
@@ -1514,3 +1515,34 @@ Total subagent tokens (sum of last values): 350,070. Each analyst call after the
 **Operational friction.** Blank ID on `/us`. GATE 1 had 8 PO questions; the PO had no price data, so prices are a $1.000 placeholder (follow-ups R-182..R-184). The analyst close script truncated the sprint doc once; it was restored with `git checkout`. Two stale worktrees (US-099, R-170) from earlier runs were found and left alone.
 
 **What to measure next.** Whether the PO-question round at GATE 1 can be shortened by pre-filling defaults in the contract.
+
+## Run 37 — US-104 (R-186: close the register with a shortage after confirmation, level M)
+
+Created from dev `9cce311`. Opened by the docs QA of the go-live kit (B1): the close modal refused any *faltante* and suggested hiding it. Commits: register `cf850bc`, GATE 1 sync `1b1dc3f`, implementation `8edaea1`, manual row fix `daf53be`, docs close `7216d3b`. Level M: the implementer wrote T-1..T-11.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract 106.0k/41/282 s; GATE 1 sync 138.2k/12/177 s; close 171.2k/22/221 s; one resume counted in the sync) | 171.2k | ~75 | ~11.3 min (680 s) |
+| implementer | 2 (implementation 94.5k/38/345 s; MINOR fix 96.3k/4/11 s) | 96.3k | 42 | ~6 min (356 s) |
+| qa | 1 round | 88.5k | 31 | ~4.2 min (252 s) |
+
+**What it found.**
+- The analyst proved by a probe that the block was UI only (server stores −5000 for a cashier) and traced it to the initial frontend import (`d1488dd`), not a PO decision.
+- D-6: a failed close showed nothing at all (no `catch`, no global handler); fixed by AC-14. D-2 (`Entradas` missing from the close breakdown) turned out to be R-85, closed too.
+- Gemini contract: 8 raised, 5 verified (T-6 reused a closed shift, reports label mismatch, null not tested, no in-flight guard, no failure path), 3 false positives (AC-1 vs AC-9, negative count impossible with `parseInputCOP`, spec path prefix). All 5 entered the contract with the GATE 1 decisions.
+- QA round 1: OK, 0 BLOCKER, 4 MINOR; the binary smoke stored `difference -5000` and a second close answered 409. One MINOR was a false end-user sentence in the manual (after a network error the close may have gone through), fixed before close.
+
+**Unplanned stops:** 0 outside GATE 1 and GATE 2. QA rounds: 1. Violations: 0. PO pre-authorized the merge after QA OK.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, ~5 min | 8 | 5 | 3 | n/a (pre-implementation) |
+| diff, round 1 | OK, `CLEAN` | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- The main checkout had uncommitted files from a parallel session (`project-docs/README.md`, `spec/product.md`, `sales-strategy.md`) at merge time; they were left unstaged.
+- A new worktree needed `pnpm install` before the frontend tests.
+
+### What to measure in run 38
+- Whether M-1 (browser at 320 px, double click, failure path) finds anything the unit tests on pure helpers missed.

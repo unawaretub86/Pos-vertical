@@ -61,7 +61,7 @@ Con el dueño y el cajero, cada uno en su usuario. Ellos tocan el teclado, usted
 | 5–15 | Vender | ambos | Venta en efectivo con cambio, transferencia, mixta, **Dejar en espera** |
 | 15–20 | Fiado | ambos | Fiar con **Credito** a un cliente ya creado, ver **Debe**, responder el aviso **¿Fiar de todas formas?** |
 | 20–25 | Abonos y clientes | dueño | Crear cliente, abonar escogiendo **Efectivo** o **Transferencia** (Nequi y Daviplata son transferencia). El cajero no tiene pantalla de abonos: cuando un cliente paga, avisa al dueño |
-| 25–32 | Caja | ambos | Abrir, **Entrada** y **Salida** con nota, cerrar contando billetes. Con faltante no deja cerrar: recontar; si de verdad falta, **Salida** con la nota "Faltante de cierre" y avisar al dueño |
+| 25–32 | Caja | ambos | Abrir, **Entrada** y **Salida** con nota, cerrar contando billetes. Con faltante: recontar; si de verdad falta, avisar al dueño y confirmar **Cerrar con faltante** (queda en el ticket y el historial). No tapar el faltante con una **Salida** |
 | 32–38 | Lo del dueño | dueño | Dashboard, cartera, **Cobrar** por WhatsApp, anular una venta, reportes, preguntarle al asistente |
 | 38–42 | Productos | dueño | Crear un producto con costo, entrada de inventario, ver lo que se está acabando |
 | 42–45 | Si algo falla | ambos | Impresora: cambiar a **Navegador**; respaldo semanal a USB; a quién escribirle |
