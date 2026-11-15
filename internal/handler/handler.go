@@ -72,7 +72,7 @@ func New(db *database.DB) *Handler {
 
 	salesSvc := service.NewSaleService(saleRepo, prodRepo, regRepo)
 	salesSvc.WithElectronicDocs(eledocRepo)
-	registerSvc := service.NewRegisterService(regRepo, userRepo, setupRepo)
+	registerSvc := service.NewRegisterService(regRepo)
 
 	var factelSvc *factelect.FacElectService
 	cfg, _ := fiscalRepo.Get(context.Background())

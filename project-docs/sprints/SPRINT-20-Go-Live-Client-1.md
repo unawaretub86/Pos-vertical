@@ -44,6 +44,7 @@
 | US-105 | Receivables stay with the owner (`GET /customers` without balances for the cashier, Customers screens guarded), and the cashier records an *abono* from `Punto de Venta › Abonar` (roadmap R-188 + R-187) | [x] | 2026-11-14 |
 | US-106 | Per-line discounts leave an audit trail: one `discount` row per discounted line, shown in `Auditoría` (roadmap R-189) | [x] | 2026-11-14 |
 | US-107 | Money display polish before go-live: open-order and table totals with IVA, cart discount follows the quantity, `Fiado` payment label, negative amounts as `-$X` (roadmap R-177 + R-181 + R-185 + R-191) | [x] | 2026-11-14 |
+| US-108 | One owner email per register close: remove the duplicate sender in `RegisterService.Close`, keep the handler one (roadmap R-84) | [x] | 2026-11-14 |
 
 **Total estimated effort: ~8 days**
 
@@ -754,3 +755,23 @@ Closed: R-189. Follow-ups opened: R-215 (wholesale price rejected for a cashier)
 **Results:** QA round 1: BLOCKER (the spec delta, which is close-step work by design and is done at this close) and 3 MINOR (the `cash_out 0` test asserted only `not $-0`, strengthened in `09d4794`; `ListLines(status)` reads every line of every order with that status, so `GET /orders?status=closed` reads all history, which became R-221; this status line, done here). QA confirmed the new tests fail on the base commit. `go build`, `go test ./...`, `pnpm test` (333 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18107: one item $10.001 at 19% → 11901 from `GET /tables`, `GET /orders?status=open` and `GET /orders/1`. Spec: `spec/domain/restaurante.md` (Table state, Orders), `spec/domain/dinero.md` (Display), `spec/domain/caja.md`, `spec/domain/fiado.md` (Model). Contract discrepancies: D-1 and D-2 (the visible total was the `/mesas` card's `open_total`, not `ListOpen`) fixed by pricing both; D-3 (stale `restaurante.md` lines) fixed at close; D-4 (percentage discounts) fixed by PO decision Q-3; D-5 (three places capitalized the key) fixed; D-6 (`Salidas $-0`) fixed. Manual check parked: `gaps.md` US-107 M-1.
 
 Closed: R-177, R-181, R-185, R-191. Follow-ups opened: R-220 (`Fiado` on the customer ticket, the close ticket and Reports, only if the PO wants one word everywhere), R-221 (`GET /orders?status=closed` reads all history), R-222 (tell the cashier when a line discount is clamped).
+
+## US-108 — One owner email per register close
+
+**Status:** registered 2026-11-14 (roadmap R-84). Level M. Closed 2026-11-14 (register `d010dd2`, implementation and tests `30131b8`). Approved at GATE 1 (PO, 2026-11-14): Q-1..Q-3 as recommended (keep the handler sender because it names the closer and logs failures; remove the unused `userRepo`/`setupRepo` parameters of `NewRegisterService`; add the `mailer.Transport` test seam). The contract `changes/US-108/contract.md` disappears with the worktree; the verified criteria are below.
+
+**As** Don Carlos (owner),
+**I want** to receive exactly one summary email when a register is closed, naming who closed it,
+**so that** my inbox is not doubled and the email never shows the cashier who merely opened the register.
+- [x] One `POST /registers/{id}/close` produces one SMTP delivery attempt, not two.
+- [x] The email keeps the close figures, `Faltante` wording and the failure log; the close response is not delayed or blocked by the email.
+
+**Verified criteria (closed 2026-11-14):** the contract found by running a probe (a local listener counting SMTP connections) that one close made 2 attempts, and that the two emails named different people (the service the opener, the handler the closer). Tests in `internal/handler/register_email_test.go` use a file-backed DB (R-115) and the `mailer.Transport` seam, with the register opened by cashier 2 and closed with an admin token whose username is `u`.
+- AC-1: WHEN `POST /registers/{id}/close` succeeds with the owner email and App Password configured, the system SHALL make exactly one SMTP delivery attempt. Test: `TestRegisterEmail_T1_ExactlyOneEmail` (opening $100.000, counted $95.000 → 1 message after a 300 ms settle window).
+- AC-2: WHEN `RegisterService.Close` is called directly, the system SHALL send no email (the service no longer imports `mailer`; `NewRegisterService(repo)`). Proved by T-1 (one send over HTTP) and the constructor edits in `internal/service/register_test.go` and `expense_test.go`.
+- AC-3: WHEN the email is built, `Cajero` SHALL be the username of the request's user, with the same lines as before. Test: `TestRegisterEmail_T1_ExactlyOneEmail` (`Cajero: u`, `Esperado: $100.000`, `Real: $95.000`, `Faltante: $5.000`, `Abonos en efectivo: $0`, recipient `dueno@gmail.com`).
+- AC-4: IF the SMTP send fails, THEN the system SHALL log `register summary email: <err>` once and the close SHALL stay `200` with the register closed. Test: `TestRegisterEmail_T2_SendFailureLoggedOnce` (polls the log buffer up to 2 s).
+- AC-5: IF the owner email or the App Password is empty, THEN no email SHALL be sent and the close SHALL answer `200`. Test: `TestRegisterEmail_T3_NotConfiguredSendsNothing`.
+- AC-6: The close response SHALL NOT wait for the SMTP exchange. Test: `TestRegisterEmail_T1_ExactlyOneEmail` (the stub blocks until the HTTP call has returned).
+
+**Results:** QA round 1: OK, 0 BLOCKER, 2 MINOR (the spec delta and the roadmap and sprint status, both close-step work, done here); Gemini diff CLEAN. Mutation check on the base commit with only the seam added: T-1 sees 2 sends and T-2 sees 2 stub calls (both fail); T-3 passes there by design (it asserts absence). `go test ./...`, `pnpm test` (333 tests), `pnpm lint` and `pnpm build` green; `-count=10` on the new tests stable. Binary smoke on port 18108: close with counted $95.000 answered 200 in 2.6 ms. Spec: `spec/domain/caja.md` (Rule: email at close). Contract discrepancies: D-1 (the two emails named opener and closer) decided by keeping the handler; D-2 (`caja.md` listed a "manual summary" that does not exist) fixed; D-3 (stale R-84 line refs) refreshed. Manual check parked: `gaps.md` US-108 M-1. Follow-ups opened: R-223 (closer's full name in the email), R-224 (a failed email is visible only in the server log).

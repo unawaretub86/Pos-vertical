@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/andreyo/pos/internal/mailer"
 	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
 )
@@ -34,14 +32,12 @@ type RegisterSummary struct {
 
 // RegisterService handles business logic for cash registers.
 type RegisterService struct {
-	repo      repository.RegisterRepository
-	userRepo  repository.UserRepository
-	setupRepo *repository.SetupRepository
+	repo repository.RegisterRepository
 }
 
 // NewRegisterService creates a new RegisterService.
-func NewRegisterService(repo repository.RegisterRepository, userRepo repository.UserRepository, setupRepo *repository.SetupRepository) *RegisterService {
-	return &RegisterService{repo: repo, userRepo: userRepo, setupRepo: setupRepo}
+func NewRegisterService(repo repository.RegisterRepository) *RegisterService {
+	return &RegisterService{repo: repo}
 }
 
 // Open creates a new register session. Fails if one is already open.
@@ -176,49 +172,6 @@ func (s *RegisterService) Close(ctx context.Context, id int64, actualClose float
 		Expected:        expected,
 		Movements:       movements,
 		ByPaymentMethod: byMethod,
-	}
-
-	if s.setupRepo != nil {
-		if cfg, err := s.setupRepo.Get(); err == nil && cfg.OwnerEmail != "" && cfg.OwnerEmailAppPassword != "" {
-			cashierName := "Desconocido"
-			if s.userRepo != nil {
-				if user, err := s.userRepo.GetByID(context.Background(), closed.UserID); err == nil {
-					cashierName = user.FullName
-					if cashierName == "" {
-						cashierName = user.Username
-					}
-				}
-			}
-
-			pmLines := make([]mailer.PaymentLine, len(byMethod))
-			for i, m := range byMethod {
-				pmLines[i] = mailer.PaymentLine{Method: m.Method, Total: m.Total}
-			}
-
-			closedAt := time.Now()
-			if closed.ClosedAt != nil {
-				closedAt = *closed.ClosedAt
-			}
-
-			go func(d mailer.RegisterSummaryData, smtpCfg mailer.SMTPConfig) {
-				subject, body := mailer.BuildRegisterSummaryEmail(d)
-				_ = mailer.Send(smtpCfg, subject, body)
-			}(mailer.RegisterSummaryData{
-				BusinessName:    cfg.Name,
-				Cashier:         cashierName,
-				ClosedAt:        closedAt,
-				ByPaymentMethod: pmLines,
-				CashAbonos:      cashAbonos,
-				CashIn:          cashIn,
-				CashOut:         cashOut,
-				Expected:        expected,
-				ActualClose:     actualClose,
-				Difference:      difference,
-			}, mailer.SMTPConfig{
-				Email:       cfg.OwnerEmail,
-				AppPassword: cfg.OwnerEmailAppPassword,
-			})
-		}
 	}
 
 	return summary, nil

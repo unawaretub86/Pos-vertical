@@ -89,6 +89,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 38 | 2026-11-14 | US-105 (R-188 + R-187: receivables hidden from the cashier, `Abonar` on the POS) | L | ~439k (A 206.6k over 3 invocations · T 66.7k over 2 · I 80.8k over 2 · Q 85.3k) | 235 (A 140 · T 24 · I 37 · Q 34) | ~35 (A ~13.8 · T ~5.9 · I ~8.9 · Q ~6.5) | 1 | 1 | 6 contract discrepancies (D-1..D-6, D-6 three tests the contract missed) + 2 Gemini-verified contract gaps + 5 QA MINOR | R-187 and R-188 closed; R-210..R-214 opened | 0 | +680 / −49, 26 files (incl. docs) |
 | 39 | 2026-11-14 | US-106 (R-189: per-line discounts audited) | L | ~345k (A 156.1k over 3 invocations · T 73.6k · I 46.5k · Q 68.4k) | 144 (A 73 · T 22 · I 24 · Q 25) | ~53 (A ~39 · T ~5 · I ~4.1 · Q ~5.1) | 0 | 1 | 5 contract discrepancies (D-1..D-5, D-2 a wholesale bug for cashiers) + 1 Gemini-verified contract gap + 2 QA MINOR | R-189 closed; R-215..R-218 opened | 0 | +472 / −13, 13 files (incl. docs) |
 | 40 | 2026-11-14 | US-107 (R-177 + R-181 + R-185 + R-191: UI polish bundle) | M | ~333k+ (A 174.9k over 4 invocations, one lost to the usage limit · I 75.1k over 2 · Q 83.4k) | 139+ (A 79+ · I 28 · Q 32) | ~31+ (A ~15+ · I ~9.2 · Q ~6.3) | 1 (usage limit) | 1 | 6 contract discrepancies (D-1..D-6, D-6 `$-0` on every close) + 0 Gemini-verified + 1 QA BLOCKER (close-step spec delta, routed to close) + 3 QA MINOR | R-177, R-181, R-185, R-191 closed; R-220..R-222 opened | 0 | +423 / −41, 26 files (incl. docs) |
+| 41 | 2026-11-14 | US-108 (R-84: one summary email per register close) | M | ~169k (A 84.8k over 3 invocations · I 43.6k · Q 40.1k) | 59 (A 32 · I 15 · Q 12) | ~38 (A ~31.5 · I ~3.1 · Q ~3.7) | 0 | 1 | 3 contract discrepancies (D-1..D-3, D-1 the two emails name different people) + 1 Gemini-verified contract gap (T-2 log race) + 2 QA MINOR (both close-step) | R-84 closed; R-223, R-224 opened | 0 | +237 / −68, 11 files (incl. docs) |
 
 ### Trend
 
@@ -1645,3 +1646,34 @@ Created from dev `78de2c2`. Commits: register `69c85cf`, implementation `59df01d
 
 ### What to measure in run 41
 - Whether telling QA "spec delta lands at close" removes the false BLOCKER.
+
+## Run 41 — US-108 (R-84: one summary email per register close, level M)
+
+Created from dev `cb75625`, the first run after the pipeline tweaks of that commit (contract table of contradicted tests; a pending spec delta is a QA MINOR). Commits: register `d010dd2`, implementation `30131b8`, docs close `cafdb17`.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract 58.5k/19/239 s; GATE 1 sync 60.0k/21/515 s; close 84.8k/32/1,137 s) | 84.8k | 32 | ~31.5 min (1,891 s; the close alone took 19 min) |
+| implementer | 1 (tests + implementation) | 43.6k | 15 | ~3.1 min (183 s) |
+| qa | 1 round | 40.1k | 12 | ~3.7 min (224 s) |
+
+**What it found.**
+- The analyst proved by a run probe that one `POST /registers/{id}/close` makes 2 SMTP attempts (it pointed the SMTP address at a local listener and counted 2 connections), and that only one of the two failures is logged.
+- D-1, not in the roadmap row: the two emails name different people (the service names the opener, the handler names the closer). D-2: `spec/domain/caja.md` described a "manual summary" use of the App Password that no route implements. D-3: stale line refs.
+- The only way to count emails in a test was a new seam, `mailer.Transport`; placed under `mailer.Send` it makes T-1 fail on the base commit (2 sends) and T-2 too (2 stub calls), as QA confirmed on a `git archive` copy with only the seam added.
+- QA round 1: 0 BLOCKER, 2 MINOR (both close-step: spec delta, sprint and roadmap), the spec-delta rule worked as intended: no false BLOCKER. The binary smoke wrote exactly one send attempt (Gmail rejected the fake credentials) with no panic.
+
+**Unplanned stops:** 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, ~5 min | 8 | 1 (T-2 read the log before the goroutine wrote it: a race; fixed by polling up to 2 s) | 7 (2 about the spec delta, which lands at close; AC-2 provable over HTTP after the constructor change; role-agnostic handler; unchanged body; empty username impossible; 300 ms window) | n/a (pre-implementation) |
+| diff, round 1 | OK, `CLEAN`, ~10 min | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- The analyst's final report in `close` mode never reached the orchestrator (its second hand-back was refused: one report per result); the orchestrator verified the worktree directly (`git status`, the roadmap, the spec diff, the max R-ID) instead of trusting a report. Same happened after the contract report, harmlessly.
+- The main checkout still had 3 unrelated uncommitted `project-docs/` files from the content-plan session at step 0; the rule says stop, but they could not affect R-84 (a Go email path) and the PO had already seen them listed, so the run proceeded and said so.
+
+### What to measure in run 42
+- Whether a `close`-mode analyst can end with a single hand-back (tell it to send the report only once, at the very end).

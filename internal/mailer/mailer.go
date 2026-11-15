@@ -99,6 +99,9 @@ type SMTPConfig struct {
 
 const gmailSMTPAddr = "smtp.gmail.com:587"
 
+// Transport is the SMTP delivery function. Tests replace it to observe sends.
+var Transport = smtp.SendMail
+
 func encodeSubject(s string) string {
 	return "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(s)) + "?="
 }
@@ -114,5 +117,5 @@ func Send(cfg SMTPConfig, subject, body string) error {
 		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\n%s",
 		cfg.Email, cfg.Email, encodeSubject(subject), body,
 	)
-	return smtp.SendMail(gmailSMTPAddr, auth, cfg.Email, []string{cfg.Email}, []byte(msg))
+	return Transport(gmailSMTPAddr, auth, cfg.Email, []string{cfg.Email}, []byte(msg))
 }

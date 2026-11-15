@@ -88,7 +88,7 @@ func (s *stubRegisterRepo) CountOpenOrders(_ context.Context) (int, error) {
 func TestRegisterService_Open_AlreadyOpen_ReturnsError(t *testing.T) {
 	// A register is already open — opening a second one must fail.
 	repo := &stubRegisterRepo{openRegister: &model.Register{ID: 1, Status: "open"}}
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	_, err := svc.Open(context.Background(), 42, 100)
 	if err == nil {
@@ -101,7 +101,7 @@ func TestRegisterService_Open_AlreadyOpen_ReturnsError(t *testing.T) {
 
 func TestRegisterService_Open_NoExistingRegister_Succeeds(t *testing.T) {
 	repo := &stubRegisterRepo{} // GetOpen returns ErrNotFound
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	reg, err := svc.Open(context.Background(), 42, 100)
 	if err != nil {
@@ -121,7 +121,7 @@ func TestRegisterService_Summary_IncludesCashIn(t *testing.T) {
 		cashIn:       50,
 		cashOut:      30,
 	}
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	summary, err := svc.Summary(context.Background(), 1)
 	if err != nil {
@@ -140,7 +140,7 @@ func TestRegisterService_Summary_NoCashIn_Unchanged(t *testing.T) {
 		cashSales:    100,
 		cashOut:      50,
 	}
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	summary, err := svc.Summary(context.Background(), 1)
 	if err != nil {
@@ -160,7 +160,7 @@ func TestRegisterService_Close_ExpectedIncludesCashIn(t *testing.T) {
 		cashIn:       50,
 		cashOut:      30,
 	}
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	summary, err := svc.Close(context.Background(), 1, 320)
 	if err != nil {
@@ -185,7 +185,7 @@ func t7Repo() *stubRegisterRepo {
 
 func TestRegisterService_T7_SummaryExpectedIncludesCashAbonos(t *testing.T) {
 	// expected = 100,000 + 30,000 + 20,000 + 5,000 - 15,000 = 140,000
-	svc := NewRegisterService(t7Repo(), nil, nil)
+	svc := NewRegisterService(t7Repo())
 
 	summary, err := svc.Summary(context.Background(), 1)
 	if err != nil {
@@ -202,7 +202,7 @@ func TestRegisterService_T7_SummaryExpectedIncludesCashAbonos(t *testing.T) {
 func TestRegisterService_T7_CloseStoresExpectedWithCashAbonos(t *testing.T) {
 	// expected 140,000; actual 145,000 -> difference +5,000
 	repo := t7Repo()
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	summary, err := svc.Close(context.Background(), 1, 145000)
 	if err != nil {
@@ -228,7 +228,7 @@ func TestRegisterService_T7_CloseStoresExpectedWithCashAbonos(t *testing.T) {
 func TestRegisterService_T7_CloseFailsWhenAbonoSumFails(t *testing.T) {
 	repo := t7Repo()
 	repo.cashAbonosErr = errors.New("db error")
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	if _, err := svc.Close(context.Background(), 1, 145000); err == nil {
 		t.Fatal("Close returned nil error, want error when the abono sum fails")
@@ -241,7 +241,7 @@ func TestRegisterService_T7_CloseFailsWhenAbonoSumFails(t *testing.T) {
 func TestRegisterService_T7_SummaryFailsWhenAbonoSumFails(t *testing.T) {
 	repo := t7Repo()
 	repo.cashAbonosErr = errors.New("db error")
-	svc := NewRegisterService(repo, nil, nil)
+	svc := NewRegisterService(repo)
 
 	if _, err := svc.Summary(context.Background(), 1); err == nil {
 		t.Fatal("Summary returned nil error, want error when the abono sum fails")
