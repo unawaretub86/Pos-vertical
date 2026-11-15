@@ -285,11 +285,12 @@ func (h *Handler) Routes() http.Handler {
 			r.Delete("/users/{id}", h.deactivateUser)
 		})
 
-		// Customers (all authenticated users can read; admin to write)
+		// Customers: any role can pick a customer and read one customer's
+		// balance (credit checkout, abono from the POS); the list hides balances
+		// from a cashier and the detail is admin-only (US-105).
 		r.Get("/customers", h.listCustomers)
 		r.Get("/customers/{id}", h.getCustomer)
 		r.Get("/customers/{id}/pos-summary", h.getCustomerPOSSummary)
-		r.Get("/customers/{id}/detail", h.getCustomerDetail)
 		r.Get("/customers/{id}/balance", h.getCustomerBalance)
 		r.Get("/customers/{id}/payments", h.listCustomerPayments)
 		// Any role may register an abono; CustomerService requires an open
@@ -297,6 +298,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Post("/customers/{id}/payments", h.createCustomerPayment)
 		r.Group(func(r chi.Router) {
 			r.Use(appmw.RequireAdmin)
+			r.Get("/customers/{id}/detail", h.getCustomerDetail)
 			r.Post("/customers", h.createCustomer)
 			r.Put("/customers/{id}", h.updateCustomer)
 			r.Delete("/customers/{id}", h.deleteCustomer)

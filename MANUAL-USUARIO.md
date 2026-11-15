@@ -62,10 +62,10 @@ Hay dos tipos de usuario:
 
 | Rol | Qué puede hacer |
 |---|---|
-| **Administrador** (dueño) | Todo: dashboard, clientes, cartera, inventario, compras, reportes, usuarios, auditoría y configuración. Es el único que crea clientes y productos, recibe abonos, cambia precios en la venta, anula ventas y registra gastos. |
-| **Cajero** | En el menú solo tiene **Punto de Venta** y **Caja**: vender (también fiar a un cliente ya creado), abrir y cerrar caja, registrar entradas y salidas de efectivo. |
+| **Administrador** (dueño) | Todo: dashboard, clientes, cartera, inventario, compras, reportes, usuarios, auditoría y configuración. Es el único que ve la pantalla **Clientes** y la cartera, y el único que crea clientes y productos, cambia precios en la venta, anula ventas y registra gastos. |
+| **Cajero** | En el menú solo tiene **Punto de Venta** y **Caja**: vender (también fiar a un cliente ya creado), recibir abonos desde **Punto de Venta › Abonar** con la caja abierta, abrir y cerrar caja, registrar entradas y salidas de efectivo. |
 
-**Qué ve el cajero y qué no.** No ve el dashboard, la ganancia, los reportes, la cartera ni el inventario. Sí ve: lo que debe cada cliente al momento de fiarle (**Debe: ...**), las cajas con sus movimientos (también las anteriores, en **Ver histórico**), el efectivo esperado al cerrar y el ticket de cierre con las ventas por método de pago.
+**Qué ve el cajero y qué no.** No ve el dashboard, la ganancia, los reportes, la cartera ni el inventario. Sí ve: lo que debe un cliente al momento de fiarle (**Debe: ...**) o de recibirle un abono, las cajas con sus movimientos (también las anteriores, en **Ver histórico**), el efectivo esperado al cerrar y el ticket de cierre con las ventas por método de pago.
 
 Cree un usuario para cada persona en **Usuarios** (menú lateral). No comparta el usuario del dueño. Si alguien deja de trabajar, desactívelo: su historial se conserva.
 
@@ -143,7 +143,9 @@ Si con esta venta el cliente pasa su tope, o tiene deuda de más de 30 días, el
 
 ### Recibir un abono
 
-Los abonos los registra el **dueño**: desde **Clientes** (botón **Abonar**), desde el detalle del cliente (**Registrar abono**) o desde el dashboard (**Pagar**). En esta versión el cajero no tiene en su menú una pantalla para recibir abonos.
+El **cajero** recibe abonos desde **Punto de Venta**, botón **Abonar**, con la caja abierta: busque al cliente por nombre o teléfono y el sistema muestra solo el saldo de ese cliente. Si el cliente está **Al día** o tiene **Saldo a favor**, no hay nada que abonar. El cajero no entra a **Clientes** ni ve la cartera: eso es del dueño.
+
+El **dueño** además puede registrarlos desde **Clientes** (botón **Abonar**), desde el detalle del cliente (**Registrar abono**) o desde el dashboard (**Pagar**).
 
 1. Escoja un monto rápido (**Total**, **Mitad**, $50.000, $20.000) o escriba el valor. No puede ser mayor que la deuda.
 2. Escoja cómo pagó: **Efectivo**, **Transferencia** (Nequi, Daviplata o banco) o **Tarjeta**. Esto es importante: solo los abonos en efectivo entran al conteo de la caja.

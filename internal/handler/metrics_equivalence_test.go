@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/andreyo/pos/internal/database"
+	"github.com/andreyo/pos/internal/model"
 )
 
 // US-059 — equivalence tests. T-20, T-21 and T-23 pin the numbers of the
@@ -326,7 +327,7 @@ func TestDashboardToday_T36_AgingBalanceMatchesPortfolioAndCustomers(t *testing.
 	}
 
 	// /customers.
-	reqC := httptest.NewRequest(http.MethodGet, "/api/customers", nil)
+	reqC := withClaims(httptest.NewRequest(http.MethodGet, "/api/customers", nil), &model.Claims{UserID: 1, Role: "admin"})
 	wc := httptest.NewRecorder()
 	h.listCustomers(wc, reqC)
 	if wc.Code != http.StatusOK {

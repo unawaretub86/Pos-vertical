@@ -41,6 +41,7 @@
 | US-102 | Whole-peso money with one rounding rule: line IVA rounded, totals and payments exact, migration 24 for existing rows, no sub-peso *fiado* residue (roadmap R-133 + R-106, go-live K5) | [x] | 2026-11-13 |
 | US-103 | Starter catalog for the neighborhood shop: about 150 generic products importable in one click through the US-094 import (roadmap R-173, launch stage 2) | [x] | 2026-11-13 |
 | US-104 | Close the register with a *faltante* (shortage) after an explicit confirmation, and show it as `Faltante` on the ticket and in the histories (roadmap R-186, before G-2) | [x] | 2026-11-13 |
+| US-105 | Receivables stay with the owner (`GET /customers` without balances for the cashier, Customers screens guarded), and the cashier records an *abono* from `Punto de Venta › Abonar` (roadmap R-188 + R-187) | [x] | 2026-11-14 |
 
 **Total estimated effort: ~8 days**
 
@@ -630,3 +631,45 @@ Follow-ups opened: R-182 (real prices for the starter catalog), R-183 (importer 
 **Results:** QA round 1 OK (0 BLOCKER, 4 MINOR): the troubleshooting row wording after a network error (fixed in `daf53be`), the spec and roadmap updates (done at this close), `differenceColor` exported with no unit test (accepted), and the page wiring covered only by M-1 (accepted, as planned). `go build`, `go test ./...`, `pnpm test` (304 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18186 stored `difference` −5000. Spec: `spec/domain/caja.md` ("Rule: expected cash at close"). Contract discrepancies: D-1 (the ticket and histories would have shown `$-5.000`) and D-2 (`Entradas` missing from the close modal) fixed; D-6 (a failed close showed nothing) fixed by AC-14; D-3 became R-191; D-4 stays R-84; D-5 (stale spec line refs) fixed. Manual check parked: `gaps.md` US-104 M-1.
 
 Closed: R-186, and R-85 (`Entradas` missing from the close modal, the same gap as contract D-2). Follow-ups opened: R-190 (record who closed the register), R-191 (`formatCOP` prints negatives as `$-X`).
+
+---
+
+## US-105 — Receivables stay with the owner, and the cashier records an *abono* from the POS
+
+**Status:** registered 2026-11-14 (roadmap R-188 + R-187, Docs QA 2026-11-13 B2/B3). Level L. Closed 2026-11-14 (red tests `20b274a` + `44021cb`, implementation `27253e0`). Approved at GATE 1 (PO, 2026-11-14): Q-1..Q-5 as recommended (`Abonar` in the `Punto de Venta` top bar for both roles; the customer detail page and `GET /customers/{id}/detail` admin-only too; the cashier sees the balance of the one customer she picks; `has_balance` ignored for a cashier, not 403; voice-neutral strings). The contract `changes/US-105/contract.md` disappears with the worktree; the verified criteria are below.
+
+**As** Laura (cashier),
+**I want** to take a customer's *abono* from `Punto de Venta`, seeing only that customer's balance,
+**so that** I do not send the customer to wait for the owner, while Don Carlos keeps the list of who owes and how much to himself.
+
+**Estimated effort:** 1 day. **Impact:** High for go-live (`spec/personas.md` says receivables are admin-only; today they are not).
+
+**Problem (verified 2026-11-14):** `GET /customers` is outside `RequireAdmin` (`internal/handler/handler.go:289`) and a cashier token gets every customer's `balance`, `oldest_debt_at` and `total_portfolio` (run in the contract); `?has_balance=true` lists exactly who owes. The `/customers` and `/customers/{id}` pages have no role guard, so a cashier who types the URL sees `$X por cobrar en total` and each customer's history. Meanwhile the cashier has no screen to record an *abono*, although `POST /customers/{id}/payments` accepts her while a register is open (`internal/service/customer.go:127-136`): `AbonoModal` is mounted only on admin screens.
+
+**Acceptance criteria (draft; the contract refines them):**
+- [x] A cashier's `GET /customers` returns names, phones, notes and credit limit only: no `balance`, no `oldest_debt_at`, no `total_portfolio`, and `has_balance` is ignored. The admin response is unchanged.
+- [x] The POS checkout keeps working for the cashier: customer picker, debt badge, credit-limit notice and `¿Fiar de todas formas?` confirmation (they read `pos-summary`, not the list).
+- [x] A cashier who opens `/customers` or `/customers/{id}` is sent to `/pos` (the detail by PO decision Q-2).
+- [x] `Punto de Venta` has an `Abonar` button: search a customer by name or phone, see only that customer's balance, and record the *abono* in the existing `Registrar abono` modal; with no open register the cashier gets the server message and nothing is stored.
+- [x] The manual and the commercial docs say the cashier takes *abonos* from `Punto de Venta`.
+
+**Verified criteria (closed 2026-11-14):** fixture Dora $30.000, Eli $15.000, Fer $0, Gus −$20.000 (`seedCustomersT5`), cashier user id 2. Backend tests in `internal/handler/customer_role_test.go`.
+- AC-1: WHEN a cashier calls `GET /customers`, the system SHALL answer 200 with `data` = `{customers}` only, each row with exactly `id`, `name`, `phone`, `address`, `notes`, `credit_limit`, `created_at`, ordered Dora, Eli, Fer, Gus, and no `balance`, `oldest_debt_at` or `total_portfolio`. Test: `TestCustomerRole_T1_CashierListHasNoBalances`.
+- AC-2: WHEN a cashier calls `GET /customers?has_balance=true`, the system SHALL ignore it and return the same 4 rows; `?q=Do` → Dora only, with no balance. Test: `TestCustomerRole_T2_CashierIgnoresHasBalanceButKeepsSearch`.
+- AC-3: WHEN an admin calls `GET /customers`, the system SHALL answer as before: Dora `balance` 30000, Gus −20000, `total_portfolio` 45000; `has_balance=true` → Dora and Eli. Tests: `TestCustomerRole_T3_AdminListUnchanged`; `TestListCustomers_T5_TotalPortfolioMatchesPositiveBalances` (now with admin claims).
+- AC-4: IF the request carries no claims, THEN `listCustomers` SHALL answer the cashier shape (fail closed). Test: `TestCustomerRole_T4_NoClaimsFailsClosed`.
+- AC-5: WHILE a cashier checks out on credit, `GET /customers/1/pos-summary` and `GET /customers/1/balance` SHALL still answer her 200 with `balance` 30000, and the picker SHALL keep reading `id`, `name`, `phone`, `notes`, `credit_limit` from the list. Test: `TestCustomerRole_T5_CashierKeepsPerCustomerBalance`; picker unchanged in the diff (QA); binary smoke: cashier `pos-summary` 200 `balance` 30000.
+- AC-6: WHEN a cashier opens `/customers`, the page SHALL redirect to `/pos`, render nothing and send no `GET /customers`; an admin sees it unchanged. Tests: `frontend/lib/customerAccess.test.ts` (`T-8 canSeeCustomers`: no user, cashier → false; admin → true); page wiring by manual check `gaps.md` US-105 M-1 (e).
+- AC-7: WHEN a cashier opens `/customers/{id}`, the page SHALL redirect to `/pos` and send no `/detail`; `GET /customers/{id}/detail` SHALL be admin-only (cashier 403, admin 200 `balance` 30000). Tests: `TestCustomerRole_T6_DetailIsAdminOnly`, `T-8 canSeeCustomers`; page wiring by manual check M-1 (e).
+- AC-8: WHILE on `/pos`, the system SHALL show `Abonar` in the top bar to both roles, usable at 320 px. Manual check M-1 (a).
+- AC-9: WHEN `Abonar` is pressed, the system SHALL open a `Buscar cliente...` search over `GET /customers?q=` showing names and phones only; the cart, held sales and payment panel SHALL be unchanged when it closes. Manual check M-1 (a); code reading (QA: the cart state is independent of `showAbono`, no global keydown on `/pos`).
+- AC-10: WHEN a customer with balance `> 0` is picked, the system SHALL request `GET /customers/{id}/balance` once and open `AbonoModal` with that balance (Dora → `Saldo pendiente $30.000`). Test: `frontend/lib/abono.test.ts` `posAbonoStep` › `T-9 a balance of 30,000 opens the abono modal`; manual check M-1 (a).
+- AC-11: IF the picked balance is `≤ 0`, THEN the system SHALL show `Al día` (Fer) or `Saldo a favor: $20.000` (Gus) with no amount form and a way back to the search. Tests: `posAbonoStep` › `T-9 a balance of 0 shows Al día and no amount form`, `T-9 a balance of -20,000 shows Saldo a favor: $20.000 and no amount form`; manual check M-1 (b), (c).
+- AC-12: IF the balance lookup fails, THEN the system SHALL show `No se pudo cargar el saldo del cliente`, open no form and send no *abono*. Test: `posAbonoStep` › `T-10 a failed balance lookup (null) shows the load error and no form`; manual check M-1 (d).
+- AC-13: WHEN a cashier saves an *abono* with an open register, the system SHALL answer 201 linked to that register: Dora $30.000, cash *abono* $10.000 → balance 20000. Tests: `TestCustomerRole_T7_CashierAbonoFromPOSLowersBalance`; `TestCustomerPayment_T4_CashierNeedsOpenRegister` (unchanged).
+- AC-14: IF a cashier saves an *abono* with no open register, THEN the system SHALL answer 403 `Debe haber una caja abierta para registrar un abono`, store nothing, and the modal SHALL keep the message. Test: `TestCustomerPayment_T4_CashierNeedsOpenRegister` (unchanged); binary smoke (QA) 403 then 201 after opening a register.
+- AC-15: `MANUAL-USUARIO.md` (`:65-68`, `:146-148`), `project-docs/features.md` (`:40`, `:131`), `docs/comercial/guion-de-venta.md:68` and `docs/comercial/instalacion-y-capacitacion.md:63` SHALL say the cashier takes *abonos* from `Punto de Venta › Abonar` while the register is open. Verified by QA grep (T-14): `cajero no tiene` / `los registra el dueño` → no match.
+
+**Results:** QA round 1 OK (0 BLOCKER, 5 MINOR): the spec delta (done at this close), two stale notes in `features.md` (`:10`, `:37`, fixed at this close), three token swaps in `44021cb` that the contract did not list (recorded as contract D-6), and a blank `/customers` with no stored user (accepted, R-214). `go build`, `go test ./...`, `pnpm test` (311 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18105 confirmed the cashier and admin shapes, the detail 403 and the cashier *abono* 403 → 201. Spec: `spec/personas.md` (Laura), `spec/domain/fiado.md` (new "Rule: what the cashier sees", "Rule: payments", "Rule: opening balance"). Contract discrepancies: D-1 and D-3 fixed; D-2 fixed by PO decision Q-2; D-4 (stale spec refs) fixed; D-5 and D-6 were test token swaps with no assertion changed. Manual check parked: `gaps.md` US-105 M-1.
+
+Closed: R-188, R-187. Follow-ups opened: R-210 (`Abonar` on `/register` and table checkout), R-211 (`Abonar` aware of the register state), R-212 (client-side guards on the other admin pages), R-213 (*abono* receipt), R-214 (blank admin page with no stored user).

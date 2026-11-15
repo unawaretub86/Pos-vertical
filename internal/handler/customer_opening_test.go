@@ -179,7 +179,7 @@ type obDetailJSON struct {
 
 func (e *obEnv) detail(t *testing.T, id int64) obDetailJSON {
 	t.Helper()
-	w := e.mustStatus(t, http.MethodGet, fmt.Sprintf("/customers/%d/detail", id), e.cashier, "", http.StatusOK)
+	w := e.mustStatus(t, http.MethodGet, fmt.Sprintf("/customers/%d/detail", id), e.admin, "", http.StatusOK)
 	var d obDetailJSON
 	abonoData(t, w, &d)
 	return d
@@ -259,7 +259,7 @@ func TestCustomerOpening_T1_CreateAddsToBalanceAndDetail(t *testing.T) {
 	}
 
 	// AC-13: a customer with none gets opening_balance: null (key present).
-	w = e.mustStatus(t, http.MethodGet, "/customers/8/detail", e.cashier, "", http.StatusOK)
+	w = e.mustStatus(t, http.MethodGet, "/customers/8/detail", e.admin, "", http.StatusOK)
 	var raw map[string]json.RawMessage
 	abonoData(t, w, &raw)
 	if v, ok := raw["opening_balance"]; !ok || string(v) != "null" {

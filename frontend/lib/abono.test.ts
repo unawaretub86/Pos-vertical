@@ -15,6 +15,7 @@ import {
   abonoAmountToSend,
   abonoPreview,
   customerBalanceLabel,
+  posAbonoStep,
 } from './abono';
 
 describe('ABONO_METHOD_OPTIONS', () => {
@@ -245,5 +246,31 @@ describe('whole-peso fiado balance (US-102 T-20)', () => {
 
   it('T-20 a settled balance of 0 reads Al día', () => {
     expect(customerBalanceLabel(0)).toEqual({ text: 'Al día', color: 'var(--success)' });
+  });
+});
+
+// US-105 contract section 4, T-9 and T-10 (AC-10, AC-11, AC-12).
+// Helper API from the contract:
+//   posAbonoStep(balance: number | null):
+//     { step: 'modal' } | { step: 'info'; text: string } | { step: 'error'; text: string }
+// balance null = the GET /customers/{id}/balance lookup failed.
+describe('posAbonoStep', () => {
+  it('T-9 a balance of 30,000 opens the abono modal', () => {
+    expect(posAbonoStep(30000)).toEqual({ step: 'modal' });
+  });
+
+  it('T-9 a balance of 0 shows Al día and no amount form', () => {
+    expect(posAbonoStep(0)).toEqual({ step: 'info', text: 'Al día' });
+  });
+
+  it('T-9 a balance of -20,000 shows Saldo a favor: $20.000 and no amount form', () => {
+    expect(posAbonoStep(-20000)).toEqual({ step: 'info', text: 'Saldo a favor: $20.000' });
+  });
+
+  it('T-10 a failed balance lookup (null) shows the load error and no form', () => {
+    expect(posAbonoStep(null)).toEqual({
+      step: 'error',
+      text: 'No se pudo cargar el saldo del cliente',
+    });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import Topbar from '@/components/Topbar';
@@ -13,6 +13,7 @@ import { customerBalanceLabel, type AbonoMethod } from '@/lib/abono';
 import AbonoModal from '@/components/AbonoModal';
 import { resolveRouteParam, parseCustomerId } from '@/lib/routeParam';
 import { getUser } from '@/lib/auth';
+import { canSeeCustomers } from '@/lib/customerAccess';
 import {
   parseAmountInput,
   isValidDebtDate,
@@ -127,6 +128,9 @@ function CustomerDetailContent() {
   const customerId = parseCustomerId(resolveRouteParam(params.id, pathname ?? '', 'customers'));
   // No id from the param and the path is not known yet: keep showing Cargando.
   const resolvingId = customerId === null && pathname === null;
+  // Memoized: getUser() returns a new object per call (see app/audit/page.tsx).
+  const user = useMemo(() => getUser(), []);
+  const allowed = canSeeCustomers(user);
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,10 +151,18 @@ function CustomerDetailContent() {
     }
   }, [customerId, toast]);
 
+  // A customer's balance and history are the owner's: a cashier lands on /pos
+  // and the detail is never fetched (US-105).
   useEffect(() => {
-    if (customerId === null) return;
+    if (user && !allowed) router.replace('/pos');
+  }, [user, allowed, router]);
+
+  useEffect(() => {
+    if (customerId === null || !allowed) return;
     queueMicrotask(load);
-  }, [customerId, load]);
+  }, [customerId, allowed, load]);
+
+  if (!allowed) return null;
 
   if (resolvingId || (customerId !== null && loading)) {
     return (
@@ -255,7 +267,7 @@ function CustomerDetailContent() {
               </div>
             </div>
 
-            {/* Opening balance (deuda anterior, US-092): visible to every role, editable by admins */}
+            {/* Opening balance (deuda anterior, US-092): admin-only page since US-105; editable by admins */}
             {opening_balance ? (
               <div style={{
                 background: 'var(--surface-1)',

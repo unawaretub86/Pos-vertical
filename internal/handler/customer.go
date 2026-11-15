@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	appmw "github.com/andreyo/pos/internal/middleware"
+	"github.com/andreyo/pos/internal/model"
 	"github.com/andreyo/pos/internal/repository"
 	"github.com/andreyo/pos/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -16,6 +17,18 @@ func (h *Handler) listCustomers(w http.ResponseWriter, r *http.Request) {
 	customers, err := h.customers.List(r.Context(), search)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "error listando clientes")
+		return
+	}
+
+	// Balances and total_portfolio are receivables: admin only (US-105). A
+	// cashier, or a request with no claims, gets plain customer rows and
+	// has_balance is ignored so the list does not reveal who owes.
+	if claims := appmw.GetClaims(r); claims == nil || claims.Role != "admin" {
+		plain := make([]model.Customer, 0, len(customers))
+		for _, c := range customers {
+			plain = append(plain, c.Customer)
+		}
+		respond(w, http.StatusOK, map[string]any{"customers": plain})
 		return
 	}
 

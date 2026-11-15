@@ -1,13 +1,13 @@
 # Feature inventory — Pos-vertical
 
 > **Type:** current · **Rules over:** what the product does today, who sees it, and what not to promise
-> **Updated:** 2026-11-13 (US-104: register close row; the shortage limitation row removed) · 2026-11-13 · Verified against `dev` at `ba4ae01` (routes in `internal/handler/handler.go:124-306`, sidebar in `frontend/components/Sidebar.tsx`, rules in `spec/`).
+> **Updated:** 2026-11-14 (US-105: cashier *abono* from `Punto de Venta › Abonar`, receivables API and Customers screens admin-only; roles note and customer route ref) · 2026-11-13 (US-104: register close row; the shortage limitation row removed) · 2026-11-13 · Verified against `dev` at `ba4ae01` (routes in `internal/handler/handler.go:124-306`, sidebar in `frontend/components/Sidebar.tsx`, rules in `spec/`).
 
 This is the list to sell from. Each row says what exists, who can use it and where the rule lives. The rules themselves stay in `spec/`; this file only points at them. When a US adds or removes a feature, update the row in the same commit (CLAUDE.md Rule 2).
 
 **Status legend.** **Live** = on by default, in every install. **Toggle** = built, off until the admin turns it on in `Configuración`. **Frozen** = built, but do not sell or switch on until a customer asks (roadmap § Freeze). **Tool** = a separate `.exe` the installer runs, not the shop.
 
-**Roles.** `admin` = the owner (Don Carlos). `cashier` = the counter (Laura). The "Who" column is what each role can reach **in the UI**: the cashier's menu has only `Punto de Venta` and `Caja` (plus `Mesas` and `Barra` in restaurant mode; every other entry is `adminOnly`, `frontend/components/Sidebar.tsx`). Several APIs are open to both roles even where the menu is not (roadmap R-187, R-188).
+**Roles.** `admin` = the owner (Don Carlos). `cashier` = the counter (Laura). The "Who" column is what each role can reach **in the UI**: the cashier's menu has only `Punto de Venta` and `Caja` (plus `Mesas` and `Barra` in restaurant mode; every other entry is `adminOnly`, `frontend/components/Sidebar.tsx`). A few read APIs are still open to both roles where the menu is not (for example `GET /purchases`, `internal/handler/handler.go:250`). Receivables are not among them: since US-105 a cashier's customer list carries no balances, the customer detail API is admin-only, and the Customers screens send her to `/pos` (`fiado.md` § What the cashier sees).
 
 ---
 
@@ -34,10 +34,10 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 | Feature | Status | Who | Rule / source |
 |---|---|---|---|
 | Customer list and detail with history, balance always computed, never stored: no screen can disagree with another | Live | admin (menu); the cashier sees one customer's debt at checkout | `fiado.md` § Customer balance |
-| Create and edit customers | Live | admin | `internal/handler/handler.go:298-302` |
+| Create and edit customers | Live | admin | `internal/handler/handler.go:302-303` |
 | At checkout on *fiado*: debt badge with days owed, last visit, "Lo de siempre" (top 3 products) and `Agregar lo de siempre` | Live | both | `fiado.md` § Customer context at checkout |
 | Optional credit limit per customer; warning, plus a `¿Fiar de todas formas?` confirmation over the limit or with debt older than 30 days. Never blocks the sale | Live | both | `fiado.md` § Credit limit |
-| *Abonos* (payments toward the balance) with method `Efectivo` / `Transferencia` / `Tarjeta`, quick amounts (`Total`, `Mitad`, $50.000, $20.000), preview of the new balance | Live | admin (UI). The API also accepts a cashier while a register is open, but no cashier screen mounts the modal (R-187) | `fiado.md` § Payments |
+| *Abonos* (payments toward the balance) with method `Efectivo` / `Transferencia` / `Tarjeta`, quick amounts (`Total`, `Mitad`, $50.000, $20.000), preview of the new balance | Live | both: the cashier from `Punto de Venta › Abonar` while a register is open (one customer's balance only, US-105); the admin also from `Clientes`, the detail and the dashboard | `fiado.md` § Payments |
 | *Deuda anterior*: the debt carried over from the paper notebook, with its date, so day one starts with real balances | Live | admin | `fiado.md` § Opening balance |
 | Debt age chips on the customer list: `Hasta 14 días`, `15–30 días`, `Más de 30 días`, with totals | Live | admin | `fiado.md` § Debt age |
 | `Cartera` (receivables) page: who owes, how much, ordered by amount | Live | admin | `/portfolio` |
@@ -128,7 +128,6 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 | Blocking a *fiado* over the limit; interest or late fees | Warning and confirmation only | `fiado.md` § What does NOT exist yet |
 | Customer risk score | Roadmap R-17 | `fiado.md` |
 | Voiding any old sale from a history page | Only from the recent-sales list | roadmap D2, R-145 |
-| "The cashier sees no totals or debts" | The cashier does not see the dashboard, profit, reports or receivables, but does see each customer's debt at checkout, every register's movements (`Ver histórico`), the expected cash and the close ticket by payment method; typing `/customers` shows all balances | R-188 |
-| The cashier taking *abonos* | Only the owner in this version | R-187 |
+| "The cashier sees no totals or debts" | The cashier does not see the dashboard, profit, reports or receivables, but does see each customer's debt at checkout, every register's movements (`Ver histórico`), the expected cash and the close ticket by payment method, and one customer's balance when taking an *abono*. The Customers screens and the receivables stay with the owner (US-105) | `fiado.md` § What the cashier sees (R-188 closed by US-105) |
 | Closing the black console window without stopping the POS | The window must stay open (minimized) | roadmap D3, R-169 |
 | Real prices in the starter catalog | Every price must be set by the shop | roadmap R-182 |

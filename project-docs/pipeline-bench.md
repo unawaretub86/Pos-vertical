@@ -86,6 +86,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 35 | 2026-11-13 | US-102 (R-133 + R-106, whole-peso money with one rounding rule; go-live K5) | L | ~796k (A 225.4k cumulative over 3 invocations · T 226.0k · I 156.7k · Q 83.9k) | 293 (A 127 · T 70 · I 59 · Q 37) | ~46 min excluding the analyst (T ~13.7 · I ~9.1 · Q ~17.4 incl. a smoke run); analyst n/a (contract 476 s, GATE 1 fold-in 837 s, close mostly waiting) | 0 | 1 | 4 contract discrepancies (incl. a new table-checkout IVA bug) + 6 Gemini-verified contract gaps + 5 QA MINOR | 5 new (R-177..R-181); R-133 and R-106 closed | 0 | +1,992 / −215, 46 files (code 21 files +501 / −111) |
 | 36 | 2026-11-12 | US-103 (R-173, starter product list for the catalog; registered as US-103 by the analyst) | M | ~350k (A 188.2k over 4 invocations · T 62.9k over 2 · I 55.8k · Q 43.1k) | 130 (A 62 · T 25 · I 27 · Q 16) | ~13 min excluding Gemini and GATE waits (A 317 s · T 112 s · I 220 s · Q 130 s) | 0 outside GATE 1 and 2 (1 test-author relaunch) | 1 | 4 Gemini-verified minor contract gaps + 3 QA MINOR (product-list content) | 3 new (R-182..R-184, real prices); R-173 closed | 0 | n/a |
 | 37 | 2026-11-13 | US-104 (R-186: close the register with a shortage after confirmation; registered by the analyst) | M | ~355k (A 171.2k over 4 invocations · I 96.3k over 2 · Q 88.5k) | ~118 (A 75 · I 42 · Q 31; analyst tools summed approx.) | ~23 (A ~13.7 · I ~6 · Q ~4.2) | 0 | 1 | 6 contract discrepancies (D-1..D-6, D-6 a silent failed close) + 5 Gemini-verified contract gaps + 4 QA MINOR (1 false manual sentence fixed in round 1) | R-186 and R-85 closed; R-190, R-191 opened | 0 | +589 / −60, 16 files (incl. docs) |
+| 38 | 2026-11-14 | US-105 (R-188 + R-187: receivables hidden from the cashier, `Abonar` on the POS) | L | ~439k (A 206.6k over 3 invocations · T 66.7k over 2 · I 80.8k over 2 · Q 85.3k) | 235 (A 140 · T 24 · I 37 · Q 34) | ~35 (A ~13.8 · T ~5.9 · I ~8.9 · Q ~6.5) | 1 | 1 | 6 contract discrepancies (D-1..D-6, D-6 three tests the contract missed) + 2 Gemini-verified contract gaps + 5 QA MINOR | R-187 and R-188 closed; R-210..R-214 opened | 0 | +680 / −49, 26 files (incl. docs) |
 
 ### Trend
 
@@ -1546,3 +1547,35 @@ Created from dev `9cce311`. Opened by the docs QA of the go-live kit (B1): the c
 
 ### What to measure in run 38
 - Whether M-1 (browser at 320 px, double click, failure path) finds anything the unit tests on pure helpers missed.
+
+## Run 38 — US-105 (R-188 + R-187: receivables hidden from the cashier, `Abonar` on the POS, level L)
+
+Created from dev `7d8c724` (the hybrid-business-model docs of a parallel session were committed first, at the PO's yes, so the worktree saw them). Commits: register `c2e093b`, red `20b274a`, contract update `44021cb` (new RED), implementation `27253e0`, docs close `dfa11a9`, stale comment `7a0ccf0`.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract 121.4k/50/410 s; GATE 1 sync 125.6k/7/28 s; close 206.6k/83/392 s) | 206.6k | 140 | ~13.8 min (830 s) |
+| test-author | 2 (red 62.3k/19/244 s; 2b token swaps 66.7k/5/110 s) | 66.7k | 24 | ~5.9 min (354 s) |
+| implementer | 2 (implementation 79.9k/34/507 s; stale comment 80.8k/3/25 s) | 80.8k | 37 | ~8.9 min (532 s) |
+| qa | 1 round | 85.3k | 34 | ~6.5 min (391 s) |
+
+**What it found.**
+- The analyst proved the leak by a probe with a cashier token: `GET /customers` gave balances and `total_portfolio`, `?has_balance=true` listed exactly who owes, and `/customers/{id}/detail` gave every *fiado* sale (D-2, a US-092 design choice the PO reversed at Q-2).
+- D-5: five existing tests read the list as cashier or with no claims; the contract planned their token switch (T-12, T-13).
+- Missed by the contract: three more tests read `/detail` as cashier (`customer_opening_test.go:182`, `:262`, `shift_certification_test.go:515`). The implementer stopped without touching them; the test-author swapped the token only (step 2b, `44021cb`).
+- QA round 1: OK, 0 BLOCKER, 5 MINOR (spec pending until close, 2 stale `features.md` lines, the 2b swaps not recorded in the contract, a blank `/customers` with no stored user → R-214). The binary smoke confirmed every role answer.
+
+**Unplanned stops:** 1 (the three contradicting tests, after the implementer). QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, ~4 min | 8 | 2 (manual check covered only the positive path; no automated check that the guarded pages send no request) | 6 (3 from truncated input on Q-2, admin without register already allowed, phone search exists, `data` envelope unchanged) | n/a (pre-implementation) |
+| diff, round 1 | OK, `CLEAN` | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- Gemini contract input was again truncated mid-question (Q-2), the run-18 issue; half its false positives came from it.
+- A role change on a route needs a grep of every test calling that route with the old role; the contract's D-5 covered only the list.
+
+### What to measure in run 39
+- Whether a contract §5 list of "existing tests an AC contradicts" (pending since run 21) would have prevented this run's only unplanned stop.

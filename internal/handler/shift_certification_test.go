@@ -177,7 +177,7 @@ func (e *shiftEnv) balance(t *testing.T) float64 {
 
 func (e *shiftEnv) customers(t *testing.T) shiftCustomersJSON {
 	t.Helper()
-	w := abonoRequest(t, e.h, http.MethodGet, "/customers", e.cashier, "")
+	w := abonoRequest(t, e.h, http.MethodGet, "/customers", e.admin, "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("GET /customers = %d, want 200; body %s", w.Code, w.Body.String())
 	}
@@ -512,7 +512,7 @@ func TestShiftCert_T3_CreditVoidLowersBalance(t *testing.T) {
 		if od := string(c.Customers[0].OldestDebtAt); od != "null" {
 			t.Errorf("Dora oldest_debt_at after void = %s, want null", od)
 		}
-		w := abonoRequest(t, e.h, http.MethodGet, "/customers/1/detail", e.cashier, "")
+		w := abonoRequest(t, e.h, http.MethodGet, "/customers/1/detail", e.admin, "")
 		if w.Code != http.StatusOK {
 			t.Fatalf("GET /customers/1/detail = %d, want 200; body %s", w.Code, w.Body.String())
 		}

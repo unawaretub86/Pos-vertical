@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import AppLayout from '@/components/AppLayout';
@@ -16,6 +16,7 @@ import EmptyState from '@/components/EmptyState';
 import AbonoModal from '@/components/AbonoModal';
 import { customerBalanceLabel } from '@/lib/abono';
 import { getUser } from '@/lib/auth';
+import { canSeeCustomers } from '@/lib/customerAccess';
 import { parseAmountInput, isValidDebtDate, todayISODate, MAX_OPENING_BALANCE } from '@/lib/openingBalance';
 import { daysOverdue, bucketTotals, filterByBucket, toggleBucket, bucketLabel, AGING_BUCKETS, type AgingBucket } from '@/lib/aging';
 
@@ -350,6 +351,9 @@ export default function CustomersPage() {
   const { toast } = useToast();
   const router = useRouter();
   const isMobile = useIsMobile();
+  // Memoized: getUser() returns a new object per call (see app/audit/page.tsx).
+  const user = useMemo(() => getUser(), []);
+  const allowed = canSeeCustomers(user);
   const [customers, setCustomers] = useState<CustomerWithBalance[]>([]);
   const [totalPortfolio, setTotalPortfolio] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -387,9 +391,15 @@ export default function CustomersPage() {
     }
   }, [fetchCustomers]);
 
+  // Balances and receivables are the owner's: a cashier lands on /pos and the
+  // list is never fetched (US-105).
   useEffect(() => {
-    queueMicrotask(() => load(''));
-  }, [load]);
+    if (user && !allowed) router.replace('/pos');
+  }, [user, allowed, router]);
+
+  useEffect(() => {
+    if (allowed) queueMicrotask(() => load(''));
+  }, [allowed, load]);
 
   function handleSearchChange(val: string) {
     setSearch(val);
@@ -441,6 +451,8 @@ export default function CustomersPage() {
       setConfirmTarget(null);
     }
   }
+
+  if (!allowed) return null;
 
   return (
     <AppLayout>

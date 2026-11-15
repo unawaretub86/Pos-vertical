@@ -15,6 +15,7 @@ import { shouldAutoPrint, handleTicketPrint } from '@/lib/printFlow';
 import { calcSubtotal, calcTax, calcTotal, lineBase } from '@/lib/saleCalc';
 import { readActiveCart, writeActiveCart } from '@/lib/activeCart';
 import SalePaymentPanel, { type CheckoutData, type Customer } from '@/components/SalePaymentPanel';
+import PosAbonoFlow from '@/components/PosAbonoFlow';
 import { decideUsualAdd, type PosSummaryTopProduct } from '@/lib/posSummary';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -468,6 +469,8 @@ function POSContent() {
   // Mobile detection
   const isMobile = useIsMobile(768);
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
+  // Abono from the POS (US-105): any role, one customer at a time.
+  const [showAbono, setShowAbono] = useState(false);
 
   // Data
   const [categories, setCategories] = useState<Category[]>([]);
@@ -818,7 +821,13 @@ function POSContent() {
       <Topbar
         title="Punto de Venta"
         subtitle={cart.length > 0 ? `${cart.length} artículo${cart.length !== 1 ? 's' : ''} en carrito` : 'Selecciona productos para agregar al carrito'}
+        actions={
+          <button className="btn btn-sm" style={{ flexShrink: 0, whiteSpace: 'nowrap' }} onClick={() => setShowAbono(true)}>
+            Abonar
+          </button>
+        }
       />
+      {showAbono && <PosAbonoFlow onClose={() => setShowAbono(false)} />}
 
       {/* Mobile tab bar */}
       {isMobile && (

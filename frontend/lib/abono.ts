@@ -82,3 +82,21 @@ export function customerBalanceLabel(balance: number): { text: string; color: st
   if (balance < 0) return { text: `Saldo a favor: ${formatCOP(-balance)}`, color: 'var(--success)' };
   return { text: 'Al día', color: 'var(--success)' };
 }
+
+// ─── Abono from the POS (US-105) ─────────────────────────────────────────────
+
+export type PosAbonoStep =
+  | { step: 'modal' }
+  | { step: 'info'; text: string }
+  | { step: 'error'; text: string };
+
+/**
+ * What the POS `Abonar` flow shows after looking up the picked customer's
+ * balance: the amount form only when something is owed, the balance state
+ * otherwise, and an error when the lookup failed (`null`).
+ */
+export function posAbonoStep(balance: number | null): PosAbonoStep {
+  if (balance === null) return { step: 'error', text: 'No se pudo cargar el saldo del cliente' };
+  if (balance > 0) return { step: 'modal' };
+  return { step: 'info', text: customerBalanceLabel(balance).text };
+}

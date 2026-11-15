@@ -65,7 +65,7 @@ Después pregunte: **"¿Qué le dan los programas que conoce?"** Su respuesta le
 - Envío automático de WhatsApp, o conexión con datáfono o Nequi (se registra el método, no se conecta).
 - Bloqueo del fiado por tope, intereses o puntaje de clientes.
 - Anular cualquier venta vieja desde una pantalla de historial (solo las recientes).
-- Que el cajero reciba abonos (en esta versión los registra el dueño).
+- Que el cajero vea la cartera o la lista de clientes con saldos (recibe abonos desde **Punto de Venta › Abonar** con la caja abierta, viendo solo el saldo de ese cliente; la pantalla **Clientes** y la cartera son del dueño).
 - Que el catálogo base trae precios reales (todos son $1.000 de referencia).
 - Modo restaurante o catálogo en línea: existen pero no se están vendiendo.
 

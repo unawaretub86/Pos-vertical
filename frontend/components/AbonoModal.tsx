@@ -1,7 +1,8 @@
 'use client';
 
 // Shared abono (partial payment toward a fiado balance) modal, used by the
-// Customers list, the customer detail and the dashboard (US-084).
+// Customers list, the customer detail and the dashboard (US-084), and by the
+// POS `Abonar` button through PosAbonoFlow (US-105).
 
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';

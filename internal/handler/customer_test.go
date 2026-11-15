@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/andreyo/pos/internal/database"
+	"github.com/andreyo/pos/internal/model"
 )
 
 // seedCustomersT5 seeds the US-064 fixture (contract §4, shared with
@@ -59,7 +60,7 @@ func TestListCustomers_T5_TotalPortfolioMatchesPositiveBalances(t *testing.T) {
 	db := setupTestDB(t)
 	h := seedCustomersT5(t, db)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/customers", nil)
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/customers", nil), &model.Claims{UserID: 1, Role: "admin"})
 	w := httptest.NewRecorder()
 	h.listCustomers(w, req)
 
@@ -162,7 +163,7 @@ func TestDeleteCustomer_LogicalDelete(t *testing.T) {
 
 	// List keeps Dora and Eli only; portfolio stays $30.000 + $15.000 = $45.000.
 	w := httptest.NewRecorder()
-	h.listCustomers(w, httptest.NewRequest(http.MethodGet, "/api/customers", nil))
+	h.listCustomers(w, withClaims(httptest.NewRequest(http.MethodGet, "/api/customers", nil), &model.Claims{UserID: 1, Role: "admin"}))
 	var resp struct {
 		Data struct {
 			Customers []struct {
@@ -183,7 +184,7 @@ func TestDeleteCustomer_LogicalDelete(t *testing.T) {
 
 	// Search does not find the inactive customer.
 	w = httptest.NewRecorder()
-	h.listCustomers(w, httptest.NewRequest(http.MethodGet, "/api/customers?q=Fer", nil))
+	h.listCustomers(w, withClaims(httptest.NewRequest(http.MethodGet, "/api/customers?q=Fer", nil), &model.Claims{UserID: 1, Role: "admin"}))
 	resp.Data.Customers = nil
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode search: %v", err)

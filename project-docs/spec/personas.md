@@ -1,7 +1,7 @@
 # Personas
 
 > **Type:** spec · **Current:** yes · **Rules over:** who each US is written for
-> **Updated:** 2026-10-01 · Origin: `PRD.md:29-38`, verified against the system roles.
+> **Updated:** 2026-11-14 (US-105: what the cashier sees of customers and receivables) · 2026-10-01 · Origin: `PRD.md:29-38`, verified against the system roles.
 
 Every US is written as *"As Don Carlos (owner)…"* or *"As Laura (cashier)…"*. If a US cannot be attributed to either, it is probably technical work and goes as *"As a developer…"*.
 
@@ -27,7 +27,7 @@ Staffs the counter, 50–150 sales per day. 20–35 years old, comfortable with 
 
 **What frustrates her:** anything that takes her hands off the keyboard at rush hour, and any extra step between scanning and charging.
 
-**Technical role:** `cashier`. **Does not see** dashboard, reports, profit or receivables — they are under `RequireAdmin`.
+**Technical role:** `cashier`. **Does not see** dashboard, reports, profit or receivables (the list of balances, `total_portfolio`, debt aging, a customer's credit and *abono* history) — they are under `RequireAdmin`, and the Customers screens (`/customers`, `/customers/{id}`) send her to `/pos`. She sees customer names and phones to pick one, and the balance of **one selected customer** only where she needs it: the credit checkout (`GET /customers/{id}/pos-summary`) and taking an *abono* from `Punto de Venta › Abonar` (`GET /customers/{id}/balance`). Since US-105 `GET /customers` answers her without balances (`internal/handler/customer.go:22-33`); detail in `domain/fiado.md` → "Rule: what the cashier sees".
 
 ---
 
