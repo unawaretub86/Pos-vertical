@@ -17,9 +17,9 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 |---|---|---|---|
 | Search products by name or code; scan a barcode (the scanner's `Enter` adds the item) | Live | both | `catalogo.md`; `GET /products/barcode/{barcode}` |
 | Cart with quantities, retail or wholesale price per line (when the product has a wholesale price) | Live | both | `frontend/app/pos/page.tsx:230` |
-| Per-line `Descuento`, up to 100% of the line, **not audited** (R-189) | Live (no toggle) | both | `frontend/app/pos/page.tsx:408-419`; `internal/service/sale.go:183-189` |
-| Global discount on the sale, audited (`discount`) | Toggle (`Descuento global en ventas`) | both | Settings → Caja registradora; `internal/repository/sale.go:152` |
-| Price override on a cart line, audited (`price_override`) | Live | admin | `frontend/app/pos/page.tsx:374-389`; `internal/service/sale.go:73-77`; `internal/repository/sale.go:101` |
+| Per-line `Descuento`, up to 100% of the line, audited (`discount`, entity `sale_item`, one row per line, US-106) | Live (no toggle) | both | `frontend/app/pos/page.tsx:410-453`; `internal/service/sale.go:183-191`; `internal/repository/sale.go:130` |
+| Global discount on the sale, audited (`discount`) | Toggle (`Descuento global en ventas`) | both | Settings → Caja registradora; `internal/repository/sale.go:182` |
+| Price override on a cart line, audited (`price_override`) | Live | admin | `frontend/app/pos/page.tsx:374-389`; `internal/service/sale.go:73-77`; `internal/repository/sale.go:112` |
 | Selling requires an open register (`no hay caja abierta`) | Live | — | `internal/service/sale.go:46-50` |
 | Payment methods: `Efectivo`, `Transferencia` (Nequi, Daviplata, bank), `Tarjeta`, `Credito` (*fiado*; label without the accent, R-185), and mixed payments that split one sale across several | Live | both | `fiado.md` § Model; `SalePaymentPanel.tsx:299-302` |
 | Cash received and change shown (`Recibido` / `Cambio`) | Live | both | `frontend/components/SalePaymentPanel.tsx:500-516` |
@@ -80,7 +80,7 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 | Best seller vs best margin ("the rice sells, the oil earns"); the margin list ranks by margin %, not by pesos earned | Live | `rentabilidad.md` § The contrast that sells; `frontend/app/page.tsx:485-492` |
 | Reports: sales by day, week, month or custom range, with CSV export; top products; receivables; expenses; register history with differences | Live | `/reports` |
 | Local assistant that answers in Spanish without internet: sales, profit, margin, best seller, best margin, low stock, who owes me, expenses, transfer income (asked as "nequi", answered as all transfers together), cash, *fiado* given | Live (sell it; do not extend, roadmap § Freeze) | `internal/service/assistant.go:327-338`, `:586` |
-| Audit log: voids, global discounts, price overrides, cash out (best effort), imports, *deuda anterior* changes. Per-line discounts are not logged (R-189) | Live | `/audit` |
+| Audit log: voids, global and per-line discounts, price overrides, cash out (best effort), imports, *deuda anterior* changes | Live | `/audit` |
 | Users: create, edit, deactivate; roles `admin` and `cashier` | Live | `/users` |
 
 ## 6. Safety and operation

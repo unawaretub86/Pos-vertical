@@ -1,7 +1,7 @@
 # Domain — Go-live reset (`reset-data`)
 
 > **Type:** spec · **Current:** yes · **Rules over:** which data the go-live reset deletes and keeps, how stock is rebuilt, the safety order of the tool
-> **Updated:** 2026-11-11 (US-089: close `pos.exe` first, daily prune never touches `.pre-reset-*`, reset backup not copied to the backup folder) · 2026-11-10 (US-093: created) · Verified against the code at `171f836` (`internal/resetdata/reset.go`, `guard.go`, `backup.go`, `confirm.go`, `errors.go`, `cmd/reset-data/main.go`, `internal/database/database.go:46`).
+> **Updated:** 2026-11-14 (US-106: per-line `discount` rows are deleted with the sale-level ones) · 2026-11-11 (US-089: close `pos.exe` first, daily prune never touches `.pre-reset-*`, reset backup not copied to the backup folder) · 2026-11-10 (US-093: created) · Verified against the code at `171f836` (`internal/resetdata/reset.go`, `guard.go`, `backup.go`, `confirm.go`, `errors.go`, `cmd/reset-data/main.go`, `internal/database/database.go:46`).
 
 `reset-data` is a command-line tool (`cmd/reset-data`, next to `cmd/reset-password`) that the Tech Lead runs **once**, after the dry run and right before go-live, on a PC where `pos.exe` is closed. **With Windows autostart (`servidor.md` § Start with Windows) the POS is normally running, so close `pos.exe` first** (the console window, or end the process): while it answers on its port the tool refuses (step 4). It removes the dry-run transactions and keeps master data, so the client starts with a clean history, the real catalog and sale numbers from `#1`. It is not part of the POS server and has no HTTP endpoint or UI button (PO, 2026-11-10).
 
@@ -24,7 +24,7 @@ The rest of the product never deletes historically referenced rows (`active = 0`
 | `products.stock` | RESET | Rule B below. |
 | `sales`, `sale_items`, `sale_payments`, `customer_payments`, `registers`, `register_movements`, `expenses`, `orders`, `order_items`, `assistant_queries` | CLEAR | Dry-run transactions. After the reset no register is open. |
 | `electronic_documents` | CLEAR, but see the fiscal guard | Refused while a document is `accepted`, `draft` or `pending`. |
-| `audit_log` | PARTIAL CLEAR + 1 row | Deleted: actions `void`, `discount`, `price_override`, `cash_out`, `order_item_void`, `order_cancel` (they point to ids of deleted rows that restart at 1, `reset.go:39-41`). Kept: `product_import`, `product_price_change`, `opening_balance_create/update`, earlier `data_reset`. One new `data_reset` row (below). |
+| `audit_log` | PARTIAL CLEAR + 1 row | Deleted: actions `void`, `discount` (sale-level and per-line, US-106; test `TestApply_US106_T9_LineDiscountRowsDeleted`), `price_override`, `cash_out`, `order_item_void`, `order_cancel` (they point to ids of deleted rows that restart at 1, `reset.go:39-41`). Kept: `product_import`, `product_price_change`, `opening_balance_create/update`, earlier `data_reset`. One new `data_reset` row (below). |
 | `sqlite_sequence` | rows of the cleared tables deleted | Ids of sales, registers, orders, expenses, abonos, movements, `sale_items`, `sale_payments`, `order_items`, `assistant_queries` restart at 1 (`reset.go:204-211`), so the first real sale prints `Venta #1` (`internal/service/printer.go:259`: the ticket number is the sale id). Counters of kept tables continue. `electronic_documents.id` is TEXT and has no counter. |
 
 Fiscal numbering is not local: `fiscal_config` and the provider's `number` stay as they are; the tool never touches `fiscal_config`.

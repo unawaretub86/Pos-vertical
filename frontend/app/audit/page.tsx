@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { formatCOP } from '@/lib/format';
 import { OPENING_BALANCE_ACTION_LABELS, describeOpeningBalanceAudit } from '@/lib/openingBalance';
 import { PRODUCT_IMPORT_ACTION_LABELS, describeProductImportAudit } from '@/lib/productImport';
+import { describeDiscountAudit } from '@/lib/discountAudit';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ function describeDetails(action: string, entity: string, entityID: number, detai
     case 'void':
       return `Venta #${entityID} anulada${typeof parsed.total === 'number' ? ` · ${formatCOP(parsed.total)}` : ''}`;
     case 'discount':
-      return `Descuento de ${formatCOP(Number(parsed.amount ?? 0))} en venta #${entityID}`;
+      return describeDiscountAudit(entity, entityID, details);
     case 'cash_out':
       return `Salida de ${formatCOP(Number(parsed.amount ?? 0))}${parsed.description ? ` — ${parsed.description}` : ''}`;
     case 'product_price_change': {

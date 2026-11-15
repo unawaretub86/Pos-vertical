@@ -42,6 +42,7 @@
 | US-103 | Starter catalog for the neighborhood shop: about 150 generic products importable in one click through the US-094 import (roadmap R-173, launch stage 2) | [x] | 2026-11-13 |
 | US-104 | Close the register with a *faltante* (shortage) after an explicit confirmation, and show it as `Faltante` on the ticket and in the histories (roadmap R-186, before G-2) | [x] | 2026-11-13 |
 | US-105 | Receivables stay with the owner (`GET /customers` without balances for the cashier, Customers screens guarded), and the cashier records an *abono* from `Punto de Venta › Abonar` (roadmap R-188 + R-187) | [x] | 2026-11-14 |
+| US-106 | Per-line discounts leave an audit trail: one `discount` row per discounted line, shown in `Auditoría` (roadmap R-189) | [x] | 2026-11-14 |
 
 **Total estimated effort: ~8 days**
 
@@ -673,3 +674,40 @@ Closed: R-186, and R-85 (`Entradas` missing from the close modal, the same gap a
 **Results:** QA round 1 OK (0 BLOCKER, 5 MINOR): the spec delta (done at this close), two stale notes in `features.md` (`:10`, `:37`, fixed at this close), three token swaps in `44021cb` that the contract did not list (recorded as contract D-6), and a blank `/customers` with no stored user (accepted, R-214). `go build`, `go test ./...`, `pnpm test` (311 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18105 confirmed the cashier and admin shapes, the detail 403 and the cashier *abono* 403 → 201. Spec: `spec/personas.md` (Laura), `spec/domain/fiado.md` (new "Rule: what the cashier sees", "Rule: payments", "Rule: opening balance"). Contract discrepancies: D-1 and D-3 fixed; D-2 fixed by PO decision Q-2; D-4 (stale spec refs) fixed; D-5 and D-6 were test token swaps with no assertion changed. Manual check parked: `gaps.md` US-105 M-1.
 
 Closed: R-188, R-187. Follow-ups opened: R-210 (`Abonar` on `/register` and table checkout), R-211 (`Abonar` aware of the register state), R-212 (client-side guards on the other admin pages), R-213 (*abono* receipt), R-214 (blank admin page with no stored user).
+
+---
+
+## US-106 — Per-line discounts leave an audit trail
+
+**Status:** registered 2026-11-14 (roadmap R-189, Docs QA 2026-11-13 round 2). Level L. Closed 2026-11-14 (red tests `27874f9`, implementation `0b8771c`). Approved at GATE 1 (PO, 2026-11-14): Q-1..Q-5 as recommended (option A, one audit row per discounted line, no gate; text `Descuento de $2.000 en Arroz (venta #7)`; reuse action `discount` with entity `sale_item`; the wholesale-price bug and an owner discount report out of scope). The contract `changes/US-106/contract.md` disappears with the worktree; the verified criteria are below.
+
+**As** Don Carlos (owner),
+**I want** every per-line `Descuento` given at the POS to appear in `Auditoría` with who gave it, on which product and for how much,
+**so that** a cashier cannot give goods away with no trace beyond the sale's lower total.
+
+**Estimated effort:** 0.5 day. **Impact:** Medium for go-live (money control once a cashier sells alone).
+
+**Problem (verified 2026-11-14):** any role can discount a cart line up to 100% (`internal/service/sale.go:183-191`; UI `frontend/app/pos/page.tsx:410-453`, no role or config condition). Only the sale-level discount (`internal/repository/sale.go:149-155`, action `discount`) and an admin price override (`:97-107`, `price_override`) write `audit_log`. Run in the contract: a cashier sale with a 100% line discount on Arroz $50.000 → 201 and 0 audit rows. Table checkout drops client line discounts (`internal/handler/order.go:200-215`), so `POST /sales` is the only path; held sales resume into it.
+
+**Acceptance criteria (draft; the contract refines them):**
+- [x] Each sale line with a discount writes one `discount` audit row (product, quantity, unit price, amount, seller) in the same transaction as the sale; lines with no discount write nothing; a rejected sale writes nothing.
+- [x] The sale-level `discount` row and the `price_override` row are unchanged.
+- [x] `Auditoría` describes a line row as `Descuento de $2.000 en Arroz (venta #7)`; the `Descuento` filter shows both kinds.
+- [x] The reset tool deletes line-discount rows with the other `discount` rows.
+- [x] The manual and `features.md` no longer say line discounts are not recorded.
+
+**Verified criteria (closed 2026-11-14):** fixture `newSaleMoneyEnv` (P1 Item $10.001 IVA 19%, P4 Queso $9.999/kg, P5 Arroz $50.000, stock 20; admin user 1, cashier user 2 `cajero1`; register open with $100.000). Backend tests in `internal/handler/sale_line_discount_audit_test.go`.
+- AC-1: WHEN a sale is created through `POST /sales` with lines whose `discount > 0`, the system SHALL write, in the sale's transaction and in cart order, one `audit_log` row per discounted line (`discount` / `sale_item` / sale id / seller, details exactly `amount`, `product_id`, `product_name`, `quantity`, `unit_price` as whole numbers); a line with discount 0 writes none. Cashier: Arroz 2 × $50.000 discount 2.000, Item 1 × $10.001 discount 0, Queso 0,5 kg × $9.999 discount 1.000, total 113.901 → 201 and exactly 2 rows: `{"amount":2000,"product_id":5,"product_name":"Arroz","quantity":2,"unit_price":50000}`, then Queso with `quantity` 0.5 and `amount` 1000. Test: `TestSaleLineDiscountAudit_T1_OneRowPerDiscountedLine`.
+- AC-2: WHEN a line is discounted 100% (total 0, empty payments), the system SHALL still write its row: Arroz 1 × $50.000 discount 50.000 → 201, one row with `amount` 50000, `sale_payments` 0. Test: `TestSaleLineDiscountAudit_T2_FullDiscountZeroTotal`.
+- AC-3: WHEN a sale has a line discount and a sale-level discount, the system SHALL write both rows, the sale-level one unchanged (`entity` `sale`, `{"amount":1000.00}`): Arroz 2 discount 2.000 + sale discount 1.000, total 97.000 → 2 `discount` rows; admin `GET /audit?action=discount` returns both. Test: `TestSaleLineDiscountAudit_T3_LineAndSaleDiscount`.
+- AC-4: WHEN an admin overrides a price and discounts the same line, the system SHALL keep the `price_override` row byte-identical and add a line row with the overridden `unit_price`: Arroz at $45.000 discount 5.000, total 40.000 → `{"product_id":5,"original_price":50000.00,"override_price":45000.00}` plus `discount` / `sale_item` `unit_price` 45000, `amount` 5000, user 1. Test: `TestSaleLineDiscountAudit_T4_PriceOverrideAndDiscount`.
+- AC-5: IF a sale with a discounted line is rejected, THEN the system SHALL write no audit row: Item discount 10.002 → 400 (`descuento`); Arroz 2 discount 2.000 with total 1 → 400 `total inconsistente`; `audit_log` 0 rows, money snapshot unchanged. Test: `TestSaleLineDiscountAudit_T5_RejectedSaleWritesNothing`.
+- AC-6: IF the line-discount audit insert fails, THEN the system SHALL roll back the whole sale: `audit_log` renamed, Arroz 2 discount 2.000, total 98.000 → 400 containing `audit_log insert`; `sales` 0, `sale_items` 0, stock 20, `register_movements` 1. Test: `TestSaleLineDiscountAudit_T6_AuditFailureRollsBack`.
+- AC-7: WHEN a table order is checked out, the system SHALL ignore client line discounts: Café × 2 ($9.000) with `items[0].discount` 9000 → 201, total 9.000, `SUM(sale_items.discount)` 0, 0 `discount` rows. Test: `TestSaleLineDiscountAudit_T7_TableCheckoutIgnoresLineDiscount`.
+- AC-8: WHEN the admin opens `Auditoría`, a `discount` / `sale_item` row SHALL read `Descuento de $2.000 en Arroz (venta #7)`, a `sale` row `Descuento de $1.000 en venta #7`; fallbacks `Descuento de $2.000 en producto #5 (venta #7)` (no name), `Descuento de $0 en producto (venta #7)` and `Descuento de $0 en venta #7` (malformed details), never throwing. Test: `frontend/lib/discountAudit.test.ts` (`T-8 describeDiscountAudit`, 5 cases); wiring `frontend/app/audit/page.tsx:61-62` by QA reading and binary smoke.
+- AC-9: WHEN the reset tool runs, it SHALL delete line-discount rows with the other `discount` rows, with no change to `internal/resetdata/reset.go`. Test: `TestApply_US106_T9_LineDiscountRowsDeleted` (`internal/resetdata/reset_test.go`).
+- AC-10: `MANUAL-USUARIO.md` (`:111`, `:223`) and `project-docs/features.md` (`:20-22`, `:83`) SHALL say line discounts are recorded in `Auditoría`. Verified by QA: grep `no queda registrado` / `not audited` in both → empty.
+
+**Results:** QA round 1 OK (0 BLOCKER, 2 MINOR): the spec delta and this status line (both done at this close). `go build`, `go test ./...`, `pnpm test` (316 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18106: a cashier sale with a 2.000 line discount on `Arroz "Diana" 500g` wrote one row with the quoted name escaped, cashier `GET /audit` 403. Spec: `spec/domain/dinero.md` (new "Discount audit" bullet), `spec/domain/reset.md` (`discount` covers per-line rows). Contract discrepancies: D-1 (stale refs) fixed in `features.md`; D-2 became R-215; D-3 stays R-138; D-4 kept as the convention; D-5 became R-216. No manual check.
+
+Closed: R-189. Follow-ups opened: R-215 (wholesale price rejected for a cashier), R-216 (raw SQL text in a 400 on a sale-create failure), R-217 (owner discount report), R-218 (cap or approval for line discounts, only if the owner asks).

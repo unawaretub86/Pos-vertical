@@ -3,12 +3,23 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/andreyo/pos/internal/model"
 )
+
+// lineDiscountAudit is the details payload of a per-line discount audit row
+// (action "discount", entity "sale_item"). Money fields are whole pesos.
+type lineDiscountAudit struct {
+	Amount      float64 `json:"amount"`
+	ProductID   int64   `json:"product_id"`
+	ProductName string  `json:"product_name"`
+	Quantity    float64 `json:"quantity"`
+	UnitPrice   float64 `json:"unit_price"`
+}
 
 // SaleFilter controls listing behavior.
 type SaleFilter struct {
@@ -113,6 +124,25 @@ func (r *saleRepo) Create(ctx context.Context, sale *model.Sale) (*model.Sale, e
 		if err != nil {
 			return nil, fmt.Errorf("sale_item product type: %w", mapBusy(err))
 		}
+
+		// US-106: one audit row per discounted line. json.Marshal (not Sprintf)
+		// because product names may contain quotes.
+		if item.Discount > 0 {
+			details, err := json.Marshal(lineDiscountAudit{
+				Amount:      item.Discount,
+				ProductID:   item.ProductID,
+				ProductName: productName,
+				Quantity:    item.Quantity,
+				UnitPrice:   item.UnitPrice,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("line discount audit details: %w", err)
+			}
+			if err := InsertAuditLog(ctx, tx, sale.UserID, "discount", "sale_item", saleID, string(details)); err != nil {
+				return nil, mapBusy(err)
+			}
+		}
+
 		if productType == "product" {
 			res, err := tx.ExecContext(ctx,
 				`UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`,

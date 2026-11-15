@@ -87,6 +87,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 36 | 2026-11-12 | US-103 (R-173, starter product list for the catalog; registered as US-103 by the analyst) | M | ~350k (A 188.2k over 4 invocations · T 62.9k over 2 · I 55.8k · Q 43.1k) | 130 (A 62 · T 25 · I 27 · Q 16) | ~13 min excluding Gemini and GATE waits (A 317 s · T 112 s · I 220 s · Q 130 s) | 0 outside GATE 1 and 2 (1 test-author relaunch) | 1 | 4 Gemini-verified minor contract gaps + 3 QA MINOR (product-list content) | 3 new (R-182..R-184, real prices); R-173 closed | 0 | n/a |
 | 37 | 2026-11-13 | US-104 (R-186: close the register with a shortage after confirmation; registered by the analyst) | M | ~355k (A 171.2k over 4 invocations · I 96.3k over 2 · Q 88.5k) | ~118 (A 75 · I 42 · Q 31; analyst tools summed approx.) | ~23 (A ~13.7 · I ~6 · Q ~4.2) | 0 | 1 | 6 contract discrepancies (D-1..D-6, D-6 a silent failed close) + 5 Gemini-verified contract gaps + 4 QA MINOR (1 false manual sentence fixed in round 1) | R-186 and R-85 closed; R-190, R-191 opened | 0 | +589 / −60, 16 files (incl. docs) |
 | 38 | 2026-11-14 | US-105 (R-188 + R-187: receivables hidden from the cashier, `Abonar` on the POS) | L | ~439k (A 206.6k over 3 invocations · T 66.7k over 2 · I 80.8k over 2 · Q 85.3k) | 235 (A 140 · T 24 · I 37 · Q 34) | ~35 (A ~13.8 · T ~5.9 · I ~8.9 · Q ~6.5) | 1 | 1 | 6 contract discrepancies (D-1..D-6, D-6 three tests the contract missed) + 2 Gemini-verified contract gaps + 5 QA MINOR | R-187 and R-188 closed; R-210..R-214 opened | 0 | +680 / −49, 26 files (incl. docs) |
+| 39 | 2026-11-14 | US-106 (R-189: per-line discounts audited) | L | ~345k (A 156.1k over 3 invocations · T 73.6k · I 46.5k · Q 68.4k) | 144 (A 73 · T 22 · I 24 · Q 25) | ~53 (A ~39 · T ~5 · I ~4.1 · Q ~5.1) | 0 | 1 | 5 contract discrepancies (D-1..D-5, D-2 a wholesale bug for cashiers) + 1 Gemini-verified contract gap + 2 QA MINOR | R-189 closed; R-215..R-218 opened | 0 | +472 / −13, 13 files (incl. docs) |
 
 ### Trend
 
@@ -1579,3 +1580,36 @@ Created from dev `7d8c724` (the hybrid-business-model docs of a parallel session
 
 ### What to measure in run 39
 - Whether a contract §5 list of "existing tests an AC contradicts" (pending since run 21) would have prevented this run's only unplanned stop.
+
+## Run 39 — US-106 (R-189: per-line discounts audited, level L)
+
+Created from dev `b0b9a41`. Commits: register `99ccd94`, red `27874f9`, implementation `0b8771c`, docs close `010cec6`.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract 130.9k/58/2,224 s; GATE 1 sync 132.8k/3/19 s; close 156.1k/12/111 s) | 156.1k | 73 | ~39 min (2,354 s; the contract alone took 37 min, the longest so far, with several run probes) |
+| test-author | 1 | 73.6k | 22 | ~5 min (299 s) |
+| implementer | 1 | 46.5k | 24 | ~4.1 min (248 s) |
+| qa | 1 round | 68.4k | 25 | ~5.1 min (304 s) |
+
+**What it found.**
+- The analyst's run probes confirmed a cashier's 100% line discount gives 201 with 0 audit rows, that a failed audit insert rolls the sale back, and that table checkout drops client line discounts.
+- D-2: a cashier is refused any price other than `sale_price`, so no wholesale sale by a cashier (`internal/service/sale.go:74-77`) → R-215 (PO: client #1 does not sell wholesale, normal priority). D-5: a DB failure in sale create answers 400 with raw SQL → R-216.
+- The contract carried, at the orchestrator's request, a table of the existing tests each option could contradict (none under option A, 3 under B). The implementer hit no surprise test.
+- QA round 1: OK, 0 BLOCKER, 2 MINOR (both close-step: spec delta, sprint status line). The binary smoke wrote one `sale_item` row with a quoted product name escaped correctly.
+
+**Unplanned stops:** 0 outside GATE 1 and GATE 2. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, ~5 min | 6 | 1 (no malformed-JSON fallback for `sale_item`) | 5 (spec delta is applied at close by design; 2 pending PO questions; 2 from truncated input) | n/a (pre-implementation) |
+| diff, round 1 | OK, `CLEAN` | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- Gemini contract input truncated again (§8 and the last §5 row): third run in a row.
+- `TestConcurrency_T3_FiftyCreditSales` failed once under full-suite load in the red phase and passed in every later run (possibly the R-180 pattern).
+
+### What to measure in run 40
+- Whether listing contradicting tests in the contract keeps unplanned stops at 0 (runs 38 vs 39: 1 vs 0).
+- Whether `TestConcurrency_T3` fails again under load.

@@ -108,7 +108,7 @@ Primero debe haber una **caja abierta** (sección 8): sin caja abierta el sistem
 
 1. Busque el producto por nombre o escanee su código de barras. Con el lector, cada lectura agrega el producto al carrito.
 2. Ajuste cantidades. Si el producto tiene precio mayorista, puede escoger ese precio en la línea.
-3. **Descuentos:** cualquier usuario puede poner un **Descuento** en una línea. Si el dueño lo activó en Configuración, también se puede descontar sobre el total. El dueño, además, puede cambiar el precio de un producto en la venta. En la auditoría quedan el descuento sobre el total y los cambios de precio; **el descuento por línea no queda registrado**, así que revise el total de las ventas si le preocupa.
+3. **Descuentos:** cualquier usuario puede poner un **Descuento** en una línea. Si el dueño lo activó en Configuración, también se puede descontar sobre el total. El dueño, además, puede cambiar el precio de un producto en la venta. En la **Auditoría** quedan todos los descuentos (por línea y sobre el total) y los cambios de precio: quién los hizo, en qué producto, de cuánto y en qué venta.
 4. Escoja cómo le pagan: **Efectivo**, **Transferencia** (Nequi, Daviplata o banco), **Tarjeta** o **Credito** (fiado).
    - Con efectivo, escriba lo **Recibido** y el sistema muestra el **Cambio**.
    - Si le pagan una parte en efectivo y otra por Nequi, use **+ Agregar otro método de pago**.
@@ -220,7 +220,7 @@ Solo con el usuario administrador.
 - **Lo que más vende no siempre es lo que más le deja.** Además del más vendido, el dashboard le muestra los productos con mayor margen (el porcentaje que le queda de cada venta).
 - **Asistente:** escriba preguntas como *"cuánto vendí hoy"*, *"quién me debe"* o *"qué se está acabando"*. Responde sin internet. Si pregunta por Nequi, le responde con el total de todas las transferencias (Nequi, Daviplata y bancos juntos).
 - **Historial de cajas:** en **Reportes** (y en **Caja › Ver histórico**, que también ve el cajero) están las cajas anteriores con sus movimientos y diferencias. Una caja cerrada con faltante muestra **Faltante** y el valor que faltó, en rojo; una que cuadró o tuvo sobrante muestra **Diferencia** (**Dif.** en Reportes) con un **+**.
-- **Auditoría:** quién anuló ventas, hizo descuentos sobre el total, cambió precios, sacó efectivo, importó productos o corrigió deudas anteriores, y cuándo.
+- **Auditoría:** quién anuló ventas, hizo descuentos (por línea o sobre el total), cambió precios, sacó efectivo, importó productos o corrigió deudas anteriores, y cuándo.
 
 ---
 

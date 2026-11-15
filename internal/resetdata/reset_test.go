@@ -596,3 +596,25 @@ func TestApply_T13_FingerprintMismatchAborts(t *testing.T) {
 		t.Errorf("P1 stock = %v, want 106", got)
 	}
 }
+
+// US-106 T-9 (AC-9): a per-line discount row (action discount, entity
+// sale_item) is deleted with the other discount rows. The row is inserted
+// here, not in seedFixtureF, because TestPlan_T1 asserts audit_log 3.
+func TestApply_US106_T9_LineDiscountRowsDeleted(t *testing.T) {
+	db, _ := newFixtureF(t)
+	mustExec(t, db, `INSERT INTO audit_log (id, user_id, action, entity, entity_id, details) VALUES (7, 1, 'discount', 'sale_item', 4, '{"amount":2000}')`)
+	if n := count(t, db, `SELECT COUNT(*) FROM audit_log WHERE action = 'discount'`); n != 2 {
+		t.Fatalf("discount rows before Apply = %d, want 2 (sale + sale_item)", n)
+	}
+
+	if _, err := Apply(context.Background(), db, Options{}); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	if n := count(t, db, `SELECT COUNT(*) FROM audit_log WHERE action = 'discount'`); n != 0 {
+		t.Errorf("discount rows after Apply = %d, want 0", n)
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM audit_log WHERE id IN (1, 2, 3) AND action IN ('product_import','opening_balance_create','product_price_change')`); n != 3 {
+		t.Errorf("kept audit rows = %d, want 3", n)
+	}
+}
