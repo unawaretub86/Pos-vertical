@@ -23,7 +23,7 @@ Read `changes/<US>/contract.md` and `git diff dev...HEAD`. Every finding carries
 - Anything about sales, profit or receivables outside an `appmw.RequireAdmin` group?
 - Frontend: hardcoded colors instead of `var(--…)`? Currency without `formatCOP`? Direct `fetch` instead of `api`? Anything broken at 320px?
 - New CGO dependency?
-- Did a business rule change without a "Spec delta" in the contract?
+- Did a business rule change without a "Spec delta" in the contract? The delta itself is applied by the analyst in `close` mode, after QA: a contract §6 delta not yet in `project-docs/spec/` is a MINOR ("pending close"), never a BLOCKER. A BLOCKER only if the contract has no delta for a rule the diff changes. (Run 40 graded the pending delta as BLOCKER.)
 - Extra scope not requested by the contract?
 - Docs/specs/sprints/roadmap text written in Spanish (Rule 0)?
 

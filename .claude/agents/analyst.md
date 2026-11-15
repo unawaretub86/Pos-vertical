@@ -28,6 +28,7 @@ Copy `.claude/templates/contract.md` to `changes/<US>/contract.md` and fill it i
 - **Verify by running, not only by reading,** whatever you assert about runtime behavior: HTTP codes, response bodies, what happens if the DB fails, how a date is parsed. Write a quick test in your temp folder or run `go test -run`, and delete it when done. Mark in "Verified state" what was executed and what was only read. (In run 1, two unplanned stops came from deduced behavior that turned out false.)
 - Translate the sprint's acceptance criteria into EARS. Do not invent scope; if something critical is missing, it goes to "Questions for the PO".
 - Tests with concrete numbers and in Colombian pesos (`$1.234.567`). Half-open date ranges `[from, to)`.
+- **Existing tests an AC could contradict:** in §4, add a table listing every existing test that asserts the behavior an AC changes (grep `*_test.go` and `*.test.ts(x)` for the routes, roles, strings, functions and counts the US touches), with the planned change for each (none, token swap, new expectation). In run 38 three tests reading a route as cashier were missed and caused the only unplanned stop; runs 39 and 40, with the table, had none.
 - Explicit "Spec delta": `close` mode may run cold, with no memory of this session (if the session was cut off).
 - You do NOT write code or tests.
 
