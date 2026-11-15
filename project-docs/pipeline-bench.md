@@ -88,6 +88,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 37 | 2026-11-13 | US-104 (R-186: close the register with a shortage after confirmation; registered by the analyst) | M | ~355k (A 171.2k over 4 invocations · I 96.3k over 2 · Q 88.5k) | ~118 (A 75 · I 42 · Q 31; analyst tools summed approx.) | ~23 (A ~13.7 · I ~6 · Q ~4.2) | 0 | 1 | 6 contract discrepancies (D-1..D-6, D-6 a silent failed close) + 5 Gemini-verified contract gaps + 4 QA MINOR (1 false manual sentence fixed in round 1) | R-186 and R-85 closed; R-190, R-191 opened | 0 | +589 / −60, 16 files (incl. docs) |
 | 38 | 2026-11-14 | US-105 (R-188 + R-187: receivables hidden from the cashier, `Abonar` on the POS) | L | ~439k (A 206.6k over 3 invocations · T 66.7k over 2 · I 80.8k over 2 · Q 85.3k) | 235 (A 140 · T 24 · I 37 · Q 34) | ~35 (A ~13.8 · T ~5.9 · I ~8.9 · Q ~6.5) | 1 | 1 | 6 contract discrepancies (D-1..D-6, D-6 three tests the contract missed) + 2 Gemini-verified contract gaps + 5 QA MINOR | R-187 and R-188 closed; R-210..R-214 opened | 0 | +680 / −49, 26 files (incl. docs) |
 | 39 | 2026-11-14 | US-106 (R-189: per-line discounts audited) | L | ~345k (A 156.1k over 3 invocations · T 73.6k · I 46.5k · Q 68.4k) | 144 (A 73 · T 22 · I 24 · Q 25) | ~53 (A ~39 · T ~5 · I ~4.1 · Q ~5.1) | 0 | 1 | 5 contract discrepancies (D-1..D-5, D-2 a wholesale bug for cashiers) + 1 Gemini-verified contract gap + 2 QA MINOR | R-189 closed; R-215..R-218 opened | 0 | +472 / −13, 13 files (incl. docs) |
+| 40 | 2026-11-14 | US-107 (R-177 + R-181 + R-185 + R-191: UI polish bundle) | M | ~333k+ (A 174.9k over 4 invocations, one lost to the usage limit · I 75.1k over 2 · Q 83.4k) | 139+ (A 79+ · I 28 · Q 32) | ~31+ (A ~15+ · I ~9.2 · Q ~6.3) | 1 (usage limit) | 1 | 6 contract discrepancies (D-1..D-6, D-6 `$-0` on every close) + 0 Gemini-verified + 1 QA BLOCKER (close-step spec delta, routed to close) + 3 QA MINOR | R-177, R-181, R-185, R-191 closed; R-220..R-222 opened | 0 | +423 / −41, 26 files (incl. docs) |
 
 ### Trend
 
@@ -1613,3 +1614,34 @@ Created from dev `b0b9a41`. Commits: register `99ccd94`, red `27874f9`, implemen
 ### What to measure in run 40
 - Whether listing contradicting tests in the contract keeps unplanned stops at 0 (runs 38 vs 39: 1 vs 0).
 - Whether `TestConcurrency_T3` fails again under load.
+
+## Run 40 — US-107 (R-177 + R-181 + R-185 + R-191: UI polish bundle, level M)
+
+Created from dev `78de2c2`. Commits: register `69c85cf`, implementation `59df01d`, MINOR 1 test fix `09d4794`, docs close `cbfb627`. Level M: the implementer wrote the tests.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 4 (contract 134.6k/65/802 s; GATE 1 sync 136.3k/3/16 s; close cut off by the 5-hour usage limit, metrics lost; close resume 174.9k/11/90 s) | 174.9k | 79+ | ~15 min+ (908 s plus the lost close pass) |
+| implementer | 2 (tests + implementation 72.5k/22/408 s; MINOR 1 75.1k/6/142 s) | 75.1k | 28 | ~9.2 min (550 s) |
+| qa | 1 round | 83.4k | 32 | ~6.3 min (376 s) |
+
+**What it found.**
+- D-1/D-2: the visible R-177 bug was the `/mesas` card (`open_total`, `dining_table.go:44`), not `ListOpen`, which no screen calls; both now priced in Go with `LineBase` + `LineTax`.
+- D-4: a percentage line discount had the R-181 defect too; D-6: every close with no outflows printed `Salidas $-0`. Both fixed in scope.
+- QA ran the implementer's new tests against the base (`git archive 69c85cf`): all fail there, so none passes for the wrong reason.
+- QA round 1 BLOCKER: the §6 spec delta was missing. That is close-step work by design (the implementer was told not to touch `spec/`); the orchestrator routed it to the analyst close instead of an implementer round, and did not rerun QA after the docs-only close. 3 MINOR: weak `$0` assertion (fixed), `ListLines(status)` loads all history for `closed` (R-221), sprint status line (fixed at close).
+
+**Unplanned stops:** 1 (5-hour usage limit mid-close; the analyst resumed from its edits). QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, ~4 min | 8 | 0 | 8 (3 truncated input / pending questions, `discountType` already stored at `page.tsx:53`, spec delta present in §6, ticket wording is Q-2, two non-issues) | n/a (pre-implementation) |
+| diff, round 1 | OK, `CLEAN` | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- A parallel session left `roadmap.md` (R-219), `README.md`, `sales-strategy.md` and `content-plan.md` uncommitted in the main checkout; R-219 was committed first at the PO's yes, the header conflict at squash was resolved by keeping both entries, the other three files were left unstaged.
+- QA at level M grades the missing spec delta as BLOCKER, while at level L (runs 38, 39) it graded it MINOR. The QA prompt should state that the spec delta lands at close.
+
+### What to measure in run 41
+- Whether telling QA "spec delta lands at close" removes the false BLOCKER.

@@ -39,3 +39,21 @@ describe('CloseTicketPreview difference line (T-4)', () => {
     expect(html).not.toContain('Faltante');
   });
 });
+
+// US-107 T-7 (AC-11): the Salidas line prints the sign before $, and $0 with
+// no outflows.
+describe('CloseTicketPreview Salidas line (R-191)', () => {
+  it('cash_out 8.000 -> -$8.000, never $-8.000', () => {
+    const html = renderToString(createElement(CloseTicketPreview, {
+      ticket: { ...ticket(122000, 0), cash_out: 8000, expected: 122000 },
+    }));
+    expect(html).toContain('-$8.000');
+    expect(html).not.toContain('$-8.000');
+  });
+
+  it('cash_out 0 -> Salidas $0, never $-0', () => {
+    const html = renderToString(createElement(CloseTicketPreview, { ticket: ticket(130000, 0) }));
+    expect(html).toMatch(/Salidas<\/span><span[^>]*>\$0<\/span>/);
+    expect(html).not.toContain('$-0');
+  });
+});

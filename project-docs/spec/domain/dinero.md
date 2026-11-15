@@ -1,7 +1,7 @@
 # Domain — Money: whole pesos and the rounding rule
 
 > **Type:** spec · **Current:** yes · **Rules over:** how a peso amount is stored, validated, rounded and compared
-> **Updated:** 2026-11-14 (US-106, roadmap R-189: discount audit rows) · 2026-11-13 (US-102, roadmap R-133 and R-106) · Verified against the code on that date (`internal/service/money.go`, `internal/service/sale.go`, `internal/database/migrate_money.go`, `frontend/lib/saleCalc.ts`).
+> **Updated:** 2026-11-14 (US-107: negative `formatCOP`, cart discount follows the quantity) · 2026-11-14 (US-106, roadmap R-189: discount audit rows) · 2026-11-13 (US-102, roadmap R-133 and R-106) · Verified against the code on that date (`internal/service/money.go`, `internal/service/sale.go`, `internal/database/migrate_money.go`, `frontend/lib/saleCalc.ts`).
 
 Every peso amount in the POS is a **whole peso**: sale lines, tax, totals, payments, *abonos*, cash movements, expenses, register counts, prices and costs. Fractions can only come from `quantity × price` (a 0,5 kg line) and from a tax rate, and they are rounded by the one rule below, on the server, and mirrored 1:1 in the frontend.
 
@@ -56,6 +56,9 @@ Migration 24 (`internal/database/migrate_money.go`) rounds every money column to
 ## Display
 
 `formatCOP` shows whole pesos. The cart, the ticket, the register, the *fiado* list and the *abono* modal all read whole values now; the old red `$0` with `Abonar` (a $0,19 residue) cannot appear for new sales. The *abono* modal's `Total` still sends the exact balance (`frontend/lib/abono.ts`), which is now the same whole number.
+
+- **Sign.** `formatCOP` rounds first and puts the sign before the symbol: −8000 → `-$8.000`, −1234567 → `-$1.234.567`; anything that rounds to 0 (0, −0, −0,4) → `$0` (`frontend/lib/format.ts:7-11`, US-107, R-191). Before US-107 it printed `$-8.000` and `$-0`. The Go formatters already wrote `-$X` (`internal/mailer/mailer.go:59-61`, `internal/service/assistant.go:667`). Callers that show an absolute amount with their own label are unchanged (`Faltante $5.000`, `Saldo a favor: $50.000`). Test: `frontend/lib/format.test.ts`.
+- **Cart discount and quantity.** WHEN a cart line's quantity changes, the POS keeps its item discount within the new line base, so the server bound above never refuses it at checkout: a fixed discount is clamped to the new `lineBase` (2 × $1.000 with $1.500, then quantity 1 → $1.000, input `1000`) and is not restored if the quantity goes back up; a percentage discount is recomputed from the new base with the typing formula `Math.round(lineBase × pct / 100)` (3 × $1.000 at 50%, then quantity 1 → $500). `discountForQuantity` (`frontend/lib/saleCalc.ts:40-52`) runs on both quantity paths, `addOneUnit` and `changeQty` (`frontend/app/pos/page.tsx:96`, `:647`) (US-107, R-181). Test: `frontend/lib/saleCalc.test.ts` (`discountForQuantity (R-181)`).
 
 ## Tests
 

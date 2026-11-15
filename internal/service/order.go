@@ -96,5 +96,28 @@ func (s *OrderService) List(ctx context.Context, status string) ([]*model.OrderS
 	if !orderStatuses[status] {
 		return nil, invalid("estado inválido")
 	}
-	return s.repo.ListOpen(ctx, status)
+	rows, err := s.repo.ListOpen(ctx, status)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := s.repo.ListLines(ctx, status)
+	if err != nil {
+		return nil, err
+	}
+	totals := orderTotals(lines)
+	for _, r := range rows {
+		r.Total = totals[r.ID]
+	}
+	return rows, nil
+}
+
+// orderTotals prices each order's non-void lines like Get: Σ LineBase +
+// LineTax at the product's current rate, rounded per line (US-107, R-177).
+func orderTotals(lines []model.OrderLine) map[int64]float64 {
+	totals := map[int64]float64{}
+	for _, l := range lines {
+		base := LineBase(l.Quantity, l.UnitPrice)
+		totals[l.OrderID] += base + LineTax(base, l.TaxRate)
+	}
+	return totals
 }

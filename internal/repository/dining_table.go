@@ -18,6 +18,7 @@ var ErrTableHasOpenOrder = errors.New("table has open order")
 
 type DiningTableRepository interface {
 	List(ctx context.Context) ([]*model.TableWithState, error)
+	OpenOrderLines(ctx context.Context) ([]model.OrderLine, error)
 	GetByID(ctx context.Context, id int64) (*model.DiningTable, error)
 	Create(ctx context.Context, t *model.DiningTable) (*model.DiningTable, error)
 	Update(ctx context.Context, t *model.DiningTable) (*model.DiningTable, error)
@@ -41,8 +42,6 @@ func (r *diningTableRepo) List(ctx context.Context) ([]*model.TableWithState, er
 		SELECT t.id, t.name, t.zone, t.seats, t.sort_order, t.active,
 		       o.id,
 		       CAST(COALESCE((julianday('now') - julianday(o.created_at)) * 1440, 0) AS INTEGER),
-		       COALESCE((SELECT SUM(quantity * unit_price) FROM order_items
-		                 WHERE order_id = o.id AND status != 'void'), 0),
 		       (SELECT COUNT(*) FROM order_items
 		        WHERE order_id = o.id AND status IN ('pending','preparing')),
 		       (SELECT COUNT(*) FROM order_items
@@ -63,7 +62,7 @@ func (r *diningTableRepo) List(ctx context.Context) ([]*model.TableWithState, er
 		var orderID sql.NullInt64
 		var pending, done int
 		if err := rows.Scan(&t.ID, &t.Name, &t.Zone, &t.Seats, &t.SortOrder, &t.Active,
-			&orderID, &t.OpenedMinutes, &t.OpenTotal, &pending, &done); err != nil {
+			&orderID, &t.OpenedMinutes, &pending, &done); err != nil {
 			return nil, fmt.Errorf("dining table scan: %w", err)
 		}
 		switch {
@@ -83,6 +82,12 @@ func (r *diningTableRepo) List(ctx context.Context) ([]*model.TableWithState, er
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// OpenOrderLines returns the non-void lines of every open order, for the
+// service to price open_total.
+func (r *diningTableRepo) OpenOrderLines(ctx context.Context) ([]model.OrderLine, error) {
+	return orderLines(ctx, r.db, "open")
 }
 
 func (r *diningTableRepo) GetByID(ctx context.Context, id int64) (*model.DiningTable, error) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcSubtotal, calcTax, calcTotal, sumPayments, paymentsBalanced, calcChange, exceedsCreditLimit, type CalcItem } from './saleCalc';
+import { calcSubtotal, calcTax, calcTotal, sumPayments, paymentsBalanced, calcChange, exceedsCreditLimit, discountForQuantity, lineBase, type CalcItem } from './saleCalc';
 
 describe('calcSubtotal', () => {
   it('sums unitPrice * quantity minus item discount', () => {
@@ -172,5 +172,56 @@ describe('exceedsCreditLimit', () => {
 
   it('is false at exactly the limit (boundary is not an excess)', () => {
     expect(exceedsCreditLimit(70000, 30000, 100000)).toBe(false);
+  });
+});
+
+// US-107 T-4 (AC-5, AC-6): an item discount follows the line quantity, so the
+// server never sees a discount above the line base.
+describe('discountForQuantity (R-181)', () => {
+  it('fixed 1.500 on 2 x 1.000 lowered to qty 1 -> clamped to 1.000, input 1000', () => {
+    const r = discountForQuantity({ unitPrice: 1000, discount: 1500, discountType: 'fixed', discountInput: '1500' }, 1);
+    expect(r).toEqual({ discount: 1000, discountInput: '1000' });
+    expect(r.discount).toBeLessThanOrEqual(lineBase(1000, 1));
+  });
+
+  it('fixed 500 still within the new base -> unchanged', () => {
+    expect(discountForQuantity({ unitPrice: 1000, discount: 500, discountType: 'fixed', discountInput: '500' }, 1))
+      .toEqual({ discount: 500, discountInput: '500' });
+  });
+
+  it('raising the quantity never changes a fixed discount: 1.000 at qty 3 -> 1.000', () => {
+    expect(discountForQuantity({ unitPrice: 1000, discount: 1000, discountType: 'fixed', discountInput: '1000' }, 3))
+      .toEqual({ discount: 1000, discountInput: '1000' });
+  });
+
+  it('kg line: fixed 5.000 on $9.999/kg at 0,25 kg -> clamped to lineBase 2.500', () => {
+    expect(lineBase(9999, 0.25)).toBe(2500);
+    expect(discountForQuantity({ unitPrice: 9999, discount: 5000, discountType: 'fixed', discountInput: '5000' }, 0.25))
+      .toEqual({ discount: 2500, discountInput: '2500' });
+  });
+
+  it('no fixed discount -> 0 and empty input', () => {
+    expect(discountForQuantity({ unitPrice: 1000, discount: 0, discountType: 'fixed', discountInput: '' }, 1))
+      .toEqual({ discount: 0, discountInput: '' });
+  });
+
+  it('50% of 3 x 1.000 (1.500) lowered to qty 1 -> 500, input keeps 50', () => {
+    expect(discountForQuantity({ unitPrice: 1000, discount: 1500, discountType: 'pct', discountInput: '50' }, 1))
+      .toEqual({ discount: 500, discountInput: '50' });
+  });
+
+  it('50% of 2 x 1.000 (1.000) raised to qty 3 -> 1.500', () => {
+    expect(discountForQuantity({ unitPrice: 1000, discount: 1000, discountType: 'pct', discountInput: '50' }, 3))
+      .toEqual({ discount: 1500, discountInput: '50' });
+  });
+
+  it('100% of $10.001 raised to qty 2 -> 20.002', () => {
+    expect(discountForQuantity({ unitPrice: 10001, discount: 10001, discountType: 'pct', discountInput: '100' }, 2))
+      .toEqual({ discount: 20002, discountInput: '100' });
+  });
+
+  it('pct with an empty input -> 0 and empty input', () => {
+    expect(discountForQuantity({ unitPrice: 1000, discount: 0, discountType: 'pct', discountInput: '' }, 2))
+      .toEqual({ discount: 0, discountInput: '' });
   });
 });

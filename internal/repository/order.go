@@ -39,6 +39,7 @@ type OrderRepository interface {
 	Cancel(ctx context.Context, orderID, userID int64, reason string) error
 	Get(ctx context.Context, id int64) (*model.Order, error)
 	ListOpen(ctx context.Context, status string) ([]*model.OrderSummary, error)
+	ListLines(ctx context.Context, status string) ([]model.OrderLine, error)
 }
 
 type orderRepo struct {
@@ -365,8 +366,6 @@ func (r *orderRepo) Get(ctx context.Context, id int64) (*model.Order, error) {
 func (r *orderRepo) ListOpen(ctx context.Context, status string) ([]*model.OrderSummary, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT o.id, o.table_id, COALESCE(t.name, ''),
-		       COALESCE((SELECT SUM(quantity * unit_price) FROM order_items
-		                 WHERE order_id = o.id AND status != 'void'), 0),
 		       (SELECT COUNT(*) FROM order_items
 		        WHERE order_id = o.id AND status IN ('pending','preparing')),
 		       CAST((julianday('now') - julianday(o.created_at)) * 1440 AS INTEGER)
@@ -381,7 +380,7 @@ func (r *orderRepo) ListOpen(ctx context.Context, status string) ([]*model.Order
 	for rows.Next() {
 		s := &model.OrderSummary{}
 		var tableID sql.NullInt64
-		if err := rows.Scan(&s.ID, &tableID, &s.TableName, &s.Total, &s.ItemsPending, &s.OpenedMinutes); err != nil {
+		if err := rows.Scan(&s.ID, &tableID, &s.TableName, &s.ItemsPending, &s.OpenedMinutes); err != nil {
 			return nil, fmt.Errorf("order list scan: %w", err)
 		}
 		if tableID.Valid {
@@ -391,4 +390,36 @@ func (r *orderRepo) ListOpen(ctx context.Context, status string) ([]*model.Order
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+func (r *orderRepo) ListLines(ctx context.Context, status string) ([]model.OrderLine, error) {
+	return orderLines(ctx, r.db, status)
+}
+
+// orderLines returns the non-void items of every order with the given status,
+// with the product's current tax_rate. Totals are priced in the service.
+func orderLines(ctx context.Context, db *sql.DB, status string) ([]model.OrderLine, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT i.order_id, i.quantity, i.unit_price, p.tax_rate
+		FROM order_items i
+		JOIN orders o ON o.id = i.order_id
+		JOIN products p ON p.id = i.product_id
+		WHERE o.status = ? AND i.status != 'void'
+		ORDER BY i.order_id, i.id`, status)
+	if err != nil {
+		return nil, fmt.Errorf("order lines: %w", err)
+	}
+	defer rows.Close()
+	var out []model.OrderLine
+	for rows.Next() {
+		var l model.OrderLine
+		if err := rows.Scan(&l.OrderID, &l.Quantity, &l.UnitPrice, &l.TaxRate); err != nil {
+			return nil, fmt.Errorf("order lines scan: %w", err)
+		}
+		out = append(out, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("order lines rows: %w", err)
+	}
+	return out, nil
 }

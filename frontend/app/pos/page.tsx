@@ -12,7 +12,7 @@ import { getUser } from '@/lib/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useBusinessConfig } from '@/lib/business-config-context';
 import { shouldAutoPrint, handleTicketPrint } from '@/lib/printFlow';
-import { calcSubtotal, calcTax, calcTotal, lineBase } from '@/lib/saleCalc';
+import { calcSubtotal, calcTax, calcTotal, lineBase, discountForQuantity } from '@/lib/saleCalc';
 import { readActiveCart, writeActiveCart } from '@/lib/activeCart';
 import SalePaymentPanel, { type CheckoutData, type Customer } from '@/components/SalePaymentPanel';
 import PosAbonoFlow from '@/components/PosAbonoFlow';
@@ -92,7 +92,8 @@ function addOneUnit(cart: CartItem[], product: Product): CartItem[] {
   const idx = cart.findIndex(i => i.product.id === product.id);
   if (idx >= 0) {
     const updated = [...cart];
-    updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + 1 };
+    const quantity = updated[idx].quantity + 1;
+    updated[idx] = { ...updated[idx], quantity, ...discountForQuantity(updated[idx], quantity) };
     return updated;
   }
   return [...cart, { product, quantity: 1, unitPrice: product.sale_price, priceInput: String(product.sale_price), priceMode: 'retail' as const, discount: 0, discountType: 'fixed', discountInput: '' }];
@@ -643,7 +644,7 @@ function POSContent() {
         blocked = true;
         return prev;
       }
-      updated[idx] = { ...item, quantity: newQty };
+      updated[idx] = { ...item, quantity: newQty, ...discountForQuantity(item, newQty) };
       return updated;
     });
     if (blocked) {

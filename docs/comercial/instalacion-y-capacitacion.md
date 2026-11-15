@@ -59,7 +59,7 @@ Con el dueño y el cajero, cada uno en su usuario. Ellos tocan el teclado, usted
 |---|---|---|---|
 | 0–5 | Encender, la ventana negra, apagar | ambos | Minimizar la consola sin cerrarla; saber que si la cierran se apaga |
 | 5–15 | Vender | ambos | Venta en efectivo con cambio, transferencia, mixta, **Dejar en espera** |
-| 15–20 | Fiado | ambos | Fiar con **Credito** a un cliente ya creado, ver **Debe**, responder el aviso **¿Fiar de todas formas?** |
+| 15–20 | Fiado | ambos | Fiar con el botón **Fiado** a un cliente ya creado, ver **Debe**, responder el aviso **¿Fiar de todas formas?** |
 | 20–25 | Abonos y clientes | ambos | Dueño: crear cliente. Ambos: abonar escogiendo **Efectivo** o **Transferencia** (Nequi y Daviplata son transferencia). El cajero abona desde **Punto de Venta › Abonar** con la caja abierta; la pantalla **Clientes** y la cartera son del dueño |
 | 25–32 | Caja | ambos | Abrir, **Entrada** y **Salida** con nota, cerrar contando billetes. Con faltante: recontar; si de verdad falta, avisar al dueño y confirmar **Cerrar con faltante** (queda en el ticket y el historial). No tapar el faltante con una **Salida** |
 | 32–38 | Lo del dueño | dueño | Dashboard, cartera, **Cobrar** por WhatsApp, anular una venta, reportes, preguntarle al asistente |

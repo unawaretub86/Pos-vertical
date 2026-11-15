@@ -36,7 +36,7 @@
 Prepare antes, con el usuario del dueño: 10 productos con costo; 2 clientes con fiado, uno de ellos con una **deuda anterior** fechada hace más de 30 días (las ventas no se pueden poner con fecha atrás) y al menos una compra previa, para que aparezca **Lo de siempre**; una caja abierta.
 
 1. **Venta en efectivo** (30 s): escanear o buscar 2 productos, **Efectivo**, **Recibido**, ver el **Cambio**, **Cobrar**, sale el ticket.
-2. **Venta fiada** (60 s): **Credito**, escoger el cliente con deuda vieja. Mostrar **Debe: ... (35 días)**, **Lo de siempre** y el aviso **¿Fiar de todas formas?**. Fiar.
+2. **Venta fiada** (60 s): **Fiado**, escoger el cliente con deuda vieja. Mostrar **Debe: ... (35 días)**, **Lo de siempre** y el aviso **¿Fiar de todas formas?**. Fiar.
 3. **Abono** (45 s): en **Clientes**, **Abonar**, monto **Mitad**, método **Transferencia**. Mostrar el nuevo saldo.
 4. **Cobro por WhatsApp** (30 s): detalle del cliente, **Cobrar**, mostrar el mensaje listo.
 5. **Sin internet** (15 s): desconectar el WiFi y repetir una venta.

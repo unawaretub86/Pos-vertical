@@ -18,7 +18,22 @@ func NewDiningTableService(repo repository.DiningTableRepository) *DiningTableSe
 }
 
 func (s *DiningTableService) List(ctx context.Context) ([]*model.TableWithState, error) {
-	return s.repo.List(ctx)
+	tables, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := s.repo.OpenOrderLines(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// open_total is the same IVA-inclusive total as GET /orders/{id}.
+	totals := orderTotals(lines)
+	for _, t := range tables {
+		if t.OpenOrderID != nil {
+			t.OpenTotal = totals[*t.OpenOrderID]
+		}
+	}
+	return tables, nil
 }
 
 func (s *DiningTableService) Create(ctx context.Context, name, zone string, seats, sortOrder int) (*model.DiningTable, error) {

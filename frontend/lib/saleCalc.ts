@@ -31,6 +31,26 @@ export function lineBase(unitPrice: number, quantity: number): number {
   return divRound(Math.round(quantity * 1000) * Math.round(unitPrice), 1000);
 }
 
+/**
+ * Item discount for a cart line whose quantity changes to `quantity`, so it
+ * never exceeds the new line base (R-181). A fixed discount is clamped to the
+ * new lineBase; a percentage one is recomputed from it with the same formula
+ * used when it is typed.
+ */
+export function discountForQuantity(
+  item: { unitPrice: number; discount: number; discountType: 'fixed' | 'pct'; discountInput: string },
+  quantity: number,
+): { discount: number; discountInput: string } {
+  const base = lineBase(item.unitPrice, quantity);
+  if (item.discountType === 'pct') {
+    const pct = parseFloat(item.discountInput);
+    if (isNaN(pct)) return { discount: 0, discountInput: item.discountInput };
+    return { discount: Math.round((base * pct) / 100), discountInput: item.discountInput };
+  }
+  const d = Math.min(item.discount, base);
+  return { discount: d, discountInput: d === item.discount ? item.discountInput : String(d) };
+}
+
 /** lineBase minus the whole-peso item discount. Mirrors the server's line subtotal. */
 export function lineSubtotal(item: CalcItem): number {
   return lineBase(item.unitPrice, item.quantity) - item.discount;

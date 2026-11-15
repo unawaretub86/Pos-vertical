@@ -31,6 +31,15 @@ type OrderItem struct {
 	TaxRate float64 `json:"-"`
 }
 
+// OrderLine is a non-void order item as raw numbers, so the service can price
+// list totals with the same per-line rule as GET /orders/{id}.
+type OrderLine struct {
+	OrderID   int64
+	Quantity  float64
+	UnitPrice float64
+	TaxRate   float64 // the product's current IVA rate
+}
+
 // OrderSummary is a row of the open-orders list.
 type OrderSummary struct {
 	ID            int64   `json:"id"`

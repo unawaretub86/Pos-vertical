@@ -43,6 +43,7 @@
 | US-104 | Close the register with a *faltante* (shortage) after an explicit confirmation, and show it as `Faltante` on the ticket and in the histories (roadmap R-186, before G-2) | [x] | 2026-11-13 |
 | US-105 | Receivables stay with the owner (`GET /customers` without balances for the cashier, Customers screens guarded), and the cashier records an *abono* from `Punto de Venta › Abonar` (roadmap R-188 + R-187) | [x] | 2026-11-14 |
 | US-106 | Per-line discounts leave an audit trail: one `discount` row per discounted line, shown in `Auditoría` (roadmap R-189) | [x] | 2026-11-14 |
+| US-107 | Money display polish before go-live: open-order and table totals with IVA, cart discount follows the quantity, `Fiado` payment label, negative amounts as `-$X` (roadmap R-177 + R-181 + R-185 + R-191) | [x] | 2026-11-14 |
 
 **Total estimated effort: ~8 days**
 
@@ -711,3 +712,45 @@ Closed: R-188, R-187. Follow-ups opened: R-210 (`Abonar` on `/register` and tabl
 **Results:** QA round 1 OK (0 BLOCKER, 2 MINOR): the spec delta and this status line (both done at this close). `go build`, `go test ./...`, `pnpm test` (316 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18106: a cashier sale with a 2.000 line discount on `Arroz "Diana" 500g` wrote one row with the quoted name escaped, cashier `GET /audit` 403. Spec: `spec/domain/dinero.md` (new "Discount audit" bullet), `spec/domain/reset.md` (`discount` covers per-line rows). Contract discrepancies: D-1 (stale refs) fixed in `features.md`; D-2 became R-215; D-3 stays R-138; D-4 kept as the convention; D-5 became R-216. No manual check.
 
 Closed: R-189. Follow-ups opened: R-215 (wholesale price rejected for a cashier), R-216 (raw SQL text in a 400 on a sale-create failure), R-217 (owner discount report), R-218 (cap or approval for line discounts, only if the owner asks).
+
+---
+
+## US-107 — Money display polish before go-live
+
+**Status:** registered 2026-11-14 (roadmap R-177, R-181, R-185, R-191). Level M. Closed 2026-11-14 (implementation and tests `59df01d`, stronger `$0` assertion `09d4794`). Approved at GATE 1 (PO, 2026-11-14): Q-1..Q-4 as recommended (the credit button reads `Fiado`; the customer ticket, the close ticket and Reports keep `Crédito`; a fixed line discount is clamped and a percentage one recomputed when the quantity changes; negatives print as `-$X` with an ASCII `-`, zero as `$0`). The contract `changes/US-107/contract.md` disappears with the worktree; the verified criteria are below.
+
+**As** Laura (cashier) and Don Carlos (owner),
+**I want** every amount on screen to match what the sale will charge and to read naturally,
+**so that** the table card, the cart and the close ticket never disagree with the server or show `$-8.000`.
+
+**Estimated effort:** 0.5 day. **Impact:** Medium for go-live (wrong or odd amounts on day one cost trust; one case makes the server refuse a sale at checkout).
+
+**Problem (verified 2026-11-14):**
+- R-177: the table card on `/mesas` (`open_total`, `internal/repository/dining_table.go:44-45`) and the open-orders list (`GET /orders?status=open`, `internal/repository/order.go:368-369`) sum `quantity * unit_price` with no IVA. Run in the contract: one item $10.001 at 19% → `GET /orders/1` total 11901, list row 10001, `GET /tables` `open_total` 10001.
+- R-181: lowering the quantity of a cart line keeps its item discount (`frontend/app/pos/page.tsx:633-652`), so 2 × $1.000 with a fixed discount of $1.500, then quantity 1, is refused by the server at checkout (`internal/service/sale.go:189-191`). A percentage discount is also frozen at the amount computed when typed (`page.tsx:243-246`).
+- R-185: the payment buttons, the mixed-mode first line and the extra-line selector capitalize the method key, so the *fiado* method reads `Credito` (`frontend/components/SalePaymentPanel.tsx:302`, `:316`, `:345`).
+- R-191: `formatCOP` puts `$` before the sign (`frontend/lib/format.ts:6-7`): `formatCOP(-8000)` is `$-8.000`, and `formatCOP(-0)` is `$-0`, which the close ticket and close modal print for `Salidas` when there were no cash outflows (run in the contract).
+
+**Acceptance criteria (draft; the contract refines them):**
+- [x] The `/mesas` table card and the open-orders list show the same total as `GET /orders/{id}` (per-line IVA, whole pesos).
+- [x] Changing a cart line's quantity keeps its item discount within the new line base (fixed clamped, percentage recomputed).
+- [x] The *fiado* payment method reads `Fiado` everywhere in the payment panel; the manual and the commercial docs match.
+- [x] `formatCOP` prints a negative amount as `-$8.000` and zero as `$0`, never `$-0`.
+
+**Verified criteria (closed 2026-11-14):** backend fixture `newOrderFixture` (Café $4.500, Torta $8.000, no IVA) plus products inserted per test; backend tests in `internal/handler/order_test.go:741-805`.
+- AC-1: WHEN `GET /orders?status=open` lists an order, the system SHALL return as `total` the same value as `GET /orders/{id}`: Σ over non-void items of `LineBase + LineTax` at the product's current `tax_rate`. One item $10.001 at 19% → 11901. Test: `TestOrder_T23_ListTotalsIncludeIVA`.
+- AC-2: WHEN `GET /tables` returns a table with an open order, `open_total` SHALL equal that order's `GET /orders/{id}` total (11901 for the same item); a table with no open order stays 0. Tests: `TestOrder_T23_ListTotalsIncludeIVA`; unchanged `TestTables_T12_DerivedStates`, `TestTables_T13_VoidAndMixedStatuses`.
+- AC-3: WHEN an order has several taxed lines, both lists SHALL round per line: Café × 2, A and B 1 × $1.050 at 19%, Torta voided → 11500, not 11499. Test: `TestOrder_T24_ListTotalsRoundPerLineAndSkipVoid`.
+- AC-4: WHEN a product's `tax_rate` changes after its item was added, both lists SHALL use the current rate: $10.001 added at 19%, rate set to 5% → 10501 on all three endpoints. Test: `TestOrder_T25_ListTotalsUseCurrentTaxRate`.
+- AC-5: WHEN the quantity of a cart line with a fixed discount changes, the cart SHALL set the discount to `min(discount, lineBase(unitPrice, newQuantity))` and show it in the input: 2 × $1.000 with $1.500, quantity 1 → 1000, input `1000`; $500 stays $500; raising the quantity never changes it; 0,25 kg × $9.999 with $5.000 → 2500. Test: `frontend/lib/saleCalc.test.ts` (`discountForQuantity (R-181)`, fixed cases).
+- AC-6: WHEN the quantity of a line with a percentage discount changes, the cart SHALL recompute it as `Math.round(lineBase × pct / 100)` and keep the percentage: 3 × $1.000 at 50%, quantity 1 → 500; 2 × $1.000 at 50%, quantity 3 → 1500; 100% of $10.001 at quantity 2 → 20002; an empty input → 0. Test: same block, pct cases.
+- AC-7: The rule SHALL apply on both quantity paths, `addOneUnit` and `changeQty` (`frontend/app/pos/page.tsx:96`, `:647`). Verified by QA code reading; browser check `gaps.md` US-107 M-1.
+- AC-8: WHEN the payment panel shows the methods (buttons, mixed-mode first line, extra-line selector), the labels SHALL come from one map: `Efectivo`, `Transferencia`, `Tarjeta`, `Fiado`; none from capitalizing the key (`frontend/components/SalePaymentPanel.tsx:16-21`, used at `:310`, `:324`, `:353`). Test: `frontend/lib/paymentMethodLabels.test.ts` (`PAYMENT_METHOD_LABELS (R-185)`, 2 cases).
+- AC-9: `MANUAL-USUARIO.md`, `docs/comercial/guion-de-venta.md`, `docs/comercial/instalacion-y-capacitacion.md`, `project-docs/features.md` and `project-docs/gaps.md` SHALL name the button `Fiado`. Verified by QA: grep `**Credito**` / `` `Credito` `` in them → empty.
+- AC-10: WHEN `formatCOP` gets an amount that rounds to a negative number, it SHALL print the sign before `$`: −8000 → `-$8.000`, −1234567 → `-$1.234.567`; 0, −0 and −0,4 → `$0`; positives and rounding unchanged (`$8.000`, `$999`, 1500,5 → `$1.501`). Test: `frontend/lib/format.test.ts` (`formatCOP (R-191)`, 4 cases).
+- AC-11: WHEN the close ticket is rendered, `Salidas` SHALL read `-$8.000` for `cash_out` 8000 and `$0` for `cash_out` 0, never `$-8.000` or `$-0`. Test: `frontend/lib/closeTicketPreview.test.tsx` (`CloseTicketPreview Salidas line (R-191)`, 2 cases). The close modal's `Salidas manuales` uses the same `formatCOP` on the same signed value (`frontend/app/register/page.tsx:386`).
+- AC-12: Callers that already print an absolute amount SHALL be unchanged: `Faltante $5.000`, `Saldo a favor: $50.000`, `Saldo a favor: $20.000`. Tests: existing `frontend/lib/registerClose.test.ts:94`, `frontend/lib/closeTicketPreview.test.tsx:27-33`, `frontend/lib/abono.test.ts:199-203`, `:267`, green with no edit.
+
+**Results:** QA round 1: BLOCKER (the spec delta, which is close-step work by design and is done at this close) and 3 MINOR (the `cash_out 0` test asserted only `not $-0`, strengthened in `09d4794`; `ListLines(status)` reads every line of every order with that status, so `GET /orders?status=closed` reads all history, which became R-221; this status line, done here). QA confirmed the new tests fail on the base commit. `go build`, `go test ./...`, `pnpm test` (333 tests), `pnpm lint` (0 problems) and `pnpm build` green; binary smoke on port 18107: one item $10.001 at 19% → 11901 from `GET /tables`, `GET /orders?status=open` and `GET /orders/1`. Spec: `spec/domain/restaurante.md` (Table state, Orders), `spec/domain/dinero.md` (Display), `spec/domain/caja.md`, `spec/domain/fiado.md` (Model). Contract discrepancies: D-1 and D-2 (the visible total was the `/mesas` card's `open_total`, not `ListOpen`) fixed by pricing both; D-3 (stale `restaurante.md` lines) fixed at close; D-4 (percentage discounts) fixed by PO decision Q-3; D-5 (three places capitalized the key) fixed; D-6 (`Salidas $-0`) fixed. Manual check parked: `gaps.md` US-107 M-1.
+
+Closed: R-177, R-181, R-185, R-191. Follow-ups opened: R-220 (`Fiado` on the customer ticket, the close ticket and Reports, only if the PO wants one word everywhere), R-221 (`GET /orders?status=closed` reads all history), R-222 (tell the cashier when a line discount is clamped).

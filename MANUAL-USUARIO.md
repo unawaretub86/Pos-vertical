@@ -109,7 +109,7 @@ Primero debe haber una **caja abierta** (sección 8): sin caja abierta el sistem
 1. Busque el producto por nombre o escanee su código de barras. Con el lector, cada lectura agrega el producto al carrito.
 2. Ajuste cantidades. Si el producto tiene precio mayorista, puede escoger ese precio en la línea.
 3. **Descuentos:** cualquier usuario puede poner un **Descuento** en una línea. Si el dueño lo activó en Configuración, también se puede descontar sobre el total. El dueño, además, puede cambiar el precio de un producto en la venta. En la **Auditoría** quedan todos los descuentos (por línea y sobre el total) y los cambios de precio: quién los hizo, en qué producto, de cuánto y en qué venta.
-4. Escoja cómo le pagan: **Efectivo**, **Transferencia** (Nequi, Daviplata o banco), **Tarjeta** o **Credito** (fiado).
+4. Escoja cómo le pagan: **Efectivo**, **Transferencia** (Nequi, Daviplata o banco), **Tarjeta** o **Fiado**.
    - Con efectivo, escriba lo **Recibido** y el sistema muestra el **Cambio**.
    - Si le pagan una parte en efectivo y otra por Nequi, use **+ Agregar otro método de pago**.
 5. Presione **Cobrar**. El ticket se imprime según la configuración de impresión.
@@ -134,7 +134,7 @@ Si el cliente ya le debía antes de usar el sistema, regístrelo como **deuda an
 
 ### Fiar en una venta
 
-En el cobro escoja **Credito** y seleccione el cliente. El sistema le muestra:
+En el cobro escoja **Fiado** y seleccione el cliente. El sistema le muestra:
 
 - Cuánto debe y hace cuántos días (por ejemplo **Debe: $450.000 (26 días)**).
 - Su última visita y **Lo de siempre** (lo que más compra). Con **Agregar lo de siempre** lo pone en el carrito.

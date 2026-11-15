@@ -12,6 +12,14 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 
 export type PaymentMethod = 'efectivo' | 'transferencia' | 'tarjeta' | 'credito';
 
+/** Label of each payment method in the panel (R-185: credito reads Fiado). */
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia',
+  tarjeta: 'Tarjeta',
+  credito: 'Fiado',
+};
+
 export interface Customer {
   id: number;
   name: string;
@@ -299,7 +307,7 @@ export default function SalePaymentPanel({
         {(['efectivo', 'transferencia', 'tarjeta', 'credito'] as PaymentMethod[]).map(m => (
           <PayBtn
             key={m}
-            label={m.charAt(0).toUpperCase() + m.slice(1)}
+            label={PAYMENT_METHOD_LABELS[m]}
             active={payMethod === m}
             onClick={() => {
               setPayMethod(m);
@@ -313,7 +321,7 @@ export default function SalePaymentPanel({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {isMixedMode && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
-            <span>{payMethod.charAt(0).toUpperCase() + payMethod.slice(1)}</span>
+            <span>{PAYMENT_METHOD_LABELS[payMethod]}</span>
             <input
               type="text"
               inputMode="numeric"
@@ -342,7 +350,7 @@ export default function SalePaymentPanel({
               }}
             >
               {(['efectivo', 'transferencia', 'tarjeta', 'credito'] as PaymentMethod[]).map(m => (
-                <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
               ))}
             </select>
             <input

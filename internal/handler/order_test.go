@@ -705,3 +705,101 @@ func TestOrder_T22_BusyMapsTo503(t *testing.T) {
 		t.Errorf("orders = %d, want 0", n)
 	}
 }
+
+// listTotals returns the open-orders list total and the GET /tables
+// open_total for the given table name (US-107, R-177).
+func (f *orderFixture) listTotals(table string) (listTotal, openTotal float64) {
+	f.t.Helper()
+	w := f.do(http.MethodGet, "/orders?status=open", "")
+	if w.Code != http.StatusOK {
+		f.t.Fatalf("list: %d %s", w.Code, w.Body.String())
+	}
+	foundList := false
+	for _, r := range decodeInto[[]orderSummaryJSON](f.t, w) {
+		if r.TableName == table {
+			listTotal, foundList = r.Total, true
+		}
+	}
+	if !foundList {
+		f.t.Fatalf("no open-orders row for %s: %s", table, w.Body.String())
+	}
+	tables, body := listTablesJSON(f.t, f.h, f.tok)
+	foundTable := false
+	for _, tb := range tables {
+		if tb.Name == table {
+			openTotal, foundTable = tb.OpenTotal, true
+		}
+	}
+	if !foundTable {
+		f.t.Fatalf("no table row for %s: %s", table, body)
+	}
+	return listTotal, openTotal
+}
+
+// US-107 T-1 (AC-1, AC-2): one item at $10.001 with 19% IVA is 11901 in
+// GET /orders/{id}, the open-orders list and GET /tables.
+func TestOrder_T23_ListTotalsIncludeIVA(t *testing.T) {
+	f := newOrderFixture(t)
+	f.exec(`INSERT INTO products (id, name, code, sale_price, cost, unit, active, tax_rate) VALUES (10, 'Item', 'IT', 10001, 5000, 'unit', 1, 0.19)`)
+	o := f.openOrder(f.mkTable("Mesa 1"))
+	f.addItem(o, 10, 1)
+
+	if got := f.getOrder(o).Total; got != 11901 {
+		t.Errorf("GET /orders/{id} total = %v, want 11901", got)
+	}
+	list, open := f.listTotals("Mesa 1")
+	if list != 11901 {
+		t.Errorf("open-orders list total = %v, want 11901 (10001 + IVA 1900)", list)
+	}
+	if open != 11901 {
+		t.Errorf("GET /tables open_total = %v, want 11901 (10001 + IVA 1900)", open)
+	}
+}
+
+// US-107 T-2 (AC-1..AC-3): Café 2 x 4500 + A 1 x 1050 @19% + B 1 x 1050 @19%,
+// Torta voided -> 9000 + 1250 + 1250 = 11500 (per-line rounding), not 11499.
+func TestOrder_T24_ListTotalsRoundPerLineAndSkipVoid(t *testing.T) {
+	f := newOrderFixture(t)
+	f.exec(`INSERT INTO products (id, name, code, sale_price, cost, unit, active, tax_rate) VALUES (11, 'A', 'A', 1050, 500, 'unit', 1, 0.19)`)
+	f.exec(`INSERT INTO products (id, name, code, sale_price, cost, unit, active, tax_rate) VALUES (12, 'B', 'B', 1050, 500, 'unit', 1, 0.19)`)
+	o := f.openOrder(f.mkTable("Mesa 1"))
+	f.addItem(o, cafeID, 2)
+	f.addItem(o, 11, 1)
+	f.addItem(o, 12, 1)
+	torta := f.addItem(o, tortaID, 1)
+	if w := f.voidItem(o, torta); w.Code != http.StatusOK {
+		t.Fatalf("void torta: %d %s", w.Code, w.Body.String())
+	}
+
+	if got := f.getOrder(o).Total; got != 11500 {
+		t.Errorf("GET /orders/{id} total = %v, want 11500", got)
+	}
+	list, open := f.listTotals("Mesa 1")
+	if list != 11500 {
+		t.Errorf("open-orders list total = %v, want 11500 (per-line rounding; 11499 means per-order rounding, 17000+ means the void line counted)", list)
+	}
+	if open != 11500 {
+		t.Errorf("GET /tables open_total = %v, want 11500 (per-line rounding; 11499 means per-order rounding, 17000+ means the void line counted)", open)
+	}
+}
+
+// US-107 T-3 (AC-4): $10.001 added at 19%, then the product's rate set to 5%
+// -> 10501 everywhere (current rate, as GET /orders/{id}).
+func TestOrder_T25_ListTotalsUseCurrentTaxRate(t *testing.T) {
+	f := newOrderFixture(t)
+	f.exec(`INSERT INTO products (id, name, code, sale_price, cost, unit, active, tax_rate) VALUES (10, 'Item', 'IT', 10001, 5000, 'unit', 1, 0.19)`)
+	o := f.openOrder(f.mkTable("Mesa 1"))
+	f.addItem(o, 10, 1)
+	f.exec(`UPDATE products SET tax_rate = 0.05 WHERE id = 10`)
+
+	if got := f.getOrder(o).Total; got != 10501 {
+		t.Errorf("GET /orders/{id} total = %v, want 10501", got)
+	}
+	list, open := f.listTotals("Mesa 1")
+	if list != 10501 {
+		t.Errorf("open-orders list total = %v, want 10501 (10001 + IVA 500 at 5%%)", list)
+	}
+	if open != 10501 {
+		t.Errorf("GET /tables open_total = %v, want 10501 (10001 + IVA 500 at 5%%)", open)
+	}
+}

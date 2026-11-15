@@ -21,7 +21,7 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 | Global discount on the sale, audited (`discount`) | Toggle (`Descuento global en ventas`) | both | Settings → Caja registradora; `internal/repository/sale.go:182` |
 | Price override on a cart line, audited (`price_override`) | Live | admin | `frontend/app/pos/page.tsx:374-389`; `internal/service/sale.go:73-77`; `internal/repository/sale.go:112` |
 | Selling requires an open register (`no hay caja abierta`) | Live | — | `internal/service/sale.go:46-50` |
-| Payment methods: `Efectivo`, `Transferencia` (Nequi, Daviplata, bank), `Tarjeta`, `Credito` (*fiado*; label without the accent, R-185), and mixed payments that split one sale across several | Live | both | `fiado.md` § Model; `SalePaymentPanel.tsx:299-302` |
+| Payment methods: `Efectivo`, `Transferencia` (Nequi, Daviplata, bank), `Tarjeta`, `Fiado` (*fiado*, store credit), and mixed payments that split one sale across several | Live | both | `fiado.md` § Model; `SalePaymentPanel.tsx` (`PAYMENT_METHOD_LABELS`) |
 | Cash received and change shown (`Recibido` / `Cambio`) | Live | both | `frontend/components/SalePaymentPanel.tsx:500-516` |
 | IVA (Colombian VAT) per product at 0%, 5% or 19%, rounded per line to whole pesos | Live | — | `dinero.md` |
 | Park a cart and serve the next customer (`Dejar en espera`) | Live (hidden in restaurant mode) | both | `restaurante.md` § Restaurant mode |
