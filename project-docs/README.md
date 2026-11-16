@@ -1,6 +1,6 @@
 # project-docs — Index
 
-> **Updated:** 2026-11-13 (`sales-strategy.md` row) · 2026-11-13 (US-102: `spec/domain/dinero.md` row) · 2026-11-11 (US-089: `spec/domain/backup.md` row) · 2026-11-10 (US-093: `spec/domain/reset.md` row) · 2026-11-10 (US-098: `spec/domain/tiempo.md` row) · 2026-11-09 (US-094: `spec/domain/catalogo.md` row) · 2026-11-05 (US-080: `spec/domain/impresion.md` row)
+> **Updated:** 2026-11-14 (`content-plan.md` row) · 2026-11-13 (`sales-strategy.md` row) · 2026-11-13 (US-102: `spec/domain/dinero.md` row) · 2026-11-11 (US-089: `spec/domain/backup.md` row) · 2026-11-10 (US-093: `spec/domain/reset.md` row) · 2026-11-10 (US-098: `spec/domain/tiempo.md` row) · 2026-11-09 (US-094: `spec/domain/catalogo.md` row) · 2026-11-05 (US-080: `spec/domain/impresion.md` row)
 
 **Read this before believing any document in this folder.** Not all of them are current: some specs must always be true, some research is dated months ago, and some is MVP history. They used to be all mixed together and written in the same present tense, and that produced plans with false claims about the code.
 
@@ -42,6 +42,7 @@ Each document opens with a status stamp that says which is which.
 | Are amounts whole pesos? How is IVA rounded? Which tolerances apply to totals and payments? | [spec/domain/dinero.md](spec/domain/dinero.md) |
 | **What does the product do today? What may we promise a customer?** | [features.md](features.md) — feature inventory; customer-facing kit in [`../docs/comercial/`](../docs/comercial/) (Spanish product content) |
 | **How does it make money? Prices, plans, costs, segments, channels, support?** | [sales-strategy.md](sales-strategy.md) |
+| What do we publish on social media? What may content promise? How does a viewer become a lead? | [content-plan.md](content-plan.md) |
 | **What do we build next?** | [roadmap.md](roadmap.md) — single source |
 | How is a sprint worked? | [workflow.md](workflow.md) |
 | What is the stack, the code conventions and the language rule? | [`../CLAUDE.md`](../CLAUDE.md) |

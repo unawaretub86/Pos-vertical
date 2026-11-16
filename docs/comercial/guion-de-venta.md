@@ -52,6 +52,7 @@ Después pregunte: **"¿Qué le dan los programas que conoce?"** Su respuesta le
 | "Ya uso un programa con mensualidad." | "Este se paga una vez. ¿Cuánto paga al mes? Multiplíquelo por 12 y compárelo. Y aquí el fiado está bien hecho." (Haga la cuenta con la cifra que le den; no cite precios de la competencia de memoria.) |
 | "¿Y si se daña el computador?" | "Hay copia diaria y le enseño a guardar una semanal en USB o Drive. Con esa copia queda funcionando en otro computador." |
 | "¿Hace factura electrónica?" | "Esta versión imprime tickets de venta. Si la DIAN le exige factura electrónica, lo conversamos aparte." (No prometa fecha.) |
+| "¿Y después del primer año me toca seguir pagando?" | "No le toca: el programa es suyo y sigue funcionando. Si quiere seguir con mi respaldo, son $180.000 al año **[confirmar]**, como un SOAT: soporte, actualizaciones y, si se le daña el computador, se lo dejo funcionando con su fiado. Si no, cada atención se cobra aparte." |
 | "¿Lo puedo ver desde mi casa?" | "No: funciona en el negocio, en el computador y en los celulares de la misma WiFi. Por eso no necesita internet ni mensualidad." |
 | "¿Puedo tener dos cajas?" | "Puede vender desde varios equipos en la misma WiFi, todos a la misma caja." |
 | "¿Le cobra intereses al cliente?" | "No. Le avisa cuando la deuda está vieja o pasa el tope; usted decide." |

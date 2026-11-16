@@ -1,7 +1,7 @@
 # Sales strategy — Pos-vertical
 
 > **Type:** current · **Current:** yes · **Rules over:** business model, pricing, cost model, segments, channels and support model
-> **Updated:** 2026-11-13
+> **Updated:** 2026-11-14 (§ 4.3 founder offer) · 2026-11-14 (Respaldo: § 4 row, § 4.1 recurring ladder, § 4.2 how it is sold; § 5.6 at 50% renewal; § 13 variables to test) · 2026-11-14 (§ 5.6 income target, § 12 renewal and guarantee rows) · 2026-11-14 (§ 6 content channel starts now, see `content-plan.md`) · 2026-11-13
 
 This document says **how the product makes money and what that costs**. What the product is and promises stays in [spec/product.md](spec/product.md); the work it implies is tracked only in [roadmap.md](roadmap.md) (R-200..R-209 and the launch stages). Customer-facing texts (offer, pitch, contract) are in [`../docs/comercial/`](../docs/comercial/) in Spanish, and they follow this document, not the other way round.
 
@@ -16,7 +16,7 @@ Every number below is an **order of magnitude with an explicit assumption**, not
 | Paying customers | 0. Client #1 (a neighborhood shop) is about to be installed | roadmap, stage 1 |
 | Product | Offline POS, *fiado* (credit extended to customers), register close with count, owner/cashier roles, local backups, catalog import, DIAN e-invoicing built but off | `features.md`; DIAN gate `internal/handler/handler.go:79` |
 | Install cost today | About one working day per shop | PO estimate; stage 2 target is under 30 minutes (R-175) |
-| Commercial offer | Drafted: list $1.000.000, founder $500.000 paid 50/50, 3 months of WhatsApp support | `docs/comercial/oferta-y-contrato.md`, R-174 |
+| Commercial offer | Drafted: list $1.000.000, founder $500.000 paid 50/50, 12 months of Respaldo included (was 3 months of support until 2026-11-14), all pending PO confirmation | `docs/comercial/oferta-y-contrato.md`, R-174 |
 
 The code is ahead of the stage. What raises the value of the business now is **evidence of use and a cheaper install**, not more features.
 
@@ -58,7 +58,8 @@ E-invoicing is **not** a selling point for segment A. A shop run by a natural pe
 
 | Plan | Price | Includes | For |
 |---|---|---|---|
-| **Licence** (one-time) | List $1.000.000; founder $500.000 for the first 5 shops only, then $800.000 | `pos.exe` for one business, install, catalog and *fiado* load, 45-minute training, 3 months of WhatsApp support, updates for 12 months | Segment A |
+| **Licence** (one-time) | List $1.000.000; founder $500.000 for the first 5 shops only, then $800.000 | `pos.exe` for one business, install, catalog and *fiado* load, 45-minute training, and the first 12 months of Respaldo | Segment A |
+| **Respaldo** (annual, optional, from year 2; UI and sales name `Respaldo`) | ~$180.000/year; at the sale, a second year prepaid for $150.000 (licence + 2 years = $1.150.000) | WhatsApp support, updates, and reinstall with data restore when the PC is replaced or breaks | Every licence that does not take Connected |
 | **Connected** (`Plan Conectado`) | $29.900/month or $299.000/year (2 months free) | Off-machine encrypted backup and restore, owner summary on the phone, WhatsApp *fiado* reminders (fair use: 300/month), updates, support | A and B, optional |
 | **Connected + DIAN** | Connected + a DIAN volume tier priced at provider cost × ~1.5 | E-invoices / electronic POS documents within the tier | Segment B |
 | **Rent-to-own** (to validate) | $39.900/month × 24 months ($957.600) | Licence owned at month 24; Connected included during the term | Shops that cannot pay upfront |
@@ -69,6 +70,56 @@ Rules that protect the promise:
 1. A lapsed Connected subscription **never** blocks selling, *fiado*, the register close or the export of data; only the connected services stop, after a 15-day grace period.
 2. If the VPS is down, the shop does not notice until it opens a connected feature.
 3. The cloud holds encrypted backups and summaries, **never the live database**.
+
+### 4.1 The recurring ladder (PO 2026-11-14)
+
+One recurring line with two levels, instead of four loose plans. From year 2 the shop picks one, or none:
+
+| Level | Price | Needs a backend | Sellable |
+|---|---|---|---|
+| None | $0; each support case is charged apart (~$80.000, to validate) | No | Now |
+| **Respaldo** | ~$180.000/year | No | Now |
+| **Connected** (includes everything in Respaldo) | $299.000/year or $29.900/month | Yes (R-201) | Stage 4 |
+
+Why a renewal and not only the alternatives:
+
+| Model | For | Against |
+|---|---|---|
+| One-time licence only | Easy to sell | No recurring income |
+| Monthly fee only | Recurring from day 1 | Breaks promise 3 (`spec/product.md`); competes head-on with Alegra and with Treinta's free app |
+| Annual Respaldo | No server, sold from client #1, one collection a year by Nequi or transfer at $0 fee | Optional and never blocking, so many shops will not renew if nothing breaks |
+| Connected | Best margin, value seen every day | Needs R-201 and R-204 first |
+
+Respaldo is the floor, not the engine: renewal of an optional maintenance plan is planned at **40–60%** (Tech Lead estimate, no data yet; § 5.6 uses 50%). Connected is the upgrade: the gap between the two levels is about $10.000 a month, which is the upsell line once Connected exists.
+
+Twelve months included instead of three raises the support cost of a licence from 2 hours to about 3 (12 × 15 min, § 5.2), about $50.000 less margin per sale than § 5.4 shows. It is accepted because the renewal date then arrives after a full year of use.
+
+### 4.2 How Respaldo is sold
+
+Customer wording is product content, in Spanish with "usted". Final texts live in `../docs/comercial/`.
+
+1. **Never "renovación de licencia".** It sounds like a hidden monthly fee. The program is the shop's forever; what is renewed is the backing: *"El programa es suyo para siempre. Lo que se renueva es el respaldo."*
+2. **Sell it as insurance, not as updates:** *"Es como el SOAT: lo paga una vez al año, y si se le daña el computador yo se lo dejo funcionando con todo su fiado."* No delivery time is promised until the first real reinstall has been timed.
+3. **Price the alternative.** Without Respaldo each case is charged apart (~$80.000). Two cases a year already cost more than the plan.
+4. **Offer the second year at the sale** ($1.000.000 with one year, $1.150.000 with two): willingness to pay is highest that day, and it removes the renewal risk for 24 months.
+5. **Collect in month 11 by WhatsApp**, with the shop's own year in numbers (*fiado* collected, days closed), read from its dashboard and reports during a support contact. Nothing automatic is promised.
+6. **A lapsed Respaldo never blocks anything** (same as rule 1 for Connected above): the shop keeps the version it has.
+
+Renewal log: one more sheet in the support log of § 7 (shop, install date, Respaldo until, reminder sent, renewed yes/no, reason if no). The reason column is the cheapest market research we will get.
+
+### 4.3 Founder offer for the first 5 shops (proposal 2026-11-14, PO confirms)
+
+Customer text: `../docs/comercial/oferta-y-contrato.md` § "Oferta Tienda Fundadora". The price is not cut further; the offer removes the shop's risk and makes the limit real.
+
+| Element | Value | Why |
+|---|---|---|
+| Price | $500.000, 5 numbered slots, 50% at install and 50% at day 30 | Already drafted; the list price stays visible as the anchor |
+| 30-day trial | The shop may walk away in the first 30 days: no second payment, first payment returned, program removed, the receivables list handed over on paper (there is no customer export yet, R-236) | The shop's fear is paying for something it will not use. Simpler to explain and to verify than the 60-day *fiado* guarantee of R-229, which stays as the alternative (§ 13, variable 7) |
+| Respaldo at founder price | $150.000 a year instead of ~$180.000 while renewed without a gap | A reason to renew that costs little |
+| Referral | $50.000 per shop that buys on the founder's recommendation | Acquisition cost far below a founder visit day |
+| Asked in return | Daily register close in the system for the first month, a short weekly talk, permission to tell the case and film the shop, two introductions if satisfied | The evidence § 1 says the business lacks; filming permission unblocks the founder-diary series of `content-plan.md` § 4 |
+
+Cost, stated plainly: at today's one-day install the founder price already loses about $60.000 per shop (§ 5.4), about $110.000 with 12 months of Respaldo; a shop that walks away costs the install day and the visit. With 5 slots the worst case is bounded, and it is the price of the first proof. The offer is **not** extended past 5 shops.
 
 Open: what happens to a rent-to-own shop that stops paying before month 24. The licence is not owned yet, but rule 1 says data is never locked. Recommendation: selling keeps working for 30 days with a banner, then the app opens read-only with export always available.
 
@@ -152,6 +203,22 @@ The provider integrated today is Factus (`internal/factelect/client.go:16`); its
 
 DIAN is only viable for high-ticket, low-volume issuers unless a reseller rate is negotiated. It is priced as provider cost × ~1.5 in volume tiers, never bundled flat.
 
+### 5.6 Income target (PO 2026-11-14)
+
+Target: **$3.000.000–5.000.000 a month** to the founder. One scenario that reaches it, built only from the numbers above plus the proposed annual renewal (roadmap R-225, ~$180.000 a year, to validate):
+
+| Line | Assumption | Per month |
+|---|---|---|
+| Connected | 200 installed shops, 40% attach (§ 9) = 80 × $25.200 | $2.016.000 |
+| Respaldo | Half of the other 120 shops renew (§ 4.1) = 60 × $15.000, less ~9% taxes and collection | ~$820.000 |
+| Fixed cash | § 5.1 mid-point | −$400.000 |
+| **Recurring, before support** | ~35 support hours a month: 140 covered shops at 15 min | **~$2.435.000** |
+| Part-time support hire | § 5.3 assumption | −$1.500.000 |
+| New licences | 4 a month sold by partners, list price (§ 5.4: $515.000 each) | $2.060.000 |
+| **Total with the hire** | ~10 founder hours a month | **~$3.000.000** |
+
+Without the hire the same base gives ~$4.500.000 for about 35 founder hours a month, which is a part-time job, not passive income. The low end of the target needs about **200 installed shops and a channel that sells about 4 licences a month**; it does not need a second product. The levers toward the high end are the Connected attach rate (each 10 points on 200 shops ≈ +$370.000 a month net of the Respaldo it replaces), the Respaldo renewal rate (each 10 points ≈ +$165.000) and second years prepaid at the sale. Per-case support income from shops with no plan is not counted.
+
 ## 6. Channels
 
 | Channel | How | Cost | When |
@@ -160,7 +227,7 @@ DIAN is only viable for high-ticket, low-volume issuers unless a reseller rate i
 | Accountants | They have dozens of clients obliged to e-invoice; perfect for segment B | 20–30% of the licence; 10–20% of Connected in year 1 | Stage 3 (R-206) |
 | Hardware sellers (thermal printers, scanners, local or Mercado Libre) | Bundle: scanner + printer + licence | Same commission | Stage 3 (R-206) |
 | Neighborhood PC technicians | They already enter the shops; they can do the install | Commission + install fee | Stage 3 (R-206) |
-| Content and free tools | Short videos ("how to control *fiado*", "how to close the register"), a free *fiado* spreadsheet template, an IVA calculator | Time | After stage 2 |
+| Content and free tools | Short faceless PAS videos and carousels on TikTok, Instagram and Facebook, a free *fiado* spreadsheet, a WhatsApp tips channel; playbook in [content-plan.md](content-plan.md) | Time; $0 ads for 6–8 weeks | Organic now (PO 2026-11-14); paid promotion after install is under 30 min |
 
 The first sale a channel brings without the founder in the room is the signal that the business can become passive.
 
@@ -168,6 +235,7 @@ The first sale a channel brings without the founder in the room is the signal th
 
 - Hours: Monday to Saturday, 8:00–18:00, by WhatsApp (offer draft).
 - Order: manual and videos first, then WhatsApp, then a remote session, then a visit (paid outside the included period).
+- After the 12 months included, support belongs to Respaldo or Connected (§ 4.1); a shop with no plan pays per case.
 - **Log every contact**: date, customer, minutes, cause. It is the input to section 5.2 and the cheapest data we can collect. A paper notebook or a spreadsheet is enough.
 - Target: ≤ 15 minutes per customer per month after month 3; hire part-time help when support passes ~25 hours a month.
 
@@ -218,6 +286,38 @@ The same effort can produce other income without touching this roadmap:
 | Partner commission | 30% of the licence, 15% of Connected in year 1 |
 | When to formalize (RUT, regime, invoicing) | Before the first Connected charge or the first company customer, whichever comes first |
 | Free tier | Only after a stranger installs the product alone (R-202, R-207) |
+| Respaldo (R-225, § 4.1) | Name `Respaldo`; ~$180.000 a year after the 12 months included; second year at the sale for $150.000; ~$80.000 per case without a plan; never blocks the product |
+| Result guarantee (R-229) | 60 days, tied to *fiado* collected and to the register being closed in the system |
+
+## 13. Strategies and variables to test (PO 2026-11-14)
+
+Nothing in sections 3, 4 and 6 is proven: there are 0 paying customers. The PO accepts trying several strategies. Each row is a variable we can move, the option we start with, the alternatives, and what tells us to change.
+
+| # | Variable | Start with | Alternatives to try | Signal that decides |
+|---|---|---|---|---|
+| 1 | Licence price | Founder $500.000 (first 5), then $800.000, list $1.000.000 | Hold $1.000.000 from shop 6; a lower entry ($300.000–400.000) with Respaldo charged from month 4 | Price objections in the lead log; closes per demo |
+| 2 | Payment form | 50% at install, 50% at 30 days | Rent-to-own $39.900 × 24; three instalments; cash discount | Share of demos lost to "no tengo la plata ahora" |
+| 3 | Support included in the licence | 12 months of Respaldo | 3 or 6 months, so the renewal comes sooner | Support minutes per shop after month 3 (§ 7 log) |
+| 4 | Respaldo price | ~$180.000/year | $150.000 or $240.000; monthly $15.000–19.900 by Nequi | Renewal rate and the "reason if no" column (§ 4.2) |
+| 5 | Second year at the sale | Offered at $150.000 | Not offered; offered at $120.000 | Share of buyers who take it |
+| 6 | Price per case without a plan | ~$80.000 | $50.000 remote and $120.000 on site | Whether it pushes renewals or produces complaints |
+| 7 | Guarantee | 30-day trial with refund for the 5 founder shops (§ 4.3) | The 60-day *fiado* result guarantee (R-229); no guarantee from shop 6 | Closes per demo with and without it; refunds asked |
+| 8 | Channel | Founder direct + organic content | Distributor (R-227), accountant, PC technician, hardware seller (R-206) | First sale closed without the founder in the room (§ 6) |
+| 9 | Segment | Neighborhood shops (A) | Distributors and IVA-responsible shops (B); hardware stores; farm-supply shops and towns (R-231, R-232) | Demos per 10 contacts and ticket size, per segment |
+| 10 | Bundle | Software only | "Caja lista" preinstalled PC, scanner and printer in instalments (R-228) | Share of leads with no PC at the counter (R-231) |
+| 11 | Install mode | On site in Bogotá | Remote with the signed installer and videos (R-202) | Install-to-first-ticket time (§ 9) |
+| 12 | Lead magnet | Free *fiado* spreadsheet | Web calculator "¿Cuánta plata tiene en la calle?"; printed *fiado* notebook insert | "FIADO" messages per 1.000 views (`content-plan.md` § 7.4) |
+| 13 | Demo | 15-minute video call or visit | A one-week trial on the shop's PC with the reset tool before go-live | Demos that become a sale |
+| 14 | Connected price and content | $29.900/month, $299.000/year | Backup-only tier at a lower price; DIAN tiers for segment B | Attach rate (§ 9), once R-201 exists |
+| 15 | Free tier | Not offered | One register, self-install, no support (R-207) | Only after a stranger installs alone |
+
+Rules for testing with very few customers:
+
+1. **One variable at a time per batch of about 5 shops.** Changing price, guarantee and channel together teaches nothing.
+2. **Write the hypothesis and the stop rule before the batch**, in the lead log: what we expect, and what result makes us change.
+3. With 5 shops the result is a signal, not a statistic. The words of the shop that said no are worth more than the count.
+4. **A promise already made to a customer is kept** when the test moves on: founder prices, guarantees and included months are honoured as signed.
+5. What is never a variable: the three promises of `spec/product.md`, the honesty rules of `content-plan.md` § 5, and "a lapsed plan never blocks the product".
 
 ## Sources
 

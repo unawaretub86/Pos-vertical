@@ -1,0 +1,139 @@
+# SPRINT-21 — PO Pre-Launch: Close v1.0 and Go Out to Sell
+
+> **Type:** sprint · **Owner:** Andrey (PO) · **Created:** 2026-11-14
+> **This is a PO checklist, not pipeline work.** It has no US for the `/us` pipeline; the only code is block D, which starts after the PO approves it.
+
+**Goal:** everything the PO must see, decide or check before selling: v1.0 accepted on a real PC and released, the offer closed with the `Respaldo` plan, the accountant's two answers, and client #1 live.
+
+**Why now:** code and tests are green on `dev` (2026-11-14: `go build`, `go vet`, `go test ./...`, 333 vitest tests, lint 0), but no screen has been seen by a human on a PC like the client's, v1.0 is not a release, and the offer still has open values. Details of every manual check stay in [`../gaps.md`](../gaps.md) → "Pending PO validations"; this document only orders them and says which ones belong to v1.0. Business rules are in [`../sales-strategy.md`](../sales-strategy.md); upcoming work is in [`../roadmap.md`](../roadmap.md) § Revenue path.
+
+Mark `[x]` when done. When a manual check passes, remove its row from `gaps.md`.
+
+---
+
+## Block A — Decisions (about 30 minutes, at the desk)
+
+| Done | Decision | Recommendation | Source |
+|---|---|---|---|
+| [ ] | Commercial name | Pick one and run the three checks (handles, `.co` domain, SIC classes 9 and 42) | R-233, `content-plan.md` § 3.1 |
+| [ ] | Licence price and payment form | Founder $500.000 for the first 5 shops, paid 50/50; then $800.000; list $1.000.000 | `sales-strategy.md` § 4, `docs/comercial/oferta-y-contrato.md` |
+| [ ] | `Respaldo`: name, 12 months included, ~$180.000 a year after | As written | R-225, `sales-strategy.md` § 4.1 |
+| [ ] | Second year of Respaldo at the sale | $150.000 (licence + 2 years = $1.150.000) | same |
+| [ ] | Price per support case without a plan | ~$80.000 | same |
+| [ ] | Support hours | Monday to Saturday, 8:00–18:00, WhatsApp | `sales-strategy.md` § 7 |
+| [ ] | Founder offer for the first 5 shops | 30-day trial with refund, Respaldo at $150.000 a year, $50.000 per referral, and what is asked in return | `sales-strategy.md` § 4.3, `oferta-y-contrato.md` § "Oferta Tienda Fundadora" |
+| [x] | Phones on the shop WiFi in v1.0 | **PO 2026-11-14: it stays in the offer; checked in block C** (US-081 M-1..M-3, US-054). If it fails there, the sentence leaves the offer until fixed | `gaps.md` US-081, `oferta-y-contrato.md:17` |
+| [ ] | Go-live decisions D2..D5 | As recommended in the roadmap (train, do not build) | `roadmap.md` § Decide before go-live |
+| [ ] | First variable to test with shops 2–5 | The founder offer itself runs for all 5; the first thing to vary after them is the guarantee (variable 7) or the payment form (variable 2) | `sales-strategy.md` § 13 |
+
+## Block B — One accountant consult
+
+| Done | Question | Source |
+|---|---|---|
+| [ ] | Which title must the printed ticket carry for a shop not obliged to invoice? | R-200, go-live D6 |
+| [ ] | Client #1 charges IVA: is it obliged to issue electronic invoices or electronic POS documents? | R-234 |
+| [ ] | How does Andrey invoice the licence and the Respaldo (RUT, regime)? | R-204 |
+| [ ] | Does selling hardware in a bundle change that regime? (only if "Caja lista" is pursued) | R-228 |
+
+If the second answer is yes, stop and tell the Tech Lead before go-live: DIAN is frozen and off (`roadmap.md` § Freeze).
+
+## Block C — v1.0 acceptance session (3 to 4 hours, on a PC like the client's)
+
+Build the real binary first (`make build`). Each row is a check in `gaps.md` with its full steps. Note every failure with the screen and the step; do not fix on the spot.
+
+**C1. Install and data (the G-2 dry run)**
+
+| Done | Check |
+|---|---|
+| [ ] | SPRINT-20 G-2: fresh folder, install, reboot, POS answers in under 30 s |
+| [ ] | US-089 M-1: start with Windows |
+| [ ] | US-089 M-2 and M-3: backup folder on USB or `D:`, section and banner |
+| [ ] | US-094 M-1: catalog import from CSV |
+| [ ] | US-103 M-1: starter catalog |
+| [ ] | US-092 M-1: opening *fiado* balances |
+| [ ] | US-090 M-1: Settings with DIAN off |
+| [ ] | US-077, US-076, US-078: login, email password not exposed, logical delete of customers |
+
+**C2. Selling, *fiado* and register (one full shift by hand)**
+
+| Done | Check |
+|---|---|
+| [ ] | US-043 M-1 steps 1–5 and 7: *fiado* at checkout, credit limit, "Lo de siempre" |
+| [ ] | US-107 M-1 steps 1–3 and 5: cart discount, `Fiado` label, negative amounts |
+| [ ] | US-105 M-1: cashier *abono* from `Punto de Venta`, Customers screens guarded |
+| [ ] | US-082 M-1..M-3, US-084 M-1: *abono* modal, close with *abonos* |
+| [ ] | US-085 M-1, US-083 M-1, US-086 M-1 step 1: debt-age chips, `Cobrar` without a phone, customer detail |
+| [ ] | US-095 M-1: void dialog |
+| [ ] | US-104 M-1: close with a *faltante* |
+| [ ] | US-091 M-1: F5 on the shop routes (skip `/mesas`, `/barra`, `/catalogo`) |
+| [ ] | US-079 M-1..M-3, US-074: theme, sort icons, smoke of the pages, 320 px |
+| [ ] | US-054, US-081 M-1..M-3: two phones on the shop WiFi charging into the same register (sold in the offer, PO 2026-11-14) |
+| [ ] | US-098 M-1: one sale **after 19:00**, checked again the next morning |
+
+**C3. Printer and scanner**
+
+| Done | Check |
+|---|---|
+| [ ] | US-080 P-2 (USB printer through Windows) or P-1 (network printer), whichever the client has |
+| [ ] | US-080 P-3 and P-4 (`/pos` part): paper width, accents, automatic ticket, *fiado* ticket |
+| [ ] | SPRINT-20 G-1: on the client's own printer and scanner (can be done on go-live day, before opening) |
+
+**C4. Reset before go-live**
+
+| Done | Check |
+|---|---|
+| [ ] | US-093 M-1: reset tool on a **copy** first, then on the real file |
+
+**Only if the shop will use it**
+
+| Done | Check | When |
+|---|---|---|
+| [ ] | US-108 M-1: close email in a real mailbox | If the owner wants the email |
+| [ ] | US-062 M-1..M-9: assistant on a phone | If the assistant is shown in the demo |
+
+**Not part of v1.0 for a shop (do not run now):** US-087 M-1 and US-086 M-1 steps 2–3 (restaurant mode and public catalog), US-043 M-1 step 6 and US-107 M-1 step 4 (tables), US-034 (DIAN sandbox). They stay in `gaps.md` and must not be promised (`features.md` § 8).
+
+## Block D — Release v1.0.0 (Tech Lead, after block C)
+
+| Done | Task | Note |
+|---|---|---|
+| [ ] | Fix what block C found | Each fix goes through the usual pipeline; the PO re-checks only the failed step |
+| [ ] | The dead `Exportar` button on `Clientes`: remove it or build the customer export | R-236; PO picks. Recommendation: build the export, the founder offer and the "your data is yours" promise lean on it |
+| [ ] | Version shown in `Configuración` and at startup | R-235; needs PO approval before it starts |
+| [ ] | `dev` merged to `master`, tag `v1.0.0`, binary built from the tag | `master` is 77 commits behind `dev` (2026-11-14) |
+| [ ] | `features.md` re-verified against the tag | It is the list to sell from |
+
+Limitations that ship in v1.0 and are said in the training, not hidden: the black console window must stay open (D3), only recent sales can be voided (D2), the starter catalog has $1.000 placeholder prices (R-182), a cashier cannot charge the wholesale price (R-215, client #1 does not sell wholesale).
+
+## Block E — Ready to sell
+
+| Done | Task | Who |
+|---|---|---|
+| [ ] | Offer and delivery sheet with the block A values, no `[confirmar]` left; two printed copies | Claude edits, PO prints |
+| [ ] | Sales script read once aloud, including the Respaldo objection | PO |
+| [ ] | Support log and renewal log opened (one spreadsheet, two sheets) | PO; `sales-strategy.md` § 4.2 and § 7 |
+| [ ] | Support WhatsApp line ready (number never written in the repository) | PO |
+| [ ] | Stopwatch and notebook for the pilot measurements | PO; R-175 |
+
+## Block F — Client #1 live
+
+| Done | Task | Source |
+|---|---|---|
+| [ ] | SPRINT-20 G-3: go-live and 45-minute training | `gaps.md` |
+| [ ] | Delivery sheet signed, Respaldo end date written on it | `oferta-y-contrato.md` clause 4 |
+| [ ] | First payment collected | Offer |
+| [ ] | 7 days in a row with the register closed in the system and matching the count | Stage 1 exit gate |
+
+## Block G — In parallel (does not wait for block F)
+
+| Done | Task | Source |
+|---|---|---|
+| [ ] | Two visits to distributors or IVA-responsible shops, pitching the distributor as a channel | R-208, R-227; visit script in `docs/comercial/guion-visita-distribuidor.md` (Spanish product content) |
+| [ ] | Ask every lead whether there is a PC at the counter | R-231 |
+| [ ] | Weekly content running | `content-plan.md` § 8 |
+
+---
+
+## Exit gate
+
+v1.0.0 tagged and installed at client #1; the offer has no open value; the accountant answered the first two questions of block B; the register closed 7 days in a row; the support and renewal logs have their first rows. Then stage 2 (shops 2 to 5) starts, with one variable of `sales-strategy.md` § 13 under test.
