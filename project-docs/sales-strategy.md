@@ -1,7 +1,7 @@
 # Sales strategy — Pos-vertical
 
 > **Type:** current · **Current:** yes · **Rules over:** business model, pricing, cost model, segments, channels and support model
-> **Updated:** 2026-11-14 (§ 4.3 founder offer) · 2026-11-14 (Respaldo: § 4 row, § 4.1 recurring ladder, § 4.2 how it is sold; § 5.6 at 50% renewal; § 13 variables to test) · 2026-11-14 (§ 5.6 income target, § 12 renewal and guarantee rows) · 2026-11-14 (§ 6 content channel starts now, see `content-plan.md`) · 2026-11-13
+> **Updated:** 2026-11-16 (PO SPRINT-21 block A: values confirmed; § 4.4 path to Connected and the payment notifier; § 5.7 honest per-shop arithmetic; § 5.6 dependencies stated; § 7 response time instead of office hours; referral paid in Respaldo months) · 2026-11-14 (§ 4.3 founder offer) · 2026-11-14 (Respaldo: § 4 row, § 4.1 recurring ladder, § 4.2 how it is sold; § 5.6 at 50% renewal; § 13 variables to test) · 2026-11-14 (§ 5.6 income target, § 12 renewal and guarantee rows) · 2026-11-14 (§ 6 content channel starts now, see `content-plan.md`) · 2026-11-13
 
 This document says **how the product makes money and what that costs**. What the product is and promises stays in [spec/product.md](spec/product.md); the work it implies is tracked only in [roadmap.md](roadmap.md) (R-200..R-209 and the launch stages). Customer-facing texts (offer, pitch, contract) are in [`../docs/comercial/`](../docs/comercial/) in Spanish, and they follow this document, not the other way round.
 
@@ -16,7 +16,7 @@ Every number below is an **order of magnitude with an explicit assumption**, not
 | Paying customers | 0. Client #1 (a neighborhood shop) is about to be installed | roadmap, stage 1 |
 | Product | Offline POS, *fiado* (credit extended to customers), register close with count, owner/cashier roles, local backups, catalog import, DIAN e-invoicing built but off | `features.md`; DIAN gate `internal/handler/handler.go:79` |
 | Install cost today | About one working day per shop | PO estimate; stage 2 target is under 30 minutes (R-175) |
-| Commercial offer | Drafted: list $1.000.000, founder $500.000 paid 50/50, 12 months of Respaldo included (was 3 months of support until 2026-11-14), all pending PO confirmation | `docs/comercial/oferta-y-contrato.md`, R-174 |
+| Commercial offer | Confirmed by the PO on 2026-11-16: list $1.000.000, founder $500.000 paid 50/50 with 12 months of Respaldo included; from shop 6, $1.000.000 with 6 months included | `docs/comercial/oferta-y-contrato.md`, R-174 |
 
 The code is ahead of the stage. What raises the value of the business now is **evidence of use and a cheaper install**, not more features.
 
@@ -58,7 +58,7 @@ E-invoicing is **not** a selling point for segment A. A shop run by a natural pe
 
 | Plan | Price | Includes | For |
 |---|---|---|---|
-| **Licence** (one-time) | List $1.000.000; founder $500.000 for the first 5 shops only, then $800.000 | `pos.exe` for one business, install, catalog and *fiado* load, 45-minute training, and the first 12 months of Respaldo | Segment A |
+| **Licence** (one-time) | List $1.000.000; founder $500.000 for the first 5 shops only; from shop 6, $1.000.000 (drop to $800.000 only if the first demos at $1.000.000 do not close, § 13 variable 1) | `pos.exe` for one business, install, catalog and *fiado* load, 45-minute training, and Respaldo included: 12 months for founder shops, 6 months from shop 6 | Segment A |
 | **Respaldo** (annual, optional, from year 2; UI and sales name `Respaldo`) | ~$180.000/year; at the sale, a second year prepaid for $150.000 (licence + 2 years = $1.150.000) | WhatsApp support, updates, and reinstall with data restore when the PC is replaced or breaks | Every licence that does not take Connected |
 | **Connected** (`Plan Conectado`) | $29.900/month or $299.000/year (2 months free) | Off-machine encrypted backup and restore, owner summary on the phone, WhatsApp *fiado* reminders (fair use: 300/month), updates, support | A and B, optional |
 | **Connected + DIAN** | Connected + a DIAN volume tier priced at provider cost × ~1.5 | E-invoices / electronic POS documents within the tier | Segment B |
@@ -92,7 +92,9 @@ Why a renewal and not only the alternatives:
 
 Respaldo is the floor, not the engine: renewal of an optional maintenance plan is planned at **40–60%** (Tech Lead estimate, no data yet; § 5.6 uses 50%). Connected is the upgrade: the gap between the two levels is about $10.000 a month, which is the upsell line once Connected exists.
 
-Twelve months included instead of three raises the support cost of a licence from 2 hours to about 3 (12 × 15 min, § 5.2), about $50.000 less margin per sale than § 5.4 shows. It is accepted because the renewal date then arrives after a full year of use.
+Twelve months included instead of three raises the support cost of a licence from 2 hours to about 3 (12 × 15 min, § 5.2), about $50.000 less margin per sale than § 5.4 shows. It is accepted for the 5 founder shops only. **From shop 6 the licence includes 6 months** (PO 2026-11-16): the first renewal comes at month 7 instead of month 13, and about 1.5 hours of free support per shop are saved. Risk: a shop with 6 months of use may renew less than one with 12; the renewal log decides (§ 13 variable 3).
+
+**Respaldo is the bridge, not the profit** (PO 2026-11-16). At ~$15.000 a month per shop for about 15 minutes of support a month, it pays the founder's hour at about $60.000 (§ 5.7): a floor that keeps the relationship and the channel to offer Connected. The money is made in Connected (§ 4.4); Respaldo income is not what the plan relies on.
 
 ### 4.2 How Respaldo is sold
 
@@ -116,10 +118,50 @@ Customer text: `../docs/comercial/oferta-y-contrato.md` § "Oferta Tienda Fundad
 | Price | $500.000, 5 numbered slots, 50% at install and 50% at day 30 | Already drafted; the list price stays visible as the anchor |
 | 30-day trial | The shop may walk away in the first 30 days: no second payment, first payment returned, program removed, the receivables list handed over on paper (there is no customer export yet, R-236) | The shop's fear is paying for something it will not use. Simpler to explain and to verify than the 60-day *fiado* guarantee of R-229, which stays as the alternative (§ 13, variable 7) |
 | Respaldo at founder price | $150.000 a year instead of ~$180.000 while renewed without a gap | A reason to renew that costs little |
-| Referral | $50.000 per shop that buys on the founder's recommendation | Acquisition cost far below a founder visit day |
+| Referral | 3 extra months of Respaldo per shop that buys on the founder shop's recommendation (PO 2026-11-16; was $50.000 in cash) | No cash out: costs about 45 minutes of support, worth ~$45.000 to the shop. When Connected exists it becomes 3 months of Connected |
 | Asked in return | Daily register close in the system for the first month, a short weekly talk, permission to tell the case and film the shop, two introductions if satisfied | The evidence § 1 says the business lacks; filming permission unblocks the founder-diary series of `content-plan.md` § 4 |
 
 Cost, stated plainly: at today's one-day install the founder price already loses about $60.000 per shop (§ 5.4), about $110.000 with 12 months of Respaldo; a shop that walks away costs the install day and the visit. With 5 slots the worst case is bounded, and it is the price of the first proof. The offer is **not** extended past 5 shops.
+
+### 4.4 Path to Connected and the payment notifier (PO 2026-11-16)
+
+Insurance is renewed only when something broke; what is paid every month without argument is what the owner sees working every day. So the plan earns in Connected, and everything before it is designed to make a shop want it.
+
+**What pulls a shop to Connected**, strongest first (Tech Lead ranking, to validate with the founder shops):
+
+| # | Service | Why it sells | Needs |
+|---|---|---|---|
+| 1 | **Payment notifier** (`Avisador de pagos`): the POS confirms that a transfer really arrived | Fake Nequi receipts are a known fraud against shops (sources below). One fake transfer of $80.000 pays almost three months of the plan | R-237 |
+| 2 | WhatsApp *fiado* reminders | They collect on their own; the plan pays for itself with what is recovered | R-201, WhatsApp Business API |
+| 3 | Close summary on the owner's phone | The owner sees the shop from home | R-201 (the close email of US-108 already covers part of it, offline) |
+| 4 | Off-machine encrypted backup | A dead disk loses nothing | R-201 |
+| 5 | DIAN e-invoicing tier, segment B only | Obliged shops have no choice | R-201, R-203 |
+
+**The payment notifier, as the PO proposed it: read the owner's email.** Verified on 2026-11-16 (web sources below, not tested with a real account):
+
+- Bancolombia sends an email per account movement once `Alertas y Notificaciones` is enabled. Nequi notifies most movements in its app, not by email; it does email payments and transfers received through a Bre-B key. So the shop should be paid to a Bre-B key, which is also the advice of the competitors.
+- `pos.exe` already holds a Gmail address and an app password for the close email (`internal/mailer/mailer.go:94-100`). Reading the bank notices over IMAP with an app password of the same kind needs **no server and no Google app review**: it runs on the shop's PC, only while there is internet, and never stops a sale when there is none. This is what makes it sellable before R-201.
+- Risks to design for: an app password opens the whole mailbox (filter by bank sender locally, store nothing else); a fake email from a look-alike domain (trust only messages whose `Authentication-Results` show DKIM pass for the bank's domain); the banks change their email format (parsers need upkeep, which is exactly what a recurring plan pays for); Nequi direct-to-phone payments produce no email.
+
+**It already exists in the market**, so it is a race on price and on fit with the counter, not an invention:
+
+| Product | How | Price |
+|---|---|---|
+| Bre-Check | Connects to the owner's Gmail with a key the owner creates; the cashier sends the receipt photo by WhatsApp and gets real, already used or fake | 10 free, then prepaid packs: $15.000 for 50 ($300 each) down to $300.000 for 3.000 ($100 each) |
+| GridPOS | The owner forwards bank notices to a GridPOS address, or registers a phone for SMS; incoming payments appear under `Ingresos` with a `Confirmar` button and an optional voice alert | Not published |
+| Alegra POS | Reported to confirm Wompi and Nequi payments by reading Gmail with the owner's consent (search result only; the official page could not be read) | Not checked |
+
+Our edge: it runs inside the POS at the moment of the sale (the cashier marks `Transferencia` and the screen shows whether the money arrived), it is offline-first, and it is part of a plan instead of a per-payment charge.
+
+**Where it goes in the ladder** (Tech Lead proposal, PO decides after the founder shops answer the questions below): because it needs no server, the notifier can be the first paid service sold before Connected exists, as a Respaldo upgrade or as the first piece of Connected at a lower entry price. Either way it changes Respaldo from insurance into something seen every day, which is the only way the renewal rate goes above the 40–60% guess of § 4.1.
+
+**Three mechanisms that push the upgrade, none of them blocking:**
+
+1. **Prompts at the moment of pain** (R-238): on a `Transferencia` sale, *"Verificar esta transferencia — Plan Conectado"*; on the close, the transfers still unconfirmed; on the backup warning, the off-machine copy. One line, dismissible, never a modal that blocks a sale.
+2. **Trial included with the licence**: the first 60 days of Connected free once it exists. A service already used hurts to lose.
+3. **Waitlist from today** (R-239): every founder shop is asked how many transfers it receives a day, whether it has received a fake one, whether it would pay $29.900 a month for the notifier, and whether it must e-invoice. The answers go to the lead log and decide the build order.
+
+**Arithmetic that replaces the 200-shop scenario as the near target:** 70 shops on Connected (70 × $25.200 − $400.000 fixed ≈ $1.360.000) plus 2 direct licences a month at $1.000.000 (2 × ~$940.000 ≈ $1.880.000) ≈ **$3.240.000 a month**. Connected is not built yet; until it is, the licences are the only income (§ 5.7).
 
 Open: what happens to a rent-to-own shop that stops paying before month 24. The licence is not owned yet, but rule 1 says data is never locked. Recommendation: selling keeps working for 30 days with a banner, then the app opens read-only with export always available.
 
@@ -219,6 +261,21 @@ Target: **$3.000.000–5.000.000 a month** to the founder. One scenario that rea
 
 Without the hire the same base gives ~$4.500.000 for about 35 founder hours a month, which is a part-time job, not passive income. The low end of the target needs about **200 installed shops and a channel that sells about 4 licences a month**; it does not need a second product. The levers toward the high end are the Connected attach rate (each 10 points on 200 shops ≈ +$370.000 a month net of the Respaldo it replaces), the Respaldo renewal rate (each 10 points ≈ +$165.000) and second years prepaid at the sale. Per-case support income from shops with no plan is not counted.
 
+**What this scenario depends on that does not exist yet** (PO review 2026-11-16): about $2.000.000 comes from Connected, which is not built (R-201); about $2.000.000 comes from partners selling 4 licences a month, and there is no partner; and it starts from 200 installed shops, when there are 0. Respaldo pays nothing in the first year, because the included months come first. Read it as a direction, not a forecast; the nearer target is in § 4.4, and 2027 income is in § 5.7.
+
+### 5.7 Honest per-shop arithmetic (PO review 2026-11-16)
+
+Cash is what the shop pays minus ~$60.000 of transport; hours are the founder's. Selling time (visits until a close) is **not** counted: it is unknown and probably the largest cost.
+
+| | Cash | Founder hours | Pays the hour at |
+|---|---|---|---|
+| Founder licence $500.000, 8-hour install as today | ~$440.000 | ~11 (8 install + 3 support in the year) | ~$40.000 |
+| Licence $800.000, 1.75-hour install | ~$740.000 | ~5 | ~$150.000 |
+| Licence $1.000.000, 1.75-hour install | ~$940.000 | ~5 | ~$190.000 |
+| Respaldo renewal ($180.000 a year) | $180.000 | ~3 | ~$60.000 |
+
+In 2027 the only income is licences: 2 direct sales a month at $800.000 ≈ $1.500.000; 4 ≈ $3.000.000; 6 ≈ $4.400.000. The two levers are an install under 2 hours (R-175, R-219) and the number of visits per close, which only selling will show. The 5 founder shops (~$2.200.000 for ~55 hours) are paid badly on purpose: they buy references and that number.
+
 ## 6. Channels
 
 | Channel | How | Cost | When |
@@ -233,7 +290,9 @@ The first sale a channel brings without the founder in the room is the signal th
 
 ## 7. Support model
 
-- Hours: Monday to Saturday, 8:00–18:00, by WhatsApp (offer draft).
+- **Response time, not office hours** (PO 2026-11-16): WhatsApp answered Monday to Saturday, within one business day and usually the same day, in two fixed blocks (for example 12:00 and 17:00). A shop that cannot sell is answered as soon as the message is seen during the day. A window like "8:00–18:00" reads as being on call, which one founder cannot keep.
+- At install the backup folder goes to a USB stick that stays in the shop, never `D:`: on most PCs `D:` is the same physical disk as `C:`, and the "reinstall with your data" promise fails exactly when the disk dies (`spec/domain/backup.md`; restore is manual, `backup.md:67`).
+- Updates are delivered by a remote session (AnyDesk or similar) replacing `pos.exe` until R-226 exists; each one is a row in the support log.
 - Order: manual and videos first, then WhatsApp, then a remote session, then a visit (paid outside the included period).
 - After the 12 months included, support belongs to Respaldo or Connected (§ 4.1); a shop with no plan pays per case.
 - **Log every contact**: date, customer, minutes, cause. It is the input to section 5.2 and the cheapest data we can collect. A paper notebook or a spreadsheet is enough.
@@ -281,12 +340,13 @@ The same effort can produce other income without touching this roadmap:
 | Decision | Recommendation |
 |---|---|
 | Connected price | $29.900/month, $299.000/year |
-| Licence price | Keep list $1.000.000; founder $500.000 for the first 5 shops only, then $800.000 |
+| Licence price | **Decided 2026-11-16:** list $1.000.000; founder $500.000 for the first 5 shops only; from shop 6, $1.000.000, down to $800.000 only if demos do not close |
 | Rent-to-own | Offer it to 2–3 pilot shops before publishing it; default policy as in section 4 |
 | Partner commission | 30% of the licence, 15% of Connected in year 1 |
 | When to formalize (RUT, regime, invoicing) | Before the first Connected charge or the first company customer, whichever comes first |
 | Free tier | Only after a stranger installs the product alone (R-202, R-207) |
-| Respaldo (R-225, § 4.1) | Name `Respaldo`; ~$180.000 a year after the 12 months included; second year at the sale for $150.000; ~$80.000 per case without a plan; never blocks the product |
+| Respaldo (R-225, § 4.1) | **Decided 2026-11-16:** name `Respaldo`; $180.000 a year after the months included (12 for founders, 6 from shop 6); second year at the sale for $150.000; $80.000 per case without a plan; never blocks the product; support by response time (§ 7) |
+| Where the payment notifier sits (R-237, § 4.4) | Decide after the founder shops answer the R-239 questions: Respaldo upgrade or first piece of Connected |
 | Result guarantee (R-229) | 60 days, tied to *fiado* collected and to the register being closed in the system |
 
 ## 13. Strategies and variables to test (PO 2026-11-14)
@@ -295,9 +355,9 @@ Nothing in sections 3, 4 and 6 is proven: there are 0 paying customers. The PO a
 
 | # | Variable | Start with | Alternatives to try | Signal that decides |
 |---|---|---|---|---|
-| 1 | Licence price | Founder $500.000 (first 5), then $800.000, list $1.000.000 | Hold $1.000.000 from shop 6; a lower entry ($300.000–400.000) with Respaldo charged from month 4 | Price objections in the lead log; closes per demo |
+| 1 | Licence price | Founder $500.000 (first 5), then $1.000.000 (PO 2026-11-16) | $800.000 if demos at $1.000.000 do not close; a lower entry ($300.000–400.000) with Respaldo charged from month 4 | Price objections in the lead log; closes per demo |
 | 2 | Payment form | 50% at install, 50% at 30 days | Rent-to-own $39.900 × 24; three instalments; cash discount | Share of demos lost to "no tengo la plata ahora" |
-| 3 | Support included in the licence | 12 months of Respaldo | 3 or 6 months, so the renewal comes sooner | Support minutes per shop after month 3 (§ 7 log) |
+| 3 | Support included in the licence | 12 months of Respaldo for founders; 6 months from shop 6 (PO 2026-11-16) | 3 months; back to 12 if 6-month shops do not renew | Support minutes per shop after month 3 (§ 7 log) |
 | 4 | Respaldo price | ~$180.000/year | $150.000 or $240.000; monthly $15.000–19.900 by Nequi | Renewal rate and the "reason if no" column (§ 4.2) |
 | 5 | Second year at the sale | Offered at $150.000 | Not offered; offered at $120.000 | Share of buyers who take it |
 | 6 | Price per case without a plan | ~$80.000 | $50.000 remote and $120.000 on site | Whether it pushes renewals or produces complaints |
@@ -325,6 +385,7 @@ Rules for testing with very few customers:
 - Obligation to invoice: [Actualícese, no responsables de IVA and POS tickets](https://actualicese.com/obligacion-de-no-responsables-del-iva-de-convertir-tiquetes-pos-a-factura-electronica/); [La República, tiendas de barrio](https://www.larepublica.co/especiales/facturacion-electronica-2024/todas-las-tiendas-de-barrio-estan-obligadas-a-cumplir-con-la-facturacion-electronica-3941175); [Accounter, Resolución 165 de 2023](https://accounter.co/noticias/actualidad/la-republica-el-documento-equivalente-electronico); [Alegra, SIMPLE regime](https://blog.alegra.com/colombia/como-deben-facturar-las-pymes-en-colombia/); [Decreto 358 de 2020](https://normograma.icfes.gov.co/docs/pdf/decreto_0358_2020.pdf).
 - DIAN provider prices: [Matias API](https://matias-api.com/); [Facturo](https://facturo.com.co/planes-y-precios/).
 - VPS: [Hetzner price adjustment](https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/); [Better Stack, Hetzner review 2026](https://betterstack.com/community/guides/web-servers/hetzner-cloud-review/).
+- Payment notifier (§ 4.4, checked 2026-11-16): [Bre-Check](https://bre-check.com/); [GridPOS, payment verifier](https://www.gridpos.co/novedades/verificador-pagos-bre-b); [Moncua, which banks email each movement](https://moncua.com/blog/registrar-gastos-bancolombia-automaticamente); [Bancolombia, alerts and notifications](https://bancolombia.com/centro-de-ayuda/canales/sucursal-telefonica); [El Tiempo, Nequi Glitch fake receipts](https://www.eltiempo.com/economia/finanzas-personales/nequi-glitch-la-app-con-la-que-tumban-a-comercios-y-tiendas-con-comprobantes-falsos-823979); [Noticias RCN, fake payments against shops](https://www.noticiasrcn.com/economia/nequi-estafas-pagos-falsos-recomendaciones-993195); [Alegra POS](https://www.alegra.com/colombia/pos/).
 - WhatsApp: [Meta, WhatsApp Business Platform pricing](https://developers.facebook.com/docs/whatsapp/pricing).
 - Payments: [Cambio, Wompi QR rate](https://cambiocolombia.com/peso-a-peso-paso-a-paso/articulo/2026/9/wompi-amplia-los-pagos-sin-contacto-y-baja-al-uno-por-ciento-la-tarifa-de-los-pagos-con-qr); [Bancolombia, Wompi datáfono](https://www.bancolombia.com/negocios/productos/recaudos/datafono).
 - Market figures (Confecámaras, Fenalco, NielsenIQ, Fenaltiendas) and competitor prices come from the PO's valuation notes of 2026-11-13 and comparison blogs; they are unverified until R-209.

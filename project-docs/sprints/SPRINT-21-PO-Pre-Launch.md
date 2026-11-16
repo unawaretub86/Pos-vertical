@@ -15,16 +15,16 @@ Mark `[x]` when done. When a manual check passes, remove its row from `gaps.md`.
 
 | Done | Decision | Recommendation | Source |
 |---|---|---|---|
-| [ ] | Commercial name | Pick one and run the three checks (handles, `.co` domain, SIC classes 9 and 42) | R-233, `content-plan.md` § 3.1 |
-| [ ] | Licence price and payment form | Founder $500.000 for the first 5 shops, paid 50/50; then $800.000; list $1.000.000 | `sales-strategy.md` § 4, `docs/comercial/oferta-y-contrato.md` |
-| [ ] | `Respaldo`: name, 12 months included, ~$180.000 a year after | As written | R-225, `sales-strategy.md` § 4.1 |
-| [ ] | Second year of Respaldo at the sale | $150.000 (licence + 2 years = $1.150.000) | same |
-| [ ] | Price per support case without a plan | ~$80.000 | same |
-| [ ] | Support hours | Monday to Saturday, 8:00–18:00, WhatsApp | `sales-strategy.md` § 7 |
-| [ ] | Founder offer for the first 5 shops | 30-day trial with refund, Respaldo at $150.000 a year, $50.000 per referral, and what is asked in return | `sales-strategy.md` § 4.3, `oferta-y-contrato.md` § "Oferta Tienda Fundadora" |
+| [ ] | Commercial name | **PO 2026-11-15: Cuadra POS.** Still to run the three checks (handles, `.co` domain, SIC classes 9 and 42) | R-233, `content-plan.md` § 3.1 |
+| [x] | Licence price and payment form | **PO 2026-11-16:** founder $500.000 for the first 5 shops, paid 50/50; from shop 6, $1.000.000 (down to $800.000 only if demos do not close); list $1.000.000 | `sales-strategy.md` § 4, `docs/comercial/oferta-y-contrato.md` |
+| [x] | `Respaldo`: name, months included, price after | **PO 2026-11-16:** `Respaldo`, $180.000 a year; 12 months included for founder shops, 6 months from shop 6. It is the bridge to Connected, not the profit (`sales-strategy.md` § 4.4, § 5.7) | R-225, `sales-strategy.md` § 4.1 |
+| [x] | Second year of Respaldo at the sale | **PO 2026-11-16:** $150.000 (licence + 2 years = $1.150.000) | same |
+| [x] | Price per support case without a plan | **PO 2026-11-16:** $80.000 | same |
+| [x] | Support hours | **PO 2026-11-16: a response time, not office hours.** WhatsApp Monday to Saturday, answered within one business day (usually the same day) in two fixed blocks; a shop that cannot sell is answered as soon as seen | `sales-strategy.md` § 7 |
+| [x] | Founder offer for the first 5 shops | **PO 2026-11-16:** 30-day trial with refund, Respaldo at $150.000 a year, **3 extra months of Respaldo per referral (no cash)**, and what is asked in return | `sales-strategy.md` § 4.3, `oferta-y-contrato.md` § "Oferta Tienda Fundadora" |
 | [x] | Phones on the shop WiFi in v1.0 | **PO 2026-11-14: it stays in the offer; checked in block C** (US-081 M-1..M-3, US-054). If it fails there, the sentence leaves the offer until fixed | `gaps.md` US-081, `oferta-y-contrato.md:17` |
-| [ ] | Go-live decisions D2..D5 | As recommended in the roadmap (train, do not build) | `roadmap.md` § Decide before go-live |
-| [ ] | First variable to test with shops 2–5 | The founder offer itself runs for all 5; the first thing to vary after them is the guarantee (variable 7) or the payment form (variable 2) | `sales-strategy.md` § 13 |
+| [x] | Go-live decisions D2..D5 | **PO 2026-11-16:** as recommended in the roadmap (train, do not build) | `roadmap.md` § Decide before go-live |
+| [x] | First variable to test after the founder shops | **PO 2026-11-16:** the guarantee (variable 7); the founder offer runs unchanged for all 5 | `sales-strategy.md` § 13 |
 
 ## Block B — One accountant consult
 
@@ -109,11 +109,13 @@ Limitations that ship in v1.0 and are said in the training, not hidden: the blac
 
 | Done | Task | Who |
 |---|---|---|
-| [ ] | Offer and delivery sheet with the block A values, no `[confirmar]` left; two printed copies | Claude edits, PO prints |
+| [ ] | Offer and delivery sheet with the block A values, no `[confirmar]` left; two printed copies | Claude edited 2026-11-16 (`oferta-y-contrato.md`, `guion-de-venta.md`); PO reads and prints |
 | [ ] | Sales script read once aloud, including the Respaldo objection | PO |
 | [ ] | Support log and renewal log opened (one spreadsheet, two sheets) | PO; `sales-strategy.md` § 4.2 and § 7 |
 | [ ] | Support WhatsApp line ready (number never written in the repository) | PO |
 | [ ] | Stopwatch and notebook for the pilot measurements | PO; R-175 |
+| [ ] | The four waitlist questions in the lead log, asked to every founder shop (transfers a day, fake transfers received, would pay $29.900 for the payment notifier, must e-invoice) | PO; R-239 |
+| [ ] | A USB stick for each install: the backup folder points to it, never `D:` | PO; `sales-strategy.md` § 7 |
 
 ## Block F — Client #1 live
 
