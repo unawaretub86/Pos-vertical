@@ -1,7 +1,7 @@
 # Feature inventory — Pos-vertical
 
 > **Type:** current · **Rules over:** what the product does today, who sees it, and what not to promise
-> **Updated:** 2026-11-14 (US-105: cashier *abono* from `Punto de Venta › Abonar`, receivables API and Customers screens admin-only; roles note and customer route ref) · 2026-11-13 (US-104: register close row; the shortage limitation row removed) · 2026-11-13 · Verified against `dev` at `ba4ae01` (routes in `internal/handler/handler.go:124-306`, sidebar in `frontend/components/Sidebar.tsx`, rules in `spec/`).
+> **Updated:** 2026-11-17 (R-236: customer CSV export row) · 2026-11-14 (US-105: cashier *abono* from `Punto de Venta › Abonar`, receivables API and Customers screens admin-only; roles note and customer route ref) · 2026-11-13 (US-104: register close row; the shortage limitation row removed) · 2026-11-13 · Verified against `dev` at `ba4ae01` (routes in `internal/handler/handler.go:124-306`, sidebar in `frontend/components/Sidebar.tsx`, rules in `spec/`).
 
 This is the list to sell from. Each row says what exists, who can use it and where the rule lives. The rules themselves stay in `spec/`; this file only points at them. When a US adds or removes a feature, update the row in the same commit (CLAUDE.md Rule 2).
 
@@ -40,6 +40,7 @@ This is the list to sell from. Each row says what exists, who can use it and whe
 | *Abonos* (payments toward the balance) with method `Efectivo` / `Transferencia` / `Tarjeta`, quick amounts (`Total`, `Mitad`, $50.000, $20.000), preview of the new balance | Live | both: the cashier from `Punto de Venta › Abonar` while a register is open (one customer's balance only, US-105); the admin also from `Clientes`, the detail and the dashboard | `fiado.md` § Payments |
 | *Deuda anterior*: the debt carried over from the paper notebook, with its date, so day one starts with real balances | Live | admin | `fiado.md` § Opening balance |
 | Debt age chips on the customer list: `Hasta 14 días`, `15–30 días`, `Más de 30 días`, with totals | Live | admin | `fiado.md` § Debt age |
+| `Exportar` on `Clientes`: a CSV of every active customer (name, phone, credit limit, balance, oldest-debt date) that Spanish Excel opens in columns, so the owner's data always leaves with him | Live (Excel check pending, `gaps.md` R-236 M-1) | admin | `fiado.md` § Customer export |
 | `Cartera` (receivables) page: who owes, how much, ordered by amount | Live | admin | `/portfolio` |
 | WhatsApp collection reminder: opens the shop's own WhatsApp with the message ready; nothing is sent automatically and there is no cost | Live | admin | `fiado.md` § Collection WhatsApp message |
 | *Saldo a favor* (credit balance, after voiding a paid credit sale or correcting a *deuda anterior* down; an *abono* can never exceed the debt) shown in green | Live | admin | `fiado.md` § Customer balance |

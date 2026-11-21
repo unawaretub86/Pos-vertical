@@ -19,6 +19,7 @@ import { getUser } from '@/lib/auth';
 import { canSeeCustomers } from '@/lib/customerAccess';
 import { parseAmountInput, isValidDebtDate, todayISODate, MAX_OPENING_BALANCE } from '@/lib/openingBalance';
 import { daysOverdue, bucketTotals, filterByBucket, toggleBucket, bucketLabel, AGING_BUCKETS, type AgingBucket } from '@/lib/aging';
+import { runCustomerExport, type CustomerExportResponse } from '@/lib/customerExport';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,17 @@ function agingBg(days: number): string {
   if (days > 14) return 'rgba(239,68,68,0.1)';
   if (days >= 7) return 'rgba(202,138,4,0.1)';
   return 'var(--surface-3)';
+}
+
+// Saves the export CSV through a Blob link, as Reportes does.
+function downloadCSV(fileName: string, csv: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -365,6 +377,7 @@ export default function CustomersPage() {
   const [confirmTarget, setConfirmTarget] = useState<CustomerWithBalance | null>(null);
   const [abonoTarget, setAbonoTarget] = useState<CustomerWithBalance | null>(null);
   const [activeBucket, setActiveBucket] = useState<AgingBucket | null>(null);
+  const [exporting, setExporting] = useState(false);
   // Clock used for debt age (chips and row badge), taken at each fetch so both agree.
   const [now, setNow] = useState(() => Date.now());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -431,6 +444,18 @@ export default function CustomersPage() {
 
   const maxBalance = Math.max(...customers.map(c => c.balance), 1);
 
+  // Exports every active customer, whatever search or chip is on screen (R-236).
+  async function handleExport() {
+    const result = await runCustomerExport({
+      get: (path) => api.get<CustomerExportResponse>(path),
+      download: downloadCSV,
+      now: new Date(),
+      setBusy: setExporting,
+    });
+    if (result === 'empty') toast('No hay clientes para exportar', 'info');
+    else if (result === 'error') toast('No se pudo exportar los clientes', 'error');
+  }
+
   async function handleDelete(c: CustomerWithBalance) {
     if (c.balance > 0) {
       toast('No se puede eliminar un cliente con saldo pendiente', 'error');
@@ -462,7 +487,7 @@ export default function CustomersPage() {
           subtitle={loading ? 'Cargando...' : `${formatCOP(totalPortfolio)} por cobrar en total`}
           actions={
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-sm">Exportar</button>
+              <button className="btn btn-sm" onClick={handleExport} disabled={exporting}>Exportar</button>
               <button className="btn btn-sm btn-accent" onClick={() => { setEditing(null); setShowModal(true); }}>
                 <IconPlus /> Nuevo cliente
               </button>

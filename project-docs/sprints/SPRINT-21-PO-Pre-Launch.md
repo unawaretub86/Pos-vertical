@@ -98,10 +98,32 @@ Build the real binary first (`make build`). Each row is a check in `gaps.md` wit
 | Done | Task | Note |
 |---|---|---|
 | [ ] | Fix what block C found | Each fix goes through the usual pipeline; the PO re-checks only the failed step |
-| [ ] | The dead `Exportar` button on `Clientes`: remove it or build the customer export | R-236; PO picks. Recommendation: build the export, the founder offer and the "your data is yours" promise lean on it |
+| [x] | The dead `Exportar` button on `Clientes`: remove it or build the customer export | R-236; **PO 2026-11-17: build the export** (admin-only customer CSV). Done 2026-11-17: [R-236 below](#r-236--customer-export-from-clientes) |
 | [ ] | Version shown in `Configuración` and at startup | R-235; needs PO approval before it starts |
 | [ ] | `dev` merged to `master`, tag `v1.0.0`, binary built from the tag | `master` is 77 commits behind `dev` (2026-11-14) |
 | [ ] | `features.md` re-verified against the tag | It is the list to sell from |
+
+### R-236 — Customer export from `Clientes`
+
+- [x] **R-236** (2026-11-17) `Exportar` on `Clientes · Cartera` downloads a CSV of every active customer (name, phone, credit limit, balance, oldest-debt date), admin only, in a layout that Spanish (Colombia) Excel opens in columns and that R-219 can read back. Built through the `/us` pipeline; GATE 1 PO 2026-11-17 (Q-1..Q-4 as recommended); QA round 1 OK (0 BLOCKER, 4 MINOR). Browser-built, no backend change. Spec: `spec/domain/fiado.md` § Customer export. Manual check: `gaps.md` R-236 M-1.
+
+**Verified criteria** (tests in `frontend/lib/customerExport.test.ts` unless stated)
+
+| AC | Criterion (EARS) | Test |
+|---|---|---|
+| AC-1 | WHEN the export file is built, the system SHALL write UTF-8 with a leading BOM, `;` as the delimiter, CRLF between lines and no line break after the last line, and the header `Nombre;Teléfono;Tope de crédito;Saldo;Deuda más antigua`. | T-1 `buildCustomersCSV header (AC-1)` › "an empty list gives exactly the BOM and the header, with no trailing CRLF" |
+| AC-2 | WHEN the export file is built, the system SHALL write one row per customer received and no total or summary row. | T-2 `buildCustomersCSV rows` › "writes the header and one line per customer…", "has no TOTAL row and no trailing CRLF" |
+| AC-3 | WHEN a money column is written, the system SHALL write whole pesos as plain digits (no `$`, no separators, `Math.round`), `-` for a negative balance, and an empty cell for a `null` credit limit. | T-2; T-3 `buildCustomersCSV money rounding (AC-3)` › "rounds balances with Math.round and writes plain digits" (15000.4 and 14999.6 → `15000`) |
+| AC-4 | WHEN a customer's balance is greater than 0, the system SHALL write `Deuda más antigua` as `dd/mm/yyyy`, the day of `oldest_debt_at` in `America/Bogota`. | T-2 › "writes the oldest debt as the Bogota day, not the UTC day" (`2026-11-18T02:30:00Z` → `17/11/2026`) |
+| AC-5 | IF a customer's balance is 0 or negative, or `oldest_debt_at` is null, THEN the system SHALL leave `Deuda más antigua` empty. | T-2 (`Fer;;0;0;`, `Gus;;;-20000;`) |
+| AC-6 | IF `Nombre` or `Teléfono` contains `;`, `"`, CR or LF, THEN the system SHALL quote it RFC 4180 style, doubling inner `"`; other values unquoted. | T-4 `buildCustomersCSV text quoting (AC-6)` › "quotes and doubles inner double quotes", "quotes a name with a line feed", "writes a plain name unquoted"; T-2 (`"Álvaro; ""el Mono"""`) |
+| AC-7 | WHEN the export file is built, the system SHALL order rows by name with `localeCompare`. | T-2 (input Gus, Ana, Beto, Fer, Álvaro → Álvaro, Ana, Beto, Fer, Gus) |
+| AC-8 | WHEN the admin clicks `Exportar`, the system SHALL request `GET /customers` with no `q` and no `has_balance`. | T-6 `runCustomerExport success (AC-8, AC-9)` › "requests /customers with no query and downloads the file"; manual R-236 M-1 step 1 |
+| AC-9 | WHEN that request answers with one or more customers, the system SHALL download `clientes-YYYY-MM-DD.csv` with today's date in `America/Bogota`. | T-5 `customersExportFileName (AC-9)` › "uses the Bogota date at 21:30 Bogota (already 18/11 in UTC)", "uses the Bogota date at 10:00 Bogota"; T-6 |
+| AC-10 | IF that request answers with no customers, THEN the system SHALL download nothing and show `No hay clientes para exportar`. | T-7 `runCustomerExport empty (AC-10)` › "null customers downloads nothing and returns empty", "an empty list downloads nothing and returns empty"; manual M-1 step 4 |
+| AC-11 | IF that request fails, THEN the system SHALL download nothing and show `No se pudo exportar los clientes`. | T-8 `runCustomerExport failure (AC-11)` › "a rejected request resolves to error, never rejects, and downloads nothing"; manual M-1 step 5 |
+| AC-12 | WHILE an export request is in flight, the system SHALL keep `Exportar` disabled, and SHALL enable it again when the request finishes, whether it succeeded, found no customers or failed. | T-10 `runCustomerExport busy state (AC-12)` › "sets busy true before get and false after get settles" (ok, empty, error); manual M-1 step 3 |
+| AC-13 | WHILE the user is a cashier, the system SHALL keep the export unreachable (redirect to `/pos`, no request) and the backend is not changed. | T-9 = `frontend/lib/customerAccess.test.ts` › `T-8 canSeeCustomers` (US-105, unchanged); `git diff dev...HEAD` touches no Go file |
 
 Limitations that ship in v1.0 and are said in the training, not hidden: the black console window must stay open (D3), only recent sales can be voided (D2), the starter catalog has $1.000 placeholder prices (R-182), a cashier cannot charge the wholesale price (R-215, client #1 does not sell wholesale).
 

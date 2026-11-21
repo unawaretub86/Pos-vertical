@@ -1,7 +1,7 @@
 # Content plan — organic social media
 
 > **Type:** current · **Current:** yes · **Rules over:** what we publish on social media, how it is produced, what it may promise, and how a viewer becomes a lead
-> **Updated:** 2026-11-15 (§ 4.1 hooks bank, § 8.1 calendar and § 8.2 metrics review drafted, pending PO review) · 2026-11-14 (§ 3.1 commercial name proposed: Caja Clara, pending checks) · 2026-11-14 (brainstorm with the PO: sections 1–8 approved; hooks bank, 8-week calendar and metrics review still to design, § 9)
+> **Updated:** 2026-11-17 (§ 7.3 `Clientes` columns frozen to the POS customer export, R-236) · 2026-11-15 (§ 4.1 hooks bank, § 8.1 calendar and § 8.2 metrics review drafted, pending PO review) · 2026-11-14 (§ 3.1 commercial name proposed: Caja Clara, pending checks) · 2026-11-14 (brainstorm with the PO: sections 1–8 approved; hooks bank, 8-week calendar and metrics review still to design, § 9)
 
 Channel decisions (which channels exist, their cost and timing) stay in [sales-strategy.md](sales-strategy.md) § 6; this document is the playbook for the "Content and free tools" channel. What the product does and may be promised is in [features.md](features.md) and [spec/product.md](spec/product.md); this plan follows them, never the other way round. Work it creates for the product goes to [roadmap.md](roadmap.md) (R-219).
 
@@ -225,11 +225,11 @@ It is a real tool, not a crippled one: a template that is visibly broken to forc
 | Sheet | Content |
 |---|---|
 | `Movimientos` | Date · customer (drop-down) · Fiado/Abono · amount · note |
-| `Clientes` | Name · phone · credit limit · balance (formula) · days since the oldest debt · color 0–14 green, 15–30 yellow, > 30 red (same buckets as `fiado.md:66`) · "Cobrar por WhatsApp" link (`wa.me` formula with the message written) |
+| `Clientes` | First five columns, frozen (PO 2026-11-17, R-236) with the same header as the POS customer export (`spec/domain/fiado.md` § Customer export): `Nombre` · `Teléfono` · `Tope de crédito` · `Saldo` (formula) · `Deuda más antigua` (`dd/mm/yyyy`). Then, computed from them: days since the oldest debt · color 0–14 green, 15–30 yellow, > 30 red (same buckets as `fiado.md:66`) · "Cobrar por WhatsApp" link (`wa.me` formula with the message written) |
 | `Resumen` | Total money "en la calle" · how much is older than 30 days · top 5 debtors |
 | `Cómo usarla` | One page, plus a 60-second video that is also a content piece |
 
-The bridge to the product is honest: in Excel everything is written twice (sell, then note it down); in the POS the *fiado* is recorded at the sale, balances with the register, and the cashier does not see the money. The `Clientes` columns are frozen before R-219 (CSV import of customers and their *deuda anterior*, debt carried over from the paper notebook) is planned, so *"su Excel pasa al sistema en un minuto"* becomes true.
+The bridge to the product is honest: in Excel everything is written twice (sell, then note it down); in the POS the *fiado* is recorded at the sale, balances with the register, and the cashier does not see the money. The `Clientes` columns are frozen (R-236) so that R-219 (CSV import of customers and their *deuda anterior*, debt carried over from the paper notebook) reads the same layout the POS exports, and *"su Excel pasa al sistema en un minuto"* becomes true.
 
 ### 7.4 Lead log
 

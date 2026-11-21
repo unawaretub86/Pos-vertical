@@ -90,6 +90,7 @@ Each `/us` run adds a row to the runs table and a detail section. The orchestrat
 | 39 | 2026-11-14 | US-106 (R-189: per-line discounts audited) | L | ~345k (A 156.1k over 3 invocations · T 73.6k · I 46.5k · Q 68.4k) | 144 (A 73 · T 22 · I 24 · Q 25) | ~53 (A ~39 · T ~5 · I ~4.1 · Q ~5.1) | 0 | 1 | 5 contract discrepancies (D-1..D-5, D-2 a wholesale bug for cashiers) + 1 Gemini-verified contract gap + 2 QA MINOR | R-189 closed; R-215..R-218 opened | 0 | +472 / −13, 13 files (incl. docs) |
 | 40 | 2026-11-14 | US-107 (R-177 + R-181 + R-185 + R-191: UI polish bundle) | M | ~333k+ (A 174.9k over 4 invocations, one lost to the usage limit · I 75.1k over 2 · Q 83.4k) | 139+ (A 79+ · I 28 · Q 32) | ~31+ (A ~15+ · I ~9.2 · Q ~6.3) | 1 (usage limit) | 1 | 6 contract discrepancies (D-1..D-6, D-6 `$-0` on every close) + 0 Gemini-verified + 1 QA BLOCKER (close-step spec delta, routed to close) + 3 QA MINOR | R-177, R-181, R-185, R-191 closed; R-220..R-222 opened | 0 | +423 / −41, 26 files (incl. docs) |
 | 41 | 2026-11-14 | US-108 (R-84: one summary email per register close) | M | ~169k (A 84.8k over 3 invocations · I 43.6k · Q 40.1k) | 59 (A 32 · I 15 · Q 12) | ~38 (A ~31.5 · I ~3.1 · Q ~3.7) | 0 | 1 | 3 contract discrepancies (D-1..D-3, D-1 the two emails name different people) + 1 Gemini-verified contract gap (T-2 log race) + 2 QA MINOR (both close-step) | R-84 closed; R-223, R-224 opened | 0 | +237 / −68, 11 files (incl. docs) |
+| 42 | 2026-11-17 | R-236 (customer export from `Clientes`) | L | ~466k (A 180.6k over 3 invocations · T 33.2k · I 40.2k · Q 64.5k) | 116 (A 58 · T 6 · I 10 · Q 32) | ~37 (A ~23.3 · T ~1.3 · I ~2.1 · Q ~7.7) | 0 | 1 | 4 contract discrepancies (D-1..D-4) + 4 Gemini-verified contract gaps + 4 QA MINOR (1 close-step) | R-236 closed; R-240..R-242 opened | 0 | +425 / −14, 10 files (incl. docs) |
 
 ### Trend
 
@@ -1677,3 +1678,35 @@ Created from dev `cb75625`, the first run after the pipeline tweaks of that comm
 
 ### What to measure in run 42
 - Whether a `close`-mode analyst can end with a single hand-back (tell it to send the report only once, at the very end).
+
+## Run 42 — R-236 (customer export from `Clientes`, level L)
+
+Created from dev `443c5ec`. A roadmap item run under its R-ID (no US number); the analyst registered it in SPRINT-21 block D. Commits: register `f2c9516`, red `29e4b32`, implementation `f728729`, docs close `ff95a1f`. The PO answered GATE 2 four days after it was presented; `dev` had not moved, so the squash merged clean.
+
+| Agent | Invocations | Tokens (last value) | Tools | Duration |
+|---|---|---|---|---|
+| analyst | 3 (contract 109.8k/48/574 s; GATE 1 update 125.4k/20/143 s; close 180.6k/58, reported 1,396 s cumulative) | 180.6k | 58 | ~23 min (cumulative figure) |
+| test-author | 1 | 33.2k | 6 | ~1.3 min (78 s) |
+| implementer | 1 | 40.2k | 10 | ~2.1 min (123 s) |
+| qa | 1 round | 64.5k | 32 | ~7.7 min (461 s) |
+
+**What it found.**
+- The analyst chose a browser-built CSV with no new endpoint: the admin `GET /customers` already carries every column and the handler strips balances for a cashier (`internal/handler/customer.go:25-32`), and a plain link would not carry the Bearer token.
+- A run probe showed paid-off customers still get an `oldest_debt_at` (the date column is blanked for them) and that the server sorts `Álvaro` after `Gus` (the export sorts with `localeCompare`).
+- D-3 and D-4 are real defects of the existing `Reportes` CSV (`,` delimiter, UTC file date), now R-240 and R-241.
+- QA round 1: 0 BLOCKER, 4 MINOR (spec delta pending close; literal BOM char; silent `catch`; `localeCompare` without locale → R-242). The binary smoke on port 18236 checked the file bytes against the live API; no browser click was possible.
+
+**Unplanned stops:** 0. QA rounds: 1. Violations: 0.
+
+**Gemini (`scripts/gemini-review.sh`, advisory).**
+| Mode | STATUS | Raised | Verified true | False positives | Caught that QA missed |
+|---|---|---|---|---|---|
+| contract | OK, ~8 min | 9 | 4 (AC-12 re-enable, T-8 "implementer's pick", M-1 missing AC-10/11 steps, CRLF terminator ambiguity) | 5 (AC-4/AC-5 precedence, negative credit limit already covered, T-9 by design, spec in §5 and spec path: spec lands at close) | n/a (pre-implementation) |
+| diff, round 1 | OK, `CLEAN`, ~3 min | 0 | 0 | 0 | no |
+
+**Operational friction.**
+- The analyst's GATE 1 edit turned the contract into CRLF and split lines; it noticed and repaired it, and left helper scripts in the scratchpad.
+- The test-author and implementer notifications report small tool counts (6 and 10) for the work done; recorded as given.
+
+### What to measure in run 43
+- Whether the Gemini contract findings that held up (4 of 9, the best ratio so far) keep that rate on a frontend-only item.
