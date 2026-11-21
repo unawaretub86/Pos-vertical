@@ -1,7 +1,7 @@
 # Content plan — organic social media
 
 > **Type:** current · **Current:** yes · **Rules over:** what we publish on social media, how it is produced, what it may promise, and how a viewer becomes a lead
-> **Updated:** 2026-11-17 (§ 7.3 `Clientes` columns frozen to the POS customer export, R-236) · 2026-11-15 (§ 4.1 hooks bank, § 8.1 calendar and § 8.2 metrics review drafted, pending PO review) · 2026-11-14 (§ 3.1 commercial name proposed: Caja Clara, pending checks) · 2026-11-14 (brainstorm with the PO: sections 1–8 approved; hooks bank, 8-week calendar and metrics review still to design, § 9)
+> **Updated:** 2026-11-21 (§ 3.1 commercial name: Apúntelo, PO 2026-11-17) · 2026-11-17 (§ 7.3 `Clientes` columns frozen to the POS customer export, R-236) · 2026-11-15 (§ 4.1 hooks bank, § 8.1 calendar and § 8.2 metrics review drafted, pending PO review) · 2026-11-14 (§ 3.1 commercial name proposed: Caja Clara, pending checks) · 2026-11-14 (brainstorm with the PO: sections 1–8 approved; hooks bank, 8-week calendar and metrics review still to design, § 9)
 
 Channel decisions (which channels exist, their cost and timing) stay in [sales-strategy.md](sales-strategy.md) § 6; this document is the playbook for the "Content and free tools" channel. What the product does and may be promised is in [features.md](features.md) and [spec/product.md](spec/product.md); this plan follows them, never the other way round. Work it creates for the product goes to [roadmap.md](roadmap.md) (R-219).
 
@@ -40,23 +40,27 @@ One handle on every platform, taken from the commercial name (§ 3.1).
 
 ### 3.1 Commercial name
 
-**Proposed: Caja Clara** (Tech Lead recommendation, PO 2026-11-14: document it; **not final until the three checks below pass**). The product had no commercial name (none in `spec/product.md`).
+**Chosen: Apúntelo** (PO 2026-11-17; **not final until the three checks below pass**). The product had no commercial name (none in `spec/product.md`).
 
 Why it wins:
 
-- It says the benefit in two words: the register balances and the money is clear. A 43-year-old shopkeeper gets it without an explanation.
-- It covers the whole product (register, *fiado*, cashier) and the other verticals of segment C (hardware store, pharmacy, bakery); a name with "fiado" or "tienda" would lock us in.
-- It is easy to say and remember (the repeated CA- sound).
-- It fits faceless content: "Clara" can be the brand voice on carousels ("Clara le explica…") without the PO on camera; later the PO is "el que hizo Caja Clara".
-- A web search found no POS or app in Colombia with that name (2026-11-14). That is not a trademark clearance.
+- It is what a customer says to ask for *fiado* ("apúntelo"), in "usted", the voice of the UI. A 43-year-old shopkeeper gets it without an explanation.
+- It names the differentiator, and *fiado* also happens in the other neighbourhood verticals (hardware store, bakery); the tagline carries the register: *"Apúntelo. La caja cuadra, el fiado se cobra."*
+- It needs no "POS": many shopkeepers call the card terminal (datáfono) "el POS", so a name with it can sound like another terminal.
+- A web search found no POS or shop app with that name (2026-11-17). That is not a trademark clearance.
 
-Possible tagline: *"Caja Clara: la caja cuadra, el fiado se cobra."*
+Known risks (told to the PO): *Apúntalo*, an appointments app with WhatsApp reminders, is one letter away; `apuntelo.com` is taken; a common phrase is a weak mark, so it is registered as a mixed mark (word + logo), and the accent is lost in handles and domains (`apuntelo`).
 
 Rejected:
 
 | Name | For | Against |
 |---|---|---|
-| Cuentas Claras | Most emotional ("cuentas claras, amistades largas" fits *fiado*) | A common saying: weak as a trademark, hard to get the handle; an expense app with that name already exists on the [App Store](https://apps.apple.com/lu/app/cuentas-claras/id6447208378). **Fallback** if Caja Clara fails, with a modifier ("Cuentas Claras POS") |
+| Caja Clara | Says the benefit in two words | `cajaclarapos.com` is an Argentine Windows desktop POS with LAN registers (2026-11-14) |
+| Cuadra POS | Two meanings: the register balances, the neighbourhood block | *Kuadra*, a funded Medellín fintech selling sales, inventory, e-invoicing and credit to the same micro-businesses, sounds identical (2026-11-17) |
+| Vecino | *Fiado* is trust between neighbours | *Super Vecino* (MIQ), an e-invoicing app for Colombian neighbourhood shops (2025) |
+| Apuntico | Coined, every domain free, no conflict found | PO: "no me dice nada" |
+| Tranqui, Contao, Cajón, Tendo, Al Día | — | A Cali debt-collection fintech; a German CMS; the generic cash-drawer term; close to Tivendo; Alegra's "Siempre al Día" |
+| Cuentas Claras | Most emotional ("cuentas claras, amistades largas" fits *fiado*) | A common saying: weak as a trademark, hard to get the handle; an expense app with that name already exists on the [App Store](https://apps.apple.com/lu/app/cuentas-claras/id6447208378) |
 | Cuadre | Shopkeeper jargon ("cuadrar caja") | In Colombia "mi cuadre" means a romantic partner or a fling |
 | Mostrador | Points at the differentiator (runs on the counter PC) | Generic, says no benefit, not registrable |
 | La Libreta | Nostalgia for the *fiado* notebook | Locks us into *fiado* and evokes what we replace |
@@ -64,9 +68,9 @@ Rejected:
 
 Checks before it is final (PO, about 10 minutes):
 
-1. Handles on TikTok, Instagram and Facebook: `cajaclara`, or `cajaclara.co` / `cajaclarapos`; ideally the same on all three.
-2. Domain: `cajaclara.co` or `cajaclara.com.co`.
-3. Trademark at the SIC (Superintendencia de Industria y Comercio), free search of registered signs, Nice classes 9 (software) and 42 (online services, for the Connected plan). An identical registration in those classes means we switch names.
+1. Handles on TikTok, Instagram and Facebook: `apuntelo`, or `apuntelo.co`; ideally the same on all three.
+2. Domain: buy `apuntelo.co` (did not resolve 2026-11-17; `.com.co` and `.app` neither).
+3. Trademark at the SIC (Superintendencia de Industria y Comercio), free search of registered signs for "Apúntelo" and "Apúntalo", Nice classes 9 (software), 35 and 42 (online services, for the Connected plan). An identical or near-identical registration in those classes means we switch names.
 
 ## 4. Content approach: educate with PAS, no face
 
@@ -308,7 +312,7 @@ Then: $100.000–200.000 a month, one winner at a time, 7 days, limited to the c
 
 | Item | Owner | Note |
 |---|---|---|
-| Confirm "Caja Clara": handles, domain, SIC trademark search | PO | § 3.1; blocks opening the accounts. If it fails, fallback "Cuentas Claras POS" |
+| Confirm "Apúntelo": handles, `apuntelo.co`, SIC trademark search | PO | § 3.1; blocks opening the accounts |
 | Updates term: 12 months or the support period | PO | § 6 rule 4 |
 | Permission to film in client #1's shop | PO | Needed only for the later founder-diary series |
 | Review the hooks bank, the calendar and the metrics rules | PO | § 4.1, § 8.1, § 8.2: drafted 2026-11-15. Strike any hook that does not sound like a shopkeeper |
